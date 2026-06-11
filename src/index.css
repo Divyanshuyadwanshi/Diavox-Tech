@@ -1,0 +1,106 @@
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,405&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Outfit", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Cormorant Garamond", serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  
+  /* Color Palette Overrides to Silk & Dark Brown Luxury Theme */
+  --color-slate-950: #120906; /* ultra deep warm chocolate espresso */
+  --color-slate-900: #1a100b; /* rich dark coffee brown */
+  --color-slate-850: #241710;
+  --color-slate-800: #2e1e16; /* warm chocolate */
+  --color-slate-700: #423026; /* silky medium brown */
+  --color-slate-650: #543f34;
+  --color-slate-600: #695246; /* warm taupe brown */
+  --color-slate-500: #856e62; /* creamy soft brown */
+  --color-slate-400: #aa9588; /* milk tea brown */
+  --color-slate-300: #ccaeb8;
+  --color-slate-200: #e6dbd3; /* luxurious light cream silk border */
+  --color-slate-100: #f4eee7; /* beautiful warm cream silk */
+  --color-slate-50: #faf7f2;  /* prime light silk background */
+
+  /* Cyber Cyans -> Pure Liquid Gold & Bronze */
+  --color-cyan-500: #bc9c6e; /* premium gold */
+  --color-cyan-400: #d1b48c; /* light shimmering brass */
+  --color-cyan-600: #a18153; /* deep burnished bronze */
+  --color-cyan-300: #e2cca9;
+  --color-cyan-200: #ebdcb9;
+
+  /* Cyber Purples -> Coppers & Warm Terracotta */
+  --color-purple-500: #a86c48; /* silky terra cotta */
+  --color-purple-400: #c28864; /* light copper */
+  --color-purple-600: #8c5230; /* rich chestnut */
+  --color-purple-300: #dca380;
+
+  /* Cyber Emeralds -> Soft Luxurious Sage/Moss */
+  --color-emerald-500: #7a8260; /* elegant sage/moss */
+  --color-emerald-400: #939b7a; /* light sage */
+  --color-emerald-600: #5f6648; /* deep forest */
+}
+
+@layer base {
+  body {
+    @apply font-sans transition-colors duration-300;
+  }
+}
+
+/* Glassmorphism custom classes - update for Silk and Dark Brown */
+.glass-panel-light {
+  background: rgba(250, 247, 242, 0.7);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(230, 219, 211, 0.4);
+}
+
+.glass-panel-dark {
+  background: rgba(18, 9, 6, 0.65);
+  backdrop-filter: blur(16px);
+  border: 1px solid rgba(230, 219, 211, 0.06);
+}
+
+.glass-card-light {
+  background: #faf7f2;
+  border: 1px solid rgba(230, 219, 211, 0.4);
+  box-shadow: 0 4px 30px rgba(66, 48, 38, 0.03);
+}
+
+.glass-card-dark {
+  background: rgba(26, 16, 11, 0.45);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(230, 219, 211, 0.04);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.45);
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(133, 110, 98, 0.3);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(133, 110, 98, 0.5);
+}
+
+/* Custom gradient hover borders */
+.animated-gradient-border {
+  position: relative;
+  background: linear-gradient(to right, #bc9c6e, #a86c48);
+  padding: 1px;
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+
+.animated-gradient-border-content {
+  background: inherit;
+  border-radius: calc(0.75rem - 1px);
+}
