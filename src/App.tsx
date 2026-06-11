@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 
 export default function App() {
-  const { theme, currentUser, syncSupabase } = useStore();
+  const { theme, currentUser, syncSupabase, cmsContent } = useStore();
   const [activeSection, setActiveSection] = useState<string>("hero");
   const [authModalOpen, setAuthModalOpen] = useState<boolean>(false);
   const [showScrollTop, setShowScrollTop] = useState<boolean>(false);
@@ -105,43 +105,163 @@ export default function App() {
             {activeSection === "team-dash" && <TeamDashboard />}
 
           </div>
+        ) : ["portfolio-page", "team-page", "reviews-page", "pricing-page", "projects-page"].includes(activeSection) ? (
+          <div className="py-8" id="dedicated-page-view">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-6 text-left">
+              <button
+                onClick={() => handleNavigate("hero")}
+                className={`px-4 py-2 rounded-xl text-xs font-mono font-bold border transition-all flex items-center space-x-1.5 cursor-pointer ${
+                  theme === "dark"
+                    ? "bg-slate-900 border-slate-800 hover:bg-slate-800 text-slate-200"
+                    : "bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700"
+                }`}
+              >
+                <span>← Back to Homepage</span>
+              </button>
+            </div>
+
+            {activeSection === "portfolio-page" && <Portfolio preview={false} onNavigate={handleNavigate} />}
+            {activeSection === "team-page" && <Team preview={false} onNavigate={handleNavigate} />}
+            {activeSection === "reviews-page" && <Reviews preview={false} onOpenAuth={() => setAuthModalOpen(true)} onNavigate={handleNavigate} />}
+            {activeSection === "pricing-page" && <Pricing preview={false} onOpenAuth={() => setAuthModalOpen(true)} onNavigate={handleNavigate} />}
+            
+            {activeSection === "projects-page" && (
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 text-left space-y-12">
+                <div className="space-y-4">
+                  <p className="text-xs font-mono uppercase tracking-widest text-cyan-500 font-bold">DIAVOX REMOTE PORTALS</p>
+                  <h2 className="text-3xl sm:text-5xl font-display font-light">
+                    Active <span className="font-semibold italic text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500 font-normal">Work Projects</span> Pipeline
+                  </h2>
+                  <p className="text-sm opacity-70 font-light max-w-2xl">
+                    Follow client development status, active sprints, and verified system operations live. All work is built with extreme compliance.
+                  </p>
+                </div>
+
+                {/* Grid of Work Projects */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  {[
+                    { id: "wp-1", title: "Apex Custom Marketplace", client: "Apex Inc", progress: 85, phase: "Beta Testing", tech: ["React", "Express", "Supabase", "Tailwind"], status: "In Sprints" },
+                    { id: "wp-2", title: "Omni Automation Flow", client: "Sovereign Logistics", progress: 100, phase: "Production Host", tech: ["Node.js", "Gemini AI SDK", "Invoicing Modules"], status: "Live & Maintained" },
+                    { id: "wp-3", title: "Genesis Lifestyle App", client: "Jordan Sparks", progress: 40, phase: "Core Architecture Setup", tech: ["Vite", "Zustand State", "Custom Assets"], status: "In Sprints" },
+                    { id: "wp-4", title: "SEO Strategy & Pipeline Campaign", client: "Equinox Elite", progress: 70, phase: "Organic Indexing", tech: ["Semrush Engines", "Google Analytics", "Sitemaps"], status: "In Sprints" },
+                  ].map((work) => (
+                    <div
+                      key={work.id}
+                      className={`p-6 rounded-2xl border flex flex-col justify-between space-y-6 ${
+                        theme === "dark" ? "bg-slate-950 border-slate-900" : "bg-slate-50 border-slate-200"
+                      }`}
+                    >
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-mono uppercase bg-cyan-500/10 text-cyan-400 px-2.5 py-0.5 rounded-lg font-bold border border-cyan-500/10">
+                            {work.status}
+                          </span>
+                          <span className="text-xs font-mono text-slate-500">{work.phase}</span>
+                        </div>
+                        <h3 className="text-xl font-display font-bold">{work.title}</h3>
+                        <p className="text-xs opacity-60">Client: <strong className="font-bold">{work.client}</strong></p>
+                      </div>
+
+                      {/* Progress line */}
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-xs font-mono">
+                          <span>Progress Tracker</span>
+                          <span>{work.progress}%</span>
+                        </div>
+                        <div className="w-full h-1.5 rounded-full bg-slate-200 dark:bg-slate-900 overflow-hidden">
+                          <div
+                            className="bg-gradient-to-r from-cyan-500 to-purple-500 h-full transition-all duration-500"
+                            style={{ width: `${work.progress}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Tech badges */}
+                      <div className="flex flex-wrap gap-1.5 pt-2">
+                        {work.tech.map((t, idx) => (
+                          <span key={idx} className="px-2.5 py-0.5 text-[9px] font-mono rounded bg-slate-900/10 dark:bg-slate-900 border dark:border-slate-800 text-slate-600 dark:text-slate-400">
+                            {t}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
         ) : (
           <div id="landing-sections-stack">
-            {/* 1. Hero Landing */}
-            <Hero 
-              onNavigate={handleNavigate} 
-              onOpenAuth={() => setAuthModalOpen(true)} 
-            />
+            {((cmsContent && cmsContent.homepageSections) || ["hero", "services", "portfolio", "team", "reviews", "pricing", "blog", "contact"]).map((sectionKey) => {
+              const rootCms = cmsContent || { sectionVisibility: {} };
+              const visible = rootCms.sectionVisibility ? rootCms.sectionVisibility[sectionKey] !== false : true;
+              if (!visible) return null;
 
-            {/* 2. Services List */}
-            <Services 
-              onNavigate={handleNavigate}
-              onOpenAuth={() => setAuthModalOpen(true)}
-            />
-
-            {/* 3. Portfolio Case Studies */}
-            <Portfolio />
-
-            {/* Team Members List Section */}
-            <Team />
-
-            {/* 4. Pricing / Packages比较 */}
-            <Pricing 
-              onOpenAuth={() => setAuthModalOpen(true)}
-              onNavigate={handleNavigate}
-            />
-
-            {/* 5. Blogs insights */}
-            <Blog />
-
-            {/* 6. Client reviews feeds */}
-            <Reviews onOpenAuth={() => setAuthModalOpen(true)} />
-
-            {/* 7. Contact quote form */}
-            <Contact 
-              onOpenAuth={() => setAuthModalOpen(true)} 
-              onNavigate={handleNavigate}
-            />
+              switch (sectionKey) {
+                case "hero":
+                  return (
+                    <Hero 
+                      key="hero"
+                      onNavigate={handleNavigate} 
+                      onOpenAuth={() => setAuthModalOpen(true)} 
+                    />
+                  );
+                case "services":
+                  return (
+                    <Services 
+                      key="services"
+                      onNavigate={handleNavigate}
+                      onOpenAuth={() => setAuthModalOpen(true)}
+                    />
+                  );
+                case "portfolio":
+                  return (
+                    <Portfolio 
+                      key="portfolio"
+                      preview={true} 
+                      onNavigate={handleNavigate}
+                    />
+                  );
+                case "team":
+                  return (
+                    <Team 
+                      key="team"
+                      preview={true} 
+                      onNavigate={handleNavigate}
+                    />
+                  );
+                case "pricing":
+                  return (
+                    <Pricing 
+                      key="pricing"
+                      preview={true}
+                      onOpenAuth={() => setAuthModalOpen(true)}
+                      onNavigate={handleNavigate}
+                    />
+                  );
+                case "blog":
+                  return <Blog key="blog" />;
+                case "reviews":
+                  return (
+                    <Reviews 
+                      key="reviews"
+                      preview={true}
+                      onOpenAuth={() => setAuthModalOpen(true)} 
+                      onNavigate={handleNavigate}
+                    />
+                  );
+                case "contact":
+                  return (
+                    <Contact 
+                      key="contact"
+                      onOpenAuth={() => setAuthModalOpen(true)} 
+                      onNavigate={handleNavigate}
+                    />
+                  );
+                default:
+                  return null;
+              }
+            })}
           </div>
         )}
       </main>

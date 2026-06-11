@@ -9,9 +9,11 @@ import { Star, MessageSquarePlus, MessageSquare, ShieldAlert, Trash2, Edit2, Che
 
 interface ReviewsProps {
   onOpenAuth: () => void;
+  preview?: boolean;
+  onNavigate?: (section: string) => void;
 }
 
-export default function Reviews({ onOpenAuth }: ReviewsProps) {
+export default function Reviews({ onOpenAuth, preview, onNavigate }: ReviewsProps) {
   const { theme, reviews, currentUser, addReview, deleteReview } = useStore();
   const [composerOpen, setComposerOpen] = useState<boolean>(false);
   const [rating, setRating] = useState<number>(5);
@@ -21,6 +23,7 @@ export default function Reviews({ onOpenAuth }: ReviewsProps) {
 
   // Filter approved or featured reviews or client specific to client
   const approvedReviews = reviews.filter(rev => rev.status === "Approved");
+  const displayedReviews = preview ? approvedReviews.slice(0, 3) : approvedReviews;
   const averageRating = approvedReviews.length > 0 
     ? (approvedReviews.reduce((acc, curr) => acc + curr.rating, 0) / approvedReviews.length).toFixed(1)
     : "5.0";
@@ -193,7 +196,7 @@ export default function Reviews({ onOpenAuth }: ReviewsProps) {
 
         {/* Approved Feed Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" id="reviews-feed-grid">
-          {approvedReviews.map((rev) => {
+          {displayedReviews.map((rev) => {
             const canClientCrud = currentUser && currentUser.id === rev.client_id;
             return (
               <div
@@ -231,7 +234,7 @@ export default function Reviews({ onOpenAuth }: ReviewsProps) {
                   </div>
 
                   {/* Comment */}
-                  <p className="text-xs opacity-80 leading-relaxed font-light min-h-[60px]">
+                  <p className="text-xs leading-relaxed font-light min-h-[60px] text-slate-700 dark:text-slate-200">
                     "{rev.review_text}"
                   </p>
                 </div>
@@ -246,24 +249,36 @@ export default function Reviews({ onOpenAuth }: ReviewsProps) {
                       className="w-8 h-8 rounded-full bg-slate-900 object-cover border dark:border-slate-800 border-slate-200"
                     />
                     <div className="text-left leading-none">
-                      <h4 className="text-xs font-bold font-display">{rev.client_name}</h4>
-                      <span className="text-[10px] font-mono opacity-50">{rev.service_used}</span>
+                      <h4 className="text-xs font-bold font-display text-slate-900 dark:text-slate-100">{rev.client_name}</h4>
+                      <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400">{rev.service_used}</span>
                     </div>
                   </div>
-                  <span className="text-[9px] font-mono opacity-40">{rev.date}</span>
+                  <span className="text-[9px] font-mono text-slate-400 dark:text-slate-500">{rev.date}</span>
                 </div>
 
                 {/* Team Replied node */}
                 {rev.reply_text && (
-                  <div className="mt-4 p-3 rounded-lg dark:bg-slate-900 bg-slate-50 border dark:border-slate-800 border-slate-200 text-[11px]">
-                    <p className="font-bold font-mono text-cyan-500 mb-1">Diavox Support Response:</p>
-                    <p className="opacity-85 font-light">"{rev.reply_text}"</p>
+                  <div className="mt-4 p-3 rounded-lg dark:bg-slate-900 bg-slate-100 border dark:border-slate-800 border-slate-200 text-[11px] text-left">
+                    <p className="font-bold font-mono text-cyan-605 text-cyan-600 dark:text-cyan-400 mb-1">Diavox Support Response:</p>
+                    <p className="text-slate-800 dark:text-slate-200 font-light">"{rev.reply_text}"</p>
                   </div>
                 )}
               </div>
             );
           })}
         </div>
+
+        {preview && (
+          <div className="mt-12 text-center" id="reviews-see-more-block">
+            <button
+              onClick={() => onNavigate?.("reviews-page")}
+              className="inline-flex items-center space-x-2 px-6 py-3 rounded-xl border dark:border-slate-800 dark:hover:bg-slate-900 border-slate-200 bg-white hover:bg-slate-50 text-slate-900 dark:text-cyan-400 font-mono text-xs font-bold shadow-lg transition-all active:scale-95 cursor-pointer"
+            >
+              <span>Read all Client Testimonials ({approvedReviews.length})</span>
+              <span>→</span>
+            </button>
+          </div>
+        )}
 
       </div>
     </section>

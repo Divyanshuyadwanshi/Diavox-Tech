@@ -17,7 +17,7 @@ export default function ClientDashboard() {
     notifications, messages, reviews, sendMessage, signContract, addReview, deleteReview, markNotificationsRead 
   } = useStore();
 
-  const [activeTab, setActiveTab] = useState<"projects" | "contracts" | "plans" | "requests" | "chat" | "reviews">("projects");
+  const [activeTab, setActiveTab] = useState<"projects" | "contracts" | "plans" | "requests" | "chat" | "reviews">("chat");
   
   // Chat input
   const [typedMessage, setTypedMessage] = useState<string>("");

@@ -20,6 +20,7 @@ interface HeaderProps {
 export default function Header({ onOpenAuth, onNavigate, activeSection }: HeaderProps) {
   const { currentUser, logout, theme, toggleTheme } = useStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
 
   const navItems = [
     { id: "hero", label: "Home" },
@@ -125,10 +126,19 @@ export default function Header({ onOpenAuth, onNavigate, activeSection }: Header
                 <span className="capitalize">{currentUser.role.replace("_", " ")}</span>
               </button>
 
-              <div className="relative group">
+              <div className="relative z-50">
+                {/* Backdrop overlay to catch click-outside */}
+                {profileDropdownOpen && (
+                  <div 
+                    className="fixed inset-0 z-40 bg-transparent" 
+                    onClick={() => setProfileDropdownOpen(false)} 
+                  />
+                )}
+                
                 <button
                   id="user-menu-btn"
-                  className={`flex items-center space-x-2 p-1 rounded-xl border ${
+                  onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
+                  className={`relative z-50 flex items-center space-x-2 p-1.5 min-h-[36px] px-2.5 rounded-xl border cursor-pointer hover:brightness-105 active:scale-95 transition-all text-slate-700 dark:text-white ${
                     theme === "dark" ? "border-slate-800 bg-slate-900" : "border-slate-200 bg-slate-50"
                   }`}
                 >
@@ -138,24 +148,29 @@ export default function Header({ onOpenAuth, onNavigate, activeSection }: Header
                     referrerPolicy="no-referrer"
                     className="w-7 h-7 rounded-lg object-cover"
                   />
-                  <span className="hidden leading-tight lg:block text-xs font-medium pr-1 text-left max-w-[80px] truncate">
+                  <span className="hidden leading-tight lg:block text-xs font-semibold pr-1 text-left max-w-[100px] truncate">
                     {currentUser.name}
                   </span>
                 </button>
                 
-                {/* Micro Dropdown on Hover */}
-                <div className={`absolute right-0 top-full mt-1.5 w-48 rounded-xl shadow-xl border scale-95 opacity-0 pointer-events-none group-hover:scale-100 group-hover:opacity-100 group-hover:pointer-events-auto transition-all ${
+                {/* Micro Dropdown on Click */}
+                <div className={`absolute right-0 top-full mt-2 w-48 rounded-xl shadow-xl border z-50 transition-all duration-200 ${
+                  profileDropdownOpen 
+                    ? "scale-100 opacity-100 transform-none translate-y-0" 
+                    : "scale-95 opacity-0 pointer-events-none translate-y-1"
+                } ${
                   theme === "dark" 
                     ? "bg-slate-900 border-slate-800 text-white shadow-black/40" 
                     : "bg-white border-slate-200 text-slate-800 shadow-slate-200/50"
                 }`}>
-                  <div className="p-3 border-b border-slate-800/10 dark:border-slate-700/30 text-xs">
-                    <p className="font-bold truncate">{currentUser.name}</p>
-                    <p className="opacity-60 text-[10px] truncate">{currentUser.email}</p>
+                  <div className="p-3 border-b border-slate-800/10 dark:border-slate-700/30 text-xs text-left">
+                    <p className="font-bold truncate text-slate-900 dark:text-white">{currentUser.name}</p>
+                    <p className="text-slate-500 dark:text-slate-400 text-[10px] truncate">{currentUser.email}</p>
                   </div>
-                  <div className="p-1 text-xs">
+                  <div className="p-1 text-xs text-left">
                     <button
                       onClick={() => {
+                        setProfileDropdownOpen(false);
                         if (["primary_admin", "secondary_admin"].includes(currentUser.role)) {
                           onNavigate("admin-dash");
                         } else if (currentUser.role === "team_member") {
@@ -164,14 +179,17 @@ export default function Header({ onOpenAuth, onNavigate, activeSection }: Header
                           onNavigate("client-dash");
                         }
                       }}
-                      className="w-full text-left px-3 py-2 rounded-lg hover:bg-cyan-500/10 hover:text-cyan-400 transition-colors flex items-center space-x-2"
+                      className="w-full text-left px-3 py-2 rounded-lg hover:bg-cyan-500/10 hover:text-cyan-400 dark:text-slate-200 text-slate-700 transition-colors flex items-center space-x-2 cursor-pointer"
                     >
                       <Laptop size={14} />
                       <span>My Dashboard</span>
                     </button>
                     <button
-                      onClick={logout}
-                      className="w-full text-left px-3 py-2 rounded-lg text-rose-500 hover:bg-rose-500/10 transition-colors flex items-center space-x-2"
+                      onClick={() => {
+                        setProfileDropdownOpen(false);
+                        logout();
+                      }}
+                      className="w-full text-left px-3 py-2 rounded-lg text-rose-500 hover:bg-rose-500/10 transition-colors flex items-center space-x-2 cursor-pointer"
                     >
                       <LogOut size={14} />
                       <span>Sign Out</span>

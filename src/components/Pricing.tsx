@@ -10,13 +10,16 @@ import { Check, ArrowUpRight, CheckCircle2, ShieldCheck, Globe, CreditCard } fro
 interface PricingProps {
   onOpenAuth: () => void;
   onNavigate: (section: string) => void;
+  preview?: boolean;
 }
 
-export default function Pricing({ onOpenAuth, onNavigate }: PricingProps) {
+export default function Pricing({ onOpenAuth, onNavigate, preview }: PricingProps) {
   const { theme, currentUser, pricingOptions, purchasePlan } = useStore();
   const [isAnnual, setIsAnnual] = useState<boolean>(false);
   const [currency, setCurrency] = useState<"USD" | "INR" | "GBP font-sans">("INR"); // Default to Indian Rupees (INR) to delight clients as requested!
   const [notification, setNotification] = useState<string | null>(null);
+
+  const displayedPricing = preview ? pricingOptions.slice(0, 1) : pricingOptions;
 
   const activeCurrency: "USD" | "INR" | "GBP" = currency.includes("INR") ? "INR" : currency.includes("GBP") ? "GBP" : "USD";
 
@@ -148,7 +151,7 @@ export default function Pricing({ onOpenAuth, onNavigate }: PricingProps) {
 
         {/* Loop Options */}
         <div className="space-y-24" id="pricing-options-stack">
-          {pricingOptions.map((opt) => (
+          {displayedPricing.map((opt) => (
             <div key={opt.id} className="space-y-8" id={`pricing-option-group-${opt.id}`}>
               
               {/* Option title & badges */}
@@ -243,6 +246,18 @@ export default function Pricing({ onOpenAuth, onNavigate }: PricingProps) {
             </div>
           ))}
         </div>
+
+        {preview && (
+          <div className="mt-12 text-center" id="pricing-see-more-block">
+            <button
+              onClick={() => onNavigate("pricing-page")}
+              className="inline-flex items-center space-x-2 px-6 py-3 rounded-xl border dark:border-slate-800 dark:hover:bg-slate-900 border-slate-200 bg-white hover:bg-slate-50 text-slate-900 dark:text-cyan-400 font-mono text-xs font-bold shadow-lg transition-all active:scale-95 cursor-pointer"
+            >
+              <span>Compare All Pricing Plans & Maintenance Retainers ({pricingOptions.length})</span>
+              <span>→</span>
+            </button>
+          </div>
+        )}
 
         {/* Premium bottom seal */}
         <div className="mt-20 p-6 rounded-2xl border dark:border-slate-900 border-slate-200 bg-slate-500/5 flex flex-col md:flex-row items-center justify-between gap-6" id="pricing-seal-footer">

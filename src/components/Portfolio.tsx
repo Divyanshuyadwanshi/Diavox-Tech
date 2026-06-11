@@ -7,7 +7,12 @@ import React, { useState } from "react";
 import { useStore } from "../store";
 import { ExternalLink, Calendar, Plus, Code, CheckCircle, Eye, Tag, X } from "lucide-react";
 
-export default function Portfolio() {
+interface PortfolioProps {
+  preview?: boolean;
+  onNavigate?: (section: string) => void;
+}
+
+export default function Portfolio({ preview, onNavigate }: PortfolioProps) {
   const { theme, projects, currentUser } = useStore();
   const [activeCategory, setActiveCategory] = useState<string>("All");
   const [selectedProject, setSelectedProject] = useState<any | null>(null);
@@ -17,6 +22,8 @@ export default function Portfolio() {
   const filteredProjects = activeCategory === "All"
     ? projects
     : projects.filter(p => p.category === activeCategory);
+
+  const displayedProjects = preview ? filteredProjects.slice(0, 3) : filteredProjects;
 
   return (
     <section id="portfolio" className={`py-20 md:py-28 text-left ${
@@ -60,7 +67,7 @@ export default function Portfolio() {
 
         {/* Dynamic Cards Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8" id="portfolio-grid">
-          {filteredProjects.map((project) => (
+          {displayedProjects.map((project) => (
             <div
               key={project.id}
               id={`portfolio-card-${project.id}`}
@@ -234,6 +241,18 @@ export default function Portfolio() {
                 )}
               </div>
             </div>
+          </div>
+        )}
+
+        {preview && (
+          <div className="mt-12 text-center" id="portfolio-see-more-block">
+            <button
+              onClick={() => onNavigate?.("portfolio-page")}
+              className="inline-flex items-center space-x-2 px-6 py-3 rounded-xl border dark:border-slate-850 dark:hover:bg-slate-900 border-slate-200 bg-white hover:bg-slate-50 text-slate-900 dark:text-cyan-400 font-mono text-xs font-bold shadow-lg transition-all active:scale-95 cursor-pointer"
+            >
+              <span>Explore Full Portfolio Case Studies ({projects.length})</span>
+              <span>→</span>
+            </button>
           </div>
         )}
 

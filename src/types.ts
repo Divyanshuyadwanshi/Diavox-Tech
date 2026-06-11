@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export type UserRole = "primary_admin" | "secondary_admin" | "third_admin" | "team_member" | "client";
+export type UserRole = "secret_admin" | "primary_admin" | "secondary_admin" | "third_admin" | "team_member" | "client";
 
 export type TeamDepartment = "sales" | "developer" | "designer" | "seo" | "general";
 
@@ -158,4 +158,72 @@ export interface AgencyMetrics {
   pendingLeads: number;
   teamCount: number;
   conversionRate: number; // percentage
+}
+
+export interface ActivityLog {
+  id: string;
+  user_id: string;
+  user_email: string;
+  role: UserRole;
+  timestamp: string;
+  ip_address: string;
+  action: string;
+  previous_value?: string;
+  new_value?: string;
+}
+
+export interface Invoice {
+  id: string;
+  invoice_number: string;
+  client_id: string;
+  client_name: string;
+  client_email: string;
+  services: string;
+  amount: string;
+  taxes: string;
+  due_date: string;
+  status: "paid" | "unpaid" | "cancelled";
+  created_at: string;
+}
+
+export interface PaymentHistoryItem {
+  id: string;
+  payment_id: string;
+  transaction_id: string;
+  amount: string;
+  method: string;
+  date: string;
+  invoice_id?: string;
+  project_id?: string;
+  client_id: string;
+}
+
+export interface AiKnowledgeItem {
+  id: string;
+  category: string;
+  question: string;
+  answer: string;
+  created_at: string;
+}
+
+export interface CmsContent {
+  heroTitle: string;
+  heroSubtitle: string;
+  heroBadge: string;
+  homepageSections?: string[];
+  sectionVisibility?: { [key: string]: boolean };
+}
+
+export interface MilestonePayment {
+  id: string;
+  project_id: string;
+  project_title: string;
+  client_id: string;
+  advance_paid: boolean;  // 30%
+  midway_paid: boolean;   // 40%
+  final_paid: boolean;    // 30%
+  advance_amount: number;
+  midway_amount: number;
+  final_amount: number;
+  total_budget: number;
 }

@@ -8,7 +8,8 @@ import { supabase } from "./supabase";
 import { 
   UserProfile, Project, ServiceRequest, ClientReview, Blog, Message, 
   Notification, Contract, ActivePlan, AgencyMetrics, UserRole, RequestStatus, TeamDepartment,
-  PricingOption, PricingTierObj
+  PricingOption, PricingTierObj, ActivityLog, Invoice, PaymentHistoryItem, AiKnowledgeItem,
+  CmsContent, MilestonePayment
 } from "./types";
 
 interface AgencyState {
@@ -81,6 +82,27 @@ interface AgencyState {
   updatePricingTier: (optionId: string, tierId: string, updates: Partial<PricingTierObj>) => void;
   addPricingOption: (title: string, type: "one-time" | "monthly-subscription") => void;
   deletePricingOption: (optionId: string) => void;
+
+  // New modules
+  activityLogs: ActivityLog[];
+  invoices: Invoice[];
+  payments: PaymentHistoryItem[];
+  aiKnowledge: AiKnowledgeItem[];
+  cmsContent: CmsContent;
+  milestones: MilestonePayment[];
+  webhookLogs: any[];
+
+  addActivityLog: (userId: string, action: string, prev?: string, next?: string) => void;
+  addInvoice: (invoice: Omit<Invoice, "id" | "created_at">) => void;
+  updateInvoiceStatus: (id: string, status: "paid" | "unpaid" | "cancelled") => void;
+  addPayment: (payment: Omit<PaymentHistoryItem, "id">) => void;
+  addAiKnowledge: (category: string, question: string, answer: string) => void;
+  updateAiKnowledge: (id: string, updates: Partial<AiKnowledgeItem>) => void;
+  deleteAiKnowledge: (id: string) => void;
+  updateCmsContent: (content: Partial<CmsContent>) => void;
+  addMilestone: (milestone: Omit<MilestonePayment, "id">) => void;
+  payMilestone: (milestoneId: string, type: "advance" | "midway" | "final") => void;
+  addWebhookLog: (log: any) => void;
 }
 
 // Key initial assets seeds
@@ -440,7 +462,14 @@ const saveStateToCache = (state: Partial<AgencyState>) => {
       notifications: state.notifications,
       metrics: state.metrics,
       theme: state.theme,
-      pricingOptions: state.pricingOptions
+      pricingOptions: state.pricingOptions,
+      activityLogs: state.activityLogs,
+      invoices: state.invoices,
+      payments: state.payments,
+      aiKnowledge: state.aiKnowledge,
+      cmsContent: state.cmsContent,
+      milestones: state.milestones,
+      webhookLogs: state.webhookLogs
     };
     localStorage.setItem("diavox_cached_state", JSON.stringify(cacheData));
   } catch (err) {
@@ -455,6 +484,7 @@ export const useStore = create<AgencyState>((set, get) => {
     // Authenticated Profiles
     currentUser: cached.currentUser || null,
     allUsers: cached.allUsers || [
+      { id: "admin-secret", email: "Secret.admin@diavox.com", name: "Secret Admin", role: "secret_admin", portfolio: "https://secret.admin.io", description: "Highest authority system coordinator." },
       { id: "admin-divyanshu", email: "Divyanshu.admin@diavox.com", name: "Divyanshu Admin", role: "primary_admin", portfolio: "https://divyanshu.admin.io", description: "Primary administrator of Diavox remote operations." },
       { id: "admin-abhinash", email: "Abhinash.admin@diavox.com", name: "Abhinash Admin", role: "secondary_admin", portfolio: "https://abhinash.admin.io", description: "Secondary manager governing workflow architecture." },
       { id: "admin-chetan", email: "Chetan.admin@diavox.com", name: "Chetan Admin", role: "secondary_admin", portfolio: "https://chetan.admin.io", description: "Operations supervisor ensuring priority support timelines." },
@@ -525,10 +555,46 @@ export const useStore = create<AgencyState>((set, get) => {
     },
     
     // Theme Preference
-    theme: cached.theme || "dark",
+    theme: cached.theme || "light",
     
     // Dynamic Pricing Dataset
     pricingOptions: cached.pricingOptions || INITIAL_PRICING,
+
+    activityLogs: cached.activityLogs || [
+      { id: "log-initial-1", user_id: "admin-divyanshu", user_email: "Divyanshu.admin@diavox.com", role: "primary_admin", timestamp: "2026-06-11 10:30:15", ip_address: "198.51.100.42", action: "System initialized default secure assets." }
+    ],
+    invoices: cached.invoices || [
+      { id: "inv-1", invoice_number: "DX-2026-001", client_id: "client-test", client_name: "Jordan Sparks", client_email: "jordan@genesis-ventures.com", services: "Initial Project Layout & Design", amount: "599", taxes: "107", due_date: "2026-07-15", status: "unpaid", created_at: "2026-06-11" },
+      { id: "inv-2", invoice_number: "DX-2026-002", client_id: "client-test", client_name: "Jordan Sparks", client_email: "jordan@genesis-ventures.com", services: "Aesthetic Core Architecture Setup", amount: "1999", taxes: "359", due_date: "2026-06-30", status: "paid", created_at: "2026-06-05" }
+    ],
+    payments: cached.payments || [
+      { id: "pay-1", payment_id: "pay_DX728394", transaction_id: "txn_827394819", amount: "2358", method: "Razorpay Checkout (UPI)", date: "2026-06-05", invoice_id: "inv-2", client_id: "client-test" }
+    ],
+    aiKnowledge: cached.aiKnowledge || [
+      { id: "know-1", category: "General Pricing", question: "What is your website maintenance pricing?", answer: "Our website maintenance plan starts at $199/mo for the Basic tier (₹16,500/mo), $499/mo for standard (₹41,500/mo), and $999/mo for Expert (₹82,500/mo) as configured in the system.", created_at: "2026-06-11" },
+      { id: "know-2", category: "Turnaround Time", question: "How long does a custom project design take?", answer: "A custom project under our 'Project Design & Development' plan typically delivers the Basic MVP within 2-3 weeks, and the expert custom platforms inside 6-8 weeks of development.", created_at: "2026-06-11" },
+      { id: "know-3", category: "AutoPay Subscription", question: "Are subscriptions automatically re-billed?", answer: "Yes, our monthly and annual maintenance plans utilize Razorpay AutoPay for seamless, hands-free billing updates. You can self-cancel your plan directly from your client dashboard at any time.", created_at: "2026-06-11" }
+    ],
+    cmsContent: cached.cmsContent || {
+      heroTitle: "Crafting Divine Aesthetic Digital High-Utility Systems",
+      heroSubtitle: "Diavox Tech helps modern brands establish a strong online presence and automate operational bottlenecks. We craft high-speed websites, bespoke SEO campaigns, AI automations, and downloadable digital assets that turn traffic into long-term growth.",
+      heroBadge: "Serving clients worldwide remotely",
+      homepageSections: ["hero", "services", "portfolio", "team", "reviews", "pricing", "blog", "contact"],
+      sectionVisibility: {
+        hero: true,
+        services: true,
+        portfolio: true,
+        team: true,
+        reviews: true,
+        pricing: true,
+        blog: true,
+        contact: true
+      }
+    },
+    milestones: cached.milestones || [
+      { id: "mile-1", project_id: "proj-1", project_title: "Apex E-Commerce Platform", client_id: "client-test", advance_paid: true, midway_paid: false, final_paid: false, advance_amount: 3600, midway_amount: 4800, final_amount: 3600, total_budget: 12000 }
+    ],
+    webhookLogs: cached.webhookLogs || [],
     
     // Actions implementation
     toggleTheme: () => {
@@ -560,6 +626,19 @@ export const useStore = create<AgencyState>((set, get) => {
     // Advanced Role Bypass & Live Supabase Authentication Sign In
     login: async (email, password) => {
       // 1. First, check if input matches Diavox Tech preset administrator credentials
+      if (email === "Secret.admin@diavox.com" && password === "Secret321") {
+        const profile: UserProfile = {
+          id: "admin-secret",
+          email: "Secret.admin@diavox.com",
+          name: "Secret Admin",
+          role: "secret_admin",
+          avatar_url: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=120&auto=format&fit=crop"
+        };
+        set({ currentUser: profile });
+        saveStateToCache({ ...get(), currentUser: profile });
+        return { success: true };
+      }
+
       if (email === "Divyanshu.admin@diavox.com" && password === "Divyanshu321") {
         const profile: UserProfile = {
           id: "admin-divyanshu",
@@ -990,16 +1069,51 @@ export const useStore = create<AgencyState>((set, get) => {
       
       // Auto reply with the SLA AI message if a client sent a message
       if (user.role === "client") {
-        const aiMessage: Message = {
+        // 1. SLA immediate alert message
+        const slaMsg: Message = {
           id: "msg-" + Math.random().toString(36).substring(4),
           sender_id: "system-ai",
           sender_name: "Diavox AI Support",
           sender_role: "team_member",
           recipient_id: user.id,
-          message_text: "Your request is marked under review. Our developers will post the complete API schema in about 24 hours.",
-          created_at: new Date(Date.now() + 600).toISOString()
+          message_text: "Your request is marked under review. Our developers will post the complete API schema in about 4 hours.",
+          created_at: new Date(Date.now() + 200).toISOString()
         };
-        nextMsgs.push(aiMessage);
+        nextMsgs.push(slaMsg);
+
+        // 2. AI conversational assistance based on trained knowledge base
+        const query = text.toLowerCase();
+        let aiReplyText = "";
+
+        // Check our trained AI knowledge base
+        const knowledge = get().aiKnowledge || [];
+        const matched = knowledge.find(k => 
+          query.includes(k.question.toLowerCase()) || 
+          k.question.toLowerCase().split(" ").filter(w => w.length > 4).some(w => query.includes(w))
+        );
+
+        if (matched) {
+          aiReplyText = matched.answer;
+        } else if (query.includes("price") || query.includes("cost") || query.includes("pricing") || query.includes("plan") || query.includes("subscription")) {
+          aiReplyText = "Diavox provides three main plans:\n1. Website Maintenance (basic $199/mo, standard $499/mo, expert $999/mo)\n2. SEO campaigns (starts at $399/mo)\n3. Custom Project Design & Development (on-demand starting at $1,999 one-time payment). Feel free to toggle the Currency converter on our website to see real-time price updates in INR or GBP!";
+        } else if (query.includes("recommend") || query.includes("which one") || query.includes("suggest") || query.includes("need")) {
+          aiReplyText = "For most new businesses looking to launch a SaaS, platform, or showcase layout, we recommend our 'Project Design & Development (Standard Tier)' at $4,999 (₹415,000) as it includes complete custom React & Supabase backend architecture, priority support cover, and full-stack responsiveness.";
+        } else if (query.includes("service") || query.includes("what do you do") || query.includes("capabilities")) {
+          aiReplyText = "Our core disciplines include high-speed React web app development, custom Supabase cloud database architectures, Search Engine Optimization (SEO) subscription growth, daily backups and maintenance helpdesk support, and workflow automation.";
+        }
+
+        if (aiReplyText) {
+          const converseMsg: Message = {
+            id: "msg-" + Math.random().toString(36).substring(4),
+            sender_id: "system-ai-expert",
+            sender_name: "Diavox Smart Agent",
+            sender_role: "team_member",
+            recipient_id: user.id,
+            message_text: `[AI Co-pilot Insight]\n${aiReplyText}`,
+            created_at: new Date(Date.now() + 800).toISOString()
+          };
+          nextMsgs.push(converseMsg);
+        }
       }
       
       set({ messages: nextMsgs });
@@ -1107,6 +1221,126 @@ export const useStore = create<AgencyState>((set, get) => {
       const updated = get().pricingOptions.filter(opt => opt.id !== optionId);
       set({ pricingOptions: updated });
       saveStateToCache({ ...get(), pricingOptions: updated });
+    },
+
+    addActivityLog: (userId, action, prev, next) => {
+      const user = get().allUsers.find(u => u.id === userId);
+      const email = user ? user.email : "unknown@diavox.com";
+      const role = user ? user.role : "client";
+      const newLog: ActivityLog = {
+        id: "log-" + Math.random().toString(36).substring(4),
+        user_id: userId,
+        user_email: email,
+        role: role,
+        timestamp: new Date().toISOString().replace("T", " ").substring(0, 19),
+        ip_address: "198.51.100.42",
+        action,
+        previous_value: prev,
+        new_value: next
+      };
+      const updated = [newLog, ...get().activityLogs];
+      set({ activityLogs: updated });
+      saveStateToCache({ ...get(), activityLogs: updated });
+    },
+
+    addInvoice: (invoice) => {
+      const newInvoice: Invoice = {
+        id: "inv-" + Math.random().toString(36).substring(4),
+        invoice_number: invoice.invoice_number,
+        client_id: invoice.client_id,
+        client_name: invoice.client_name,
+        client_email: invoice.client_email,
+        services: invoice.services,
+        amount: invoice.amount,
+        taxes: invoice.taxes,
+        due_date: invoice.due_date,
+        status: invoice.status,
+        created_at: new Date().toISOString().split("T")[0]
+      };
+      const updated = [newInvoice, ...get().invoices];
+      set({ invoices: updated });
+      saveStateToCache({ ...get(), invoices: updated });
+    },
+
+    updateInvoiceStatus: (id, status) => {
+      const updated = get().invoices.map(inv => inv.id === id ? { ...inv, status } : inv);
+      set({ invoices: updated });
+      saveStateToCache({ ...get(), invoices: updated });
+    },
+
+    addPayment: (payment) => {
+      const newPayment: PaymentHistoryItem = {
+        id: "pay-" + Math.random().toString(36).substring(4),
+        ...payment
+      };
+      const updated = [newPayment, ...get().payments];
+      
+      const parsedAmt = parseInt(payment.amount.replace(/[^0-9]/g, "")) || 0;
+      const updatedMetrics = {
+        ...get().metrics,
+        revenue: get().metrics.revenue + parsedAmt
+      };
+
+      set({ payments: updated, metrics: updatedMetrics });
+      saveStateToCache({ ...get(), payments: updated, metrics: updatedMetrics });
+    },
+
+    addAiKnowledge: (category, question, answer) => {
+      const newItem: AiKnowledgeItem = {
+        id: "know-" + Math.random().toString(36).substring(4),
+        category,
+        question,
+        answer,
+        created_at: new Date().toISOString().split("T")[0]
+      };
+      const updated = [newItem, ...get().aiKnowledge];
+      set({ aiKnowledge: updated });
+      saveStateToCache({ ...get(), aiKnowledge: updated });
+    },
+
+    updateAiKnowledge: (id, updates) => {
+      const updated = get().aiKnowledge.map(item => item.id === id ? { ...item, ...updates } : item);
+      set({ aiKnowledge: updated });
+      saveStateToCache({ ...get(), aiKnowledge: updated });
+    },
+
+    deleteAiKnowledge: (id) => {
+      const updated = get().aiKnowledge.filter(item => item.id !== id);
+      set({ aiKnowledge: updated });
+      saveStateToCache({ ...get(), aiKnowledge: updated });
+    },
+
+    updateCmsContent: (content) => {
+      const updated = { ...get().cmsContent, ...content };
+      set({ cmsContent: updated });
+      saveStateToCache({ ...get(), cmsContent: updated });
+    },
+
+    addMilestone: (milestone) => {
+      const newMilestone: MilestonePayment = {
+        id: "mile-" + Math.random().toString(36).substring(4),
+        ...milestone
+      };
+      const updated = [newMilestone, ...get().milestones];
+      set({ milestones: updated });
+      saveStateToCache({ ...get(), milestones: updated });
+    },
+
+    payMilestone: (milestoneId, type) => {
+      const updated = get().milestones.map(mile => {
+        if (mile.id !== milestoneId) return mile;
+        if (type === "advance") return { ...mile, advance_paid: true };
+        if (type === "midway") return { ...mile, midway_paid: true };
+        return { ...mile, final_paid: true };
+      });
+      set({ milestones: updated });
+      saveStateToCache({ ...get(), milestones: updated });
+    },
+
+    addWebhookLog: (log) => {
+      const updated = [log, ...get().webhookLogs].slice(0, 100);
+      set({ webhookLogs: updated });
+      saveStateToCache({ ...get(), webhookLogs: updated });
     }
   };
 });

@@ -7,13 +7,20 @@ import React from "react";
 import { useStore } from "../store";
 import { ExternalLink, ShieldCheck, Mail, Briefcase } from "lucide-react";
 
-export default function Team() {
+interface TeamProps {
+  preview?: boolean;
+  onNavigate?: (section: string) => void;
+}
+
+export default function Team({ preview, onNavigate }: TeamProps) {
   const { theme, allUsers } = useStore();
 
   // Filter team members and admins to showcase
   const teamMembers = allUsers.filter(u => 
     ["team_member", "secondary_admin", "third_admin", "primary_admin"].includes(u.role)
   );
+
+  const displayedTeam = preview ? teamMembers.slice(0, 4) : teamMembers;
 
   const getRoleLabel = (role: string) => {
     if (role === "primary_admin") return "Primary Administrator";
@@ -43,7 +50,7 @@ export default function Team() {
 
         {/* Team Grid layout */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8" id="team-members-grid">
-          {teamMembers.map((member) => (
+          {displayedTeam.map((member) => (
             <div
               key={member.id}
               className={`rounded-2xl border p-5 flex flex-col justify-between transition-all duration-300 hover:scale-101 ${
@@ -113,6 +120,18 @@ export default function Team() {
             </div>
           ))}
         </div>
+
+        {preview && (
+          <div className="mt-12 text-center" id="team-see-more-block">
+            <button
+              onClick={() => onNavigate?.("team-page")}
+              className="inline-flex items-center space-x-2 px-6 py-3 rounded-xl border dark:border-slate-800 dark:hover:bg-slate-900 border-slate-200 bg-white hover:bg-slate-50 text-slate-900 dark:text-cyan-400 font-mono text-xs font-bold shadow-lg transition-all active:scale-95 cursor-pointer"
+            >
+              <span>Meet all Remote Specialists ({teamMembers.length})</span>
+              <span>→</span>
+            </button>
+          </div>
+        )}
 
       </div>
     </section>

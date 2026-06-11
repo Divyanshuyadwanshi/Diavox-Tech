@@ -8,7 +8,8 @@ import { useStore } from "../store";
 import { 
   BarChart3, Users, Briefcase, FileSignature, CheckCircle2, 
   Trash2, Plus, Edit2, Lock, Shield, UserCheck, AlertCircle, 
-  MessageSquare, LockKeyhole, Mail, UserPlus, Star, Save, Tag, DollarSign, PlusCircle
+  MessageSquare, LockKeyhole, Mail, UserPlus, Star, Save, Tag, DollarSign, PlusCircle,
+  History, CreditCard, Cpu, Layout, Eye, Download, Search, FileText, Filter
 } from "lucide-react";
 import { TeamDepartment, UserRole, RequestStatus, UserProfile, Message, PricingOption, PricingTierObj } from "../types";
 
@@ -17,10 +18,13 @@ export default function AdminDashboard() {
     theme, currentUser, allUsers, projects, requests, reviews, metrics, messages, pricingOptions,
     addTeamMember, deleteTeamMember, updateTeamMember, addProject, updateProject, deleteProject,
     updateRequestStatus, updateProjectProgress, updateReviewStatus, toggleReviewFeature, replyToReview, 
-    deleteReview, sendMessage, updatePricingOption, updatePricingTier, addPricingOption, deletePricingOption
+    deleteReview, sendMessage, updatePricingOption, updatePricingTier, addPricingOption, deletePricingOption,
+    activityLogs, invoices, payments, aiKnowledge, cmsContent, milestones, webhookLogs,
+    addActivityLog, addInvoice, updateInvoiceStatus, addPayment, addAiKnowledge, updateAiKnowledge, deleteAiKnowledge,
+    updateCmsContent, addMilestone, payMilestone, addWebhookLog
   } = useStore();
 
-  const [activeTab, setActiveTab] = useState<"analytics" | "projects" | "requests" | "team" | "reviews" | "chats" | "pricing" | "settings">("analytics");
+  const [activeTab, setActiveTab] = useState<"analytics" | "projects" | "requests" | "team" | "reviews" | "chats" | "pricing" | "settings" | "audit" | "billing" | "aitrain" | "cms">("analytics");
   
   // Dynamic Pricing CRUD local states
   const [newOptionTitle, setNewOptionTitle] = useState<string>("");
@@ -85,7 +89,30 @@ export default function AdminDashboard() {
   const [selectedClientId, setSelectedClientId] = useState<string>("client-test");
   const [chatReplyMsg, setChatReplyMsg] = useState<string>("");
 
-  if (!currentUser || !["primary_admin", "secondary_admin", "third_admin"].includes(currentUser.role)) {
+  // Audit Logs filters
+  const [auditSearch, setAuditSearch] = useState<string>("");
+  const [auditRoleFilter, setAuditRoleFilter] = useState<string>("all");
+
+  // Invoices & Billing creation states
+  const [invNum, setInvNum] = useState<string>("DX-2026-101");
+  const [invClientId, setInvClientId] = useState<string>("client-test");
+  const [invClientName, setInvClientName] = useState<string>("Jordan Sparks");
+  const [invClientEmail, setInvClientEmail] = useState<string>("jordan@genesis-ventures.com");
+  const [invServices, setInvServices] = useState<string>("Custom React Portal MVP delivery");
+  const [invAmount, setInvAmount] = useState<string>("1299");
+  const [invDueDate, setInvDueDate] = useState<string>("2026-07-30");
+
+  // AI Training states
+  const [aiQ, setAiQ] = useState<string>("");
+  const [aiA, setAiA] = useState<string>("");
+  const [aiCat, setAiCat] = useState<string>("General Pricing");
+
+  // CMS Content customizer states
+  const [cmsHeroTitle, setCmsHeroTitle] = useState<string>(cmsContent?.heroTitle || "");
+  const [cmsHeroSubtitle, setCmsHeroSubtitle] = useState<string>(cmsContent?.heroSubtitle || "");
+  const [cmsHeroBadge, setCmsHeroBadge] = useState<string>(cmsContent?.heroBadge || "");
+
+  if (!currentUser || !["secret_admin", "primary_admin", "secondary_admin", "third_admin"].includes(currentUser.role)) {
     return (
       <div className="p-8 text-center" id="admin-unauth-container">
         <Shield className="mx-auto text-rose-500 mb-2" size={32} />
@@ -94,28 +121,26 @@ export default function AdminDashboard() {
     );
   }
 
+  const isSecret = currentUser.role === "secret_admin";
   const isPrimary = currentUser.role === "primary_admin";
   const isSecondary = currentUser.role === "secondary_admin";
   const isThird = currentUser.role === "third_admin";
-  const hasTeamMgmtPower = isPrimary || isSecondary || isThird;
+  const hasTeamMgmtPower = isSecret || isPrimary || isSecondary || isThird;
 
-  // STRICT PROGRAMMATIC SECURITY HIERARCHY RULES:
+  // STRICT PROGRAMMATIC SECURITY TIER HIERARCHY VALUES:
+  const roleValue = (roleStr: string) => {
+    if (roleStr === "secret_admin") return 5;
+    if (roleStr === "primary_admin") return 4;
+    if (roleStr === "secondary_admin") return 3;
+    if (roleStr === "third_admin") return 2;
+    if (roleStr === "team_member") return 1;
+    return 0; // clients / guests
+  };
+
   const canModifyUser = (targetUser: UserProfile) => {
-    if (isPrimary) return true; // Primary can modify anyone!
-    if (targetUser.role === "primary_admin") return false; // Non-primary cannot modify primary!
-    if (targetUser.role === "secondary_admin") return false; // Non-primary cannot modify secondary!
-    
-    if (isSecondary) {
-      // Secondary can modify third_admins and normal team_members
-      return ["third_admin", "team_member"].includes(targetUser.role);
-    }
-    
-    if (isThird) {
-      // Third can ONLY modify normal team_members! They cannot modify any tier-level admins!
-      return targetUser.role === "team_member";
-    }
-    
-    return false;
+    // Cannot manage self or roles equal-to/greater-than oneself
+    if (currentUser.id === targetUser.id) return false;
+    return roleValue(currentUser.role) > roleValue(targetUser.role);
   };
 
   const handleCreateTeamMember = (e: React.FormEvent) => {
@@ -123,13 +148,8 @@ export default function AdminDashboard() {
     if (!teamName || !teamPosition) return;
 
     // Reject role creation if escalating privileges beyond hierarchical limits
-    if (isSecondary && ["primary_admin", "secondary_admin"].includes(teamRole)) {
-      setDashAlert("Decline: Secondary admins cannot create other secondary or primary administrators.");
-      setTimeout(() => setDashAlert(null), 5000);
-      return;
-    }
-    if (isThird && ["primary_admin", "secondary_admin", "third_admin"].includes(teamRole)) {
-      setDashAlert("Decline: Third admins cannot create other system operations administrators.");
+    if (roleValue(currentUser.role) <= roleValue(teamRole)) {
+      setDashAlert(`Decline: You cannot provision a role (${teamRole}) that is equal to or higher than your own system authority.`);
       setTimeout(() => setDashAlert(null), 5000);
       return;
     }
@@ -374,6 +394,62 @@ export default function AdminDashboard() {
             <span>Clients Chat Helpdesk</span>
             <span className="bg-emerald-500/20 text-emerald-450 text-[9px] rounded px-1 font-bold font-mono uppercase">LIVE</span>
           </button>
+
+          {/* Activity Logs tab: Visible to secret, primary, secondary */}
+          {["secret_admin", "primary_admin", "secondary_admin"].includes(currentUser.role) && (
+            <button
+              onClick={() => setActiveTab("audit")}
+              className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors ${
+                activeTab === "audit" ? "bg-slate-900 border border-cyan-500/10 text-cyan-400" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+              }`}
+              id="btn-nav-audit"
+            >
+              <History size={15} />
+              <span>Activity Audit Logs</span>
+            </button>
+          )}
+
+          {/* Billing & Invoices tab: Visible to secret, primary, secondary */}
+          {["secret_admin", "primary_admin", "secondary_admin"].includes(currentUser.role) && (
+            <button
+              onClick={() => setActiveTab("billing")}
+              className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors ${
+                activeTab === "billing" ? "bg-slate-900 border border-cyan-500/10 text-cyan-400" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+              }`}
+              id="btn-nav-billing"
+            >
+              <CreditCard size={15} />
+              <span>Invoices & Billing</span>
+            </button>
+          )}
+
+          {/* AI Training tab: Visible to secret, primary */}
+          {["secret_admin", "primary_admin"].includes(currentUser.role) && (
+            <button
+              onClick={() => setActiveTab("aitrain")}
+              className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors ${
+                activeTab === "aitrain" ? "bg-slate-900 border border-cyan-500/10 text-cyan-400" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+              }`}
+              id="btn-nav-aitrain"
+            >
+              <Cpu size={15} />
+              <span>AI Agent Training</span>
+            </button>
+          )}
+
+          {/* CMS Customizer tab: Visible exclusively to secret_admin */}
+          {["secret_admin"].includes(currentUser.role) && (
+            <button
+              onClick={() => setActiveTab("cms")}
+              className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors ${
+                activeTab === "cms" ? "bg-slate-900 border border-cyan-500/10 text-cyan-400" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+              }`}
+              id="btn-nav-cms"
+            >
+              <Layout size={15} />
+              <span>Website CMS Editor</span>
+            </button>
+          )}
         </div>
 
         {/* Main Work Panels */}
@@ -1572,6 +1648,537 @@ export default function AdminDashboard() {
                   </div>
                 );
               })()}
+            </div>
+          )}
+
+          {/* TAB 8: ACTIVITY AUDIT LOGS REGISTRY */}
+          {activeTab === "audit" && ["secret_admin", "primary_admin", "secondary_admin"].includes(currentUser.role) && (
+            <div className="space-y-6" id="tab-audit-logs">
+              <div className="border-b dark:border-slate-900 border-slate-100 pb-3 text-left">
+                <h3 className="text-lg font-display font-extrabold flex items-center space-x-2">
+                  <History className="text-cyan-500" size={20} />
+                  <span>Administrative Activity Log Registry</span>
+                </h3>
+                <p className="text-xs opacity-65 mt-1 font-light">
+                  Real-time tamper-resistant log tracking system capturing administrative activities, settings updates, and privilege assignments across the Diavox platform.
+                </p>
+              </div>
+
+              {/* Filters row */}
+              <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-slate-900/40 p-4 rounded-xl border dark:border-slate-900 border-slate-200">
+                <div className="relative flex-1 w-full text-left">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <input
+                    type="text"
+                    value={auditSearch}
+                    onChange={(e) => setAuditSearch(e.target.value)}
+                    placeholder="Search logs by action, email, or IP..."
+                    className="w-full text-xs pl-9 pr-4 py-2 rounded-lg border dark:border-slate-800 bg-slate-950 text-white focus:outline-none focus:border-cyan-500/50"
+                  />
+                </div>
+                <div className="flex items-center space-x-2 w-full sm:w-auto shrink-0 justify-end">
+                  <Filter size={12} className="text-slate-400" />
+                  <select
+                    value={auditRoleFilter}
+                    onChange={(e) => setAuditRoleFilter(e.target.value)}
+                    className="text-xs p-2 rounded-lg border dark:border-slate-800 bg-slate-950 text-slate-300 focus:outline-none"
+                  >
+                    <option value="all">All Roles</option>
+                    <option value="secret_admin">Secret Admin</option>
+                    <option value="primary_admin">Primary Admin</option>
+                    <option value="secondary_admin">Secondary Admin</option>
+                    <option value="third_admin">Third Admin</option>
+                    <option value="team_member">Team Member</option>
+                  </select>
+
+                  <button
+                    onClick={() => {
+                      const textData = activityLogs.map(l => `[${l.timestamp}] - ID: ${l.user_id} | Email: ${l.user_email} | Role: ${l.role} | IP: ${l.ip_address} | Action: ${l.action} | Prev: ${l.previous_value} | Next: ${l.new_value}`).join("\n");
+                      const blob = new Blob([textData], { type: "text/plain" });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement("a");
+                      a.href = url;
+                      a.download = "diavox_audit_logs.txt";
+                      a.click();
+                      setDashAlert("System Audit Logs downloaded successfully.");
+                      setTimeout(() => setDashAlert(null), 3000);
+                    }}
+                    className="flex items-center space-x-1.5 px-3 py-2 rounded-lg text-xs font-mono font-bold text-white bg-slate-900 border dark:border-slate-800 hover:bg-slate-850"
+                  >
+                    <Download size={13} />
+                    <span>Download TXT</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Monospace Logs list */}
+              <div className="overflow-x-auto rounded-xl border dark:border-slate-900 border-slate-200">
+                <table className="w-full text-xs text-left text-slate-300">
+                  <thead className="bg-slate-900/70 border-b dark:border-slate-900 border-slate-200 text-[10px] font-mono uppercase tracking-wider text-slate-400">
+                    <tr>
+                      <th className="p-4">Timestamp (UTC) / IP</th>
+                      <th className="p-4">Executor / Role</th>
+                      <th className="p-4">Action Performed</th>
+                      <th className="p-4">Previous Value</th>
+                      <th className="p-4">New Value</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y dark:divide-slate-900 divide-slate-100 font-mono text-left">
+                    {activityLogs
+                      .filter(log => {
+                        const term = auditSearch.toLowerCase();
+                        const matchesTerm = (log.action || "").toLowerCase().includes(term) || (log.user_email || "").toLowerCase().includes(term) || (log.ip_address || "").includes(term);
+                        const matchesRole = auditRoleFilter === "all" || log.role === auditRoleFilter;
+                        return matchesTerm && matchesRole;
+                      })
+                      .map((log) => (
+                        <tr key={log.id} className="dark:hover:bg-slate-900/20 hover:bg-slate-50/40">
+                          <td className="p-4 whitespace-nowrap leading-tight">
+                            <p className="font-bold text-slate-200">{log.timestamp}</p>
+                            <p className="text-[10px] opacity-40 mt-0.5">{log.ip_address}</p>
+                          </td>
+                          <td className="p-4 whitespace-nowrap">
+                            <p className="text-slate-205 font-sans text-slate-200">{log.user_email}</p>
+                            <span className={`inline-block text-[9px] px-1.5 rounded uppercase font-bold mt-1 ${
+                              log.role === "secret_admin" ? "bg-rose-550/20 text-rose-400" :
+                              log.role === "primary_admin" ? "bg-cyan-550/20 text-cyan-400" :
+                              log.role === "secondary_admin" ? "bg-purple-550/20 text-purple-400" :
+                              "bg-slate-700/25 text-slate-300"
+                            }`}>
+                              {log.role.replace("_", " ")}
+                            </span>
+                          </td>
+                          <td className="p-4 min-w-[200px] text-xs font-sans text-slate-200 leading-relaxed">
+                            {log.action}
+                          </td>
+                          <td className="p-4 text-[10px] max-w-[150px] truncate opacity-50" title={log.previous_value}>
+                            {log.previous_value || "-"}
+                          </td>
+                          <td className="p-4 text-[10px] max-w-[150px] truncate text-emerald-400 font-bold" title={log.new_value}>
+                            {log.new_value || "-"}
+                          </td>
+                        </tr>
+                      ))}
+                    {activityLogs.length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="p-12 text-center opacity-40">No matching activities captured in server memory.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 9: INVOICES & BILLING WITH RAZORPAY AND SUBSCRIPTIONS */}
+          {activeTab === "billing" && ["secret_admin", "primary_admin", "secondary_admin"].includes(currentUser.role) && (
+            <div className="space-y-6" id="tab-billing">
+              <div className="border-b dark:border-slate-900 border-slate-100 pb-3 text-left">
+                <h3 className="text-lg font-display font-extrabold flex items-center space-x-2">
+                  <CreditCard className="text-cyan-500" size={20} />
+                  <span>Invoices & Billing Panel</span>
+                </h3>
+                <p className="text-xs opacity-65 mt-1 font-light">
+                  Provision new invoices, audit received payments, monitor project milestones (advance, midway, final), and manage Razorpay AutoPay subscription products.
+                </p>
+              </div>
+
+              {/* Overview widgets */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-left">
+                <div className="bg-slate-900/60 p-4 rounded-xl border dark:border-slate-800 border-slate-200">
+                  <p className="text-[10px] font-mono uppercase tracking-wider text-slate-400">Total Raised Amount</p>
+                  <h4 className="text-xl font-bold font-display text-white mt-1">
+                    ${invoices.reduce((acc, inv) => acc + (parseInt(inv.amount) || 0), 0).toLocaleString()}
+                  </h4>
+                  <p className="text-[10px] text-slate-500 mt-1">Sum of all generated client invoices</p>
+                </div>
+                <div className="bg-slate-900/60 p-4 rounded-xl border dark:border-slate-800 border-slate-200">
+                  <p className="text-[10px] font-mono uppercase tracking-wider text-slate-400">Total Cleared Revenue</p>
+                  <h4 className="text-xl font-bold font-display text-emerald-450 text-emerald-400 mt-1">
+                    ${invoices.filter(i => i.status === "paid").reduce((acc, inv) => acc + (parseInt(inv.amount) || 0), 0).toLocaleString()}
+                  </h4>
+                  <p className="text-[10px] text-slate-500 mt-1">Cleared invoice revenue in ledger</p>
+                </div>
+                <div className="bg-slate-900/60 p-4 rounded-xl border dark:border-slate-800 border-slate-200">
+                  <p className="text-[10px] font-mono uppercase tracking-wider text-slate-400">Pending Outstandings</p>
+                  <h4 className="text-xl font-bold font-display text-amber-500 text-amber-400 mt-1">
+                    ${invoices.filter(i => i.status === "unpaid").reduce((acc, inv) => acc + (parseInt(inv.amount) || 0), 0).toLocaleString()}
+                  </h4>
+                  <p className="text-[10px] text-slate-500 mt-1">Awaiting client payment checkouts</p>
+                </div>
+                <div className="bg-slate-900/60 p-4 rounded-xl border dark:border-slate-800 border-slate-200">
+                  <p className="text-[10px] font-mono uppercase tracking-wider text-slate-400">AutoPay Subscriptions</p>
+                  <h4 className="text-xl font-bold font-display text-cyan-400 mt-1">
+                    Active (3 Users)
+                  </h4>
+                  <p className="text-[10px] text-slate-500 mt-1">Monthly subscriptions processed hands-free</p>
+                </div>
+              </div>
+
+              {/* Creator form for Invoices & Milestone progress */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start text-left">
+                
+                {/* Provision Invoice Form */}
+                <div className="lg:col-span-5 bg-slate-900/30 p-5 rounded-2xl border dark:border-slate-900 border-slate-200 space-y-4">
+                  <h4 className="text-xs font-mono font-bold tracking-widest uppercase border-b dark:border-slate-900 pb-2 text-slate-200">Generate Invoice</h4>
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!invAmount || !invServices) return;
+                    const taxVal = Math.round(parseInt(invAmount) * 0.18).toString();
+                    addInvoice({
+                      invoice_number: invNum,
+                      client_id: invClientId,
+                      client_name: invClientName,
+                      client_email: invClientEmail,
+                      services: invServices,
+                      amount: invAmount,
+                      taxes: taxVal,
+                      due_date: invDueDate,
+                      status: "unpaid"
+                    });
+                    addActivityLog(currentUser.id, `Created dynamic client invoice ${invNum}`, "", `Amount: $${invAmount}, Tax: $${taxVal}`);
+                    setDashAlert(`Invoice ${invNum} generated successfully and synced.`);
+                    setInvNum("DX-2026-" + Math.floor(Math.random() * 900 + 100));
+                    setTimeout(() => setDashAlert(null), 3000);
+                  }} className="space-y-3 font-sans text-xs">
+                    <div>
+                      <label className="text-[10px] font-mono opacity-50 block mb-1">Invoice Number</label>
+                      <input type="text" value={invNum} onChange={e => setInvNum(e.target.value)} className="w-full bg-slate-950 border dark:border-slate-800 p-2.5 rounded-lg text-white" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-mono opacity-50 block mb-1">Client Name & ID (Assignee)</label>
+                      <select value={invClientId} onChange={e => {
+                        const targetUser = allUsers.find(u => u.id === e.target.value);
+                        if (targetUser) {
+                          setInvClientId(targetUser.id);
+                          setInvClientName(targetUser.name);
+                          setInvClientEmail(targetUser.email);
+                        }
+                      }} className="w-full bg-slate-950 p-2.5 rounded-lg text-white border dark:border-slate-800">
+                        {allUsers.map(u => (
+                          <option key={u.id} value={u.id}>{u.name} ({u.role})</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-mono opacity-50 block mb-1">Service / Description</label>
+                      <input type="text" value={invServices} onChange={e => setInvServices(e.target.value)} className="w-full bg-slate-950 border dark:border-slate-800 p-2.5 rounded-lg text-white" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-mono opacity-50 block mb-1">Amount (USD)</label>
+                      <input type="number" value={invAmount} onChange={e => setInvAmount(e.target.value)} className="w-full bg-slate-950 border dark:border-slate-800 p-2.5 rounded-lg text-white" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-mono opacity-50 block mb-1">Due Date</label>
+                      <input type="date" value={invDueDate} onChange={e => setInvDueDate(e.target.value)} className="w-full bg-slate-950 border dark:border-slate-800 p-2.5 rounded-lg text-white" />
+                    </div>
+                    <button type="submit" className="w-full p-2.5 bg-gradient-to-r from-cyan-500 to-purple-600 rounded-lg text-white font-mono font-bold uppercase text-[10px] hover:brightness-110">
+                      Generate & Sync Invoice
+                    </button>
+                  </form>
+                </div>
+
+                {/* Invoices List table */}
+                <div className="lg:col-span-7 bg-slate-900/30 p-5 rounded-2xl border dark:border-slate-900 border-slate-200 space-y-4">
+                  <h4 className="text-xs font-mono font-bold tracking-widest uppercase border-b dark:border-slate-900 pb-2 text-slate-200">Active Invoices Registry</h4>
+                  <div className="max-h-[350px] overflow-y-auto space-y-2 pr-1">
+                    {invoices.map((inv) => (
+                      <div key={inv.id} className="p-3.5 bg-slate-950/40 rounded-xl border dark:border-slate-850 flex justify-between items-center text-xs">
+                        <div className="leading-relaxed text-left">
+                          <p className="font-bold text-slate-200">{inv.invoice_number} - {inv.client_name}</p>
+                          <p className="text-[10px] text-slate-400 mt-0.5">{inv.services}</p>
+                          <p className="text-[10px] text-slate-500 mt-1">Due: {inv.due_date} | Tax (18%): ${inv.taxes}</p>
+                        </div>
+                        <div className="text-right space-y-2 shrink-0">
+                          <p className="font-extrabold text-cyan-405 text-cyan-400 font-mono">${inv.amount}</p>
+                          <div className="flex gap-1.5 justify-end">
+                            <select
+                              value={inv.status}
+                              onChange={(e) => {
+                                const newStat = e.target.value as "paid" | "unpaid" | "cancelled";
+                                updateInvoiceStatus(inv.id, newStat);
+                                addActivityLog(currentUser.id, `Status update on invoice ${inv.invoice_number}`, inv.status, newStat);
+                                if (newStat === "paid") {
+                                  addPayment({
+                                    payment_id: "pay_manual_" + Math.random().toString(36).substring(4),
+                                    transaction_id: "txn_man_" + Math.random().toString(36).substring(4),
+                                    amount: inv.amount,
+                                    method: "Admin Direct Ledger Clear",
+                                    date: new Date().toISOString().split("T")[0],
+                                    invoice_id: inv.id,
+                                    client_id: inv.client_id
+                                  });
+                                }
+                                setDashAlert(`Invoice ${inv.invoice_number} changed to ${newStat}`);
+                                setTimeout(() => setDashAlert(null), 3000);
+                              }}
+                              className="text-[10px] bg-slate-950 border dark:border-slate-800 p-1.5 rounded font-mono text-white focus:outline-none"
+                            >
+                              <option value="unpaid">Unpaid</option>
+                              <option value="paid">Paid</option>
+                              <option value="cancelled">Cancelled</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Milestone Tracking sub-panel */}
+              <div className="p-5 rounded-2xl bg-slate-900/20 border dark:border-slate-900 text-left space-y-4">
+                <h4 className="text-xs font-mono font-bold tracking-widest uppercase border-b dark:border-slate-900 pb-2 text-slate-200">Project Milestone Disbursements (30% - 40% - 30%)</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {milestones.map((mile) => {
+                    return (
+                      <div key={mile.id} className="p-4 bg-slate-950/40 rounded-xl border dark:border-slate-850 space-y-3 font-sans text-xs">
+                        <div className="flex justify-between font-bold border-b dark:border-slate-800 pb-2">
+                          <span className="text-slate-200">{mile.project_title}</span>
+                          <span className="font-mono text-cyan-400">${mile.total_budget.toLocaleString()}</span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 leading-tight">
+                          <div className={`p-2 rounded-lg text-center ${mile.advance_paid ? "bg-emerald-950/30 border border-emerald-500/20" : "bg-slate-900/40 border dark:border-slate-800"}`}>
+                            <p className="text-[10px] font-mono opacity-50">Advance (30%)</p>
+                            <p className="font-mono text-xs font-bold mt-1 text-slate-200">${mile.advance_amount}</p>
+                            <button
+                              onClick={() => {
+                                if (mile.advance_paid) return;
+                                payMilestone(mile.id, "advance");
+                                addActivityLog(currentUser.id, `Cleared Advance milestone for ${mile.project_title}`, "false", "true");
+                              }}
+                              className={`w-full mt-2 py-0.5 text-[9px] font-mono font-bold rounded uppercase ${
+                                mile.advance_paid ? "bg-emerald-500/20 text-emerald-400 cursor-default" : "bg-cyan-600 hover:bg-cyan-500 text-white"
+                              }`}
+                            >
+                              {mile.advance_paid ? "Paid" : "Mark paid"}
+                            </button>
+                          </div>
+                          <div className={`p-2 rounded-lg text-center ${mile.midway_paid ? "bg-emerald-950/30 border border-emerald-500/20" : "bg-slate-900/40 border dark:border-slate-800"}`}>
+                            <p className="text-[10px] font-mono opacity-50">Midway (40%)</p>
+                            <p className="font-mono text-xs font-bold mt-1 text-slate-200">${mile.midway_amount}</p>
+                            <button
+                              onClick={() => {
+                                if (mile.midway_paid) return;
+                                payMilestone(mile.id, "midway");
+                                addActivityLog(currentUser.id, `Cleared Midway milestone for ${mile.project_title}`, "false", "true");
+                              }}
+                              className={`w-full mt-2 py-0.5 text-[9px] font-mono font-bold rounded uppercase ${
+                                mile.midway_paid ? "bg-emerald-500/20 text-emerald-400 cursor-default" : "bg-cyan-600 hover:bg-cyan-500 text-white"
+                              }`}
+                            >
+                              {mile.midway_paid ? "Paid" : "Mark paid"}
+                            </button>
+                          </div>
+                          <div className={`p-2 rounded-lg text-center ${mile.final_paid ? "bg-emerald-950/30 border border-emerald-500/20" : "bg-slate-900/40 border dark:border-slate-800"}`}>
+                            <p className="text-[10px] font-mono opacity-50">Final (30%)</p>
+                            <p className="font-mono text-xs font-bold mt-1 text-slate-200">${mile.final_amount}</p>
+                            <button
+                              onClick={() => {
+                                if (mile.final_paid) return;
+                                payMilestone(mile.id, "final");
+                                addActivityLog(currentUser.id, `Cleared Final milestone for ${mile.project_title}`, "false", "true");
+                              }}
+                              className={`w-full mt-2 py-0.5 text-[9px] font-mono font-bold rounded uppercase ${
+                                mile.final_paid ? "bg-emerald-500/20 text-emerald-400 cursor-default" : "bg-cyan-600 hover:bg-cyan-500 text-white"
+                              }`}
+                            >
+                              {mile.final_paid ? "Paid" : "Mark paid"}
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Webhook logs display */}
+              <div className="p-5 rounded-2xl bg-slate-900/20 border dark:border-slate-900 text-left space-y-4">
+                <h4 className="text-xs font-mono font-bold tracking-widest uppercase border-b dark:border-slate-900 pb-2 text-slate-200">Razorpay Webhook Stream Listeners (AutoPay logs)</h4>
+                <div className="bg-slate-950 p-4 rounded-xl border dark:border-slate-800 font-mono text-[10px] text-slate-300 leading-normal max-h-[150px] overflow-y-auto">
+                  <p className="text-emerald-400 font-bold">[2026-06-11 12:44:03] - EVENT: payment.captured | TXN: txn_238491823 | STS: active</p>
+                  <p className="text-cyan-400">[2026-06-11 10:15:30] - EVENT: subscription.activated | SUB_ID: sub_DX39485 | STS: running</p>
+                  <p className="text-slate-500">[2026-06-11 09:00:15] - EVENT: link.created | INV_ID: inv-x8z | STS: issued</p>
+                  <p className="text-amber-500/80">[2026-06-10 18:22:11] - EVENT: subscription.charged | SUB_ID: sub_DX12948 | STS: AutoPay_success</p>
+                </div>
+              </div>
+
+            </div>
+          )}
+
+          {/* TAB 10: AI KNOWLEDGE BASE TRAINING CORE */}
+          {activeTab === "aitrain" && ["secret_admin", "primary_admin"].includes(currentUser.role) && (
+            <div className="space-y-6" id="tab-ai-training">
+              <div className="border-b dark:border-slate-900 border-slate-100 pb-3 text-left">
+                <h3 className="text-lg font-display font-extrabold flex items-center space-x-2">
+                  <Cpu className="text-cyan-500" size={20} />
+                  <span>Intelligent AI Co-pilot Training Core</span>
+                </h3>
+                <p className="text-xs opacity-65 mt-1 font-light">
+                  Input custom Q&As to seed the Diavox semantic knowledge base. Stored responses automatically dictate recommendations and answers dispatched back on client support threads.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start text-left font-sans text-xs">
+                {/* Form column */}
+                <div className="lg:col-span-5 bg-slate-900/30 p-5 rounded-2xl border dark:border-slate-900 border-slate-200 space-y-4">
+                  <h4 className="text-xs font-mono font-bold tracking-widest uppercase border-b dark:border-slate-900 pb-2 text-slate-250">Train New Q&A Block</h4>
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
+                    if (!aiQ.trim() || !aiA.trim()) return;
+                    addAiKnowledge(aiCat, aiQ.trim(), aiA.trim());
+                    addActivityLog(currentUser.id, `Trained AI conversational agent on question: "${aiQ.substring(0, 30)}..."`, "", `Category: ${aiCat}`);
+                    setAiQ("");
+                    setAiA("");
+                    setDashAlert("AI knowledge seeded and actively deployed.");
+                    setTimeout(() => setDashAlert(null), 3000);
+                  }} className="space-y-4">
+                    <div>
+                      <label className="text-[10px] font-mono opacity-50 block mb-1">Knowledge Topic Category</label>
+                      <select value={aiCat} onChange={e => setAiCat(e.target.value)} className="w-full bg-slate-950 p-2.5 rounded-lg border dark:border-slate-800 text-white">
+                        <option value="General Pricing">General Pricing</option>
+                        <option value="Turnaround Time">Turnaround Time</option>
+                        <option value="Core Tech Stack">Core Tech Stack</option>
+                        <option value="API Integration">API Integration</option>
+                        <option value="Subscription Cancellation">Subscription Cancellation</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-mono opacity-50 block mb-1">Target Client Question (Keywords Matched)</label>
+                      <input
+                        type="text"
+                        value={aiQ}
+                        onChange={e => setAiQ(e.target.value)}
+                        placeholder="e.g., Do you support React Native?"
+                        className="w-full bg-slate-950 border dark:border-slate-800 p-2.5 rounded-lg text-white"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-mono opacity-50 block mb-1">Trained Responder Insight (Answer)</label>
+                      <textarea
+                        value={aiA}
+                        onChange={e => setAiA(e.target.value)}
+                        rows={4}
+                        placeholder="Type the exact expert response description you'd like the chatbot to output..."
+                        className="w-full bg-slate-950 border dark:border-slate-800 p-2.5 rounded-lg text-white focus:outline-none"
+                      />
+                    </div>
+                    <button type="submit" className="w-full p-2.5 bg-gradient-to-r from-cyan-500 to-purple-600 rounded-lg text-white font-mono font-bold uppercase tracking-wide cursor-pointer hover:brightness-110">
+                      Seed AI brain
+                    </button>
+                  </form>
+                </div>
+
+                {/* Stored brain list */}
+                <div className="lg:col-span-7 bg-slate-900/30 p-5 rounded-2xl border dark:border-slate-900 border-slate-200 space-y-4">
+                  <h4 className="text-xs font-mono font-bold tracking-widest uppercase border-b dark:border-slate-900 pb-2 text-slate-200">Active AI Synapses</h4>
+                  <div className="space-y-3 max-h-[450px] overflow-y-auto pr-1">
+                    {aiKnowledge.map((k) => (
+                      <div key={k.id} className="p-3.5 bg-slate-950/40 rounded-xl border dark:border-slate-850 leading-relaxed text-left space-y-2">
+                        <div className="flex justify-between items-center">
+                          <span className="text-[9px] font-mono uppercase bg-cyan-950 text-cyan-400 font-bold px-2 py-0.5 rounded border border-cyan-800/10">{k.category}</span>
+                          <button
+                            onClick={() => {
+                              deleteAiKnowledge(k.id);
+                              addActivityLog(currentUser.id, `Deleted trained synapse block "${k.question.substring(0, 20)}..."`, k.question, "DELETED");
+                              setDashAlert("Synapse block deleted from core memory.");
+                              setTimeout(() => setDashAlert(null), 3000);
+                            }}
+                            className="text-rose-500 hover:text-rose-400 shrink-0"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                        <p className="font-bold text-slate-200">Q: "{k.question}"</p>
+                        <p className="opacity-75 text-slate-300 bg-slate-900/10 p-2.5 rounded-lg border dark:border-slate-900 text-[11px]">A: {k.answer}</p>
+                      </div>
+                    ))}
+                    {aiKnowledge.length === 0 && (
+                      <p className="text-center opacity-40 py-20 text-slate-400">AI knowledge base is currently empty. Train the synapses on the left.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 11: WEBSITE CMS CONTROLLER (SECRET ADMIN ONLY) */}
+          {activeTab === "cms" && ["secret_admin"].includes(currentUser.role) && (
+            <div className="space-y-6" id="tab-cms-panel">
+              <div className="border-b dark:border-slate-900 border-slate-100 pb-3 text-left">
+                <h3 className="text-lg font-display font-extrabold flex items-center space-x-2">
+                  <Layout className="text-cyan-500" size={20} />
+                  <span>Website CMS Content Editor (no-code)</span>
+                </h3>
+                <p className="text-xs opacity-65 mt-1 font-light">
+                  Exclusively for the **Secret Admin**. Live edit layout copywriting parameters without touching any raw code files.
+                </p>
+              </div>
+
+              <div className="bg-slate-900/30 p-6 rounded-2xl border dark:border-slate-900 border-slate-200 text-left font-sans text-xs space-y-4 max-w-2xl">
+                <h4 className="text-xs font-mono font-bold tracking-widest uppercase border-b dark:border-slate-900 pb-2 text-slate-200">Hero Section Content Controls</h4>
+                
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-[10px] font-mono opacity-50 block mb-1">Badge Copy Text</label>
+                    <input
+                      type="text"
+                      value={cmsHeroBadge}
+                      onChange={e => setCmsHeroBadge(e.target.value)}
+                      className="w-full bg-slate-950 border dark:border-slate-800 p-2.5 rounded-lg text-white focus:outline-none focus:border-cyan-500/40"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-mono opacity-50 block mb-1">Hero Title Typography Text</label>
+                    <input
+                      type="text"
+                      value={cmsHeroTitle}
+                      onChange={e => setCmsHeroTitle(e.target.value)}
+                      className="w-full bg-slate-950 border dark:border-slate-800 p-2.5 rounded-lg text-white font-bold focus:outline-none focus:border-cyan-500/40"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-mono opacity-50 block mb-1">Hero Body Paragraph Copy</label>
+                    <textarea
+                      value={cmsHeroSubtitle}
+                      onChange={e => setCmsHeroSubtitle(e.target.value)}
+                      rows={5}
+                      className="w-full bg-slate-950 border dark:border-slate-800 p-2.5 rounded-lg text-white focus:outline-none focus:border-cyan-500/40 leading-relaxed"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2 flex justify-end space-x-2">
+                  <button
+                    onClick={() => {
+                      setCmsHeroTitle("Crafting Divine Aesthetic Digital High-Utility Systems");
+                      setCmsHeroSubtitle("Diavox Tech helps modern brands establish a strong online presence and automate operational bottlenecks. We craft high-speed websites, bespoke SEO campaigns, AI automations, and downloadable digital assets that turn traffic into long-term growth.");
+                      setCmsHeroBadge("Serving clients remote remote operations");
+                    }}
+                    className="px-4 py-2 border dark:border-slate-850 hover:bg-slate-850 text-slate-300 rounded-lg text-xs font-mono cursor-pointer"
+                  >
+                    Reset Defaults
+                  </button>
+                  <button
+                    onClick={() => {
+                      updateCmsContent({
+                        heroTitle: cmsHeroTitle,
+                        heroSubtitle: cmsHeroSubtitle,
+                        heroBadge: cmsHeroBadge
+                      });
+                      addActivityLog(currentUser.id, "Executed structural Website CMS copy update", "Customized layout title", cmsHeroTitle);
+                      setDashAlert("Website landing page updated in database.");
+                      setTimeout(() => setDashAlert(null), 3000);
+                    }}
+                    className="px-5 py-2 bg-gradient-to-r from-cyan-500 to-purple-600 rounded-lg text-white font-mono font-bold hover:brightness-110 flex items-center space-x-1.5 cursor-pointer"
+                  >
+                    <Save size={13} />
+                    <span>Apply website edits</span>
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 

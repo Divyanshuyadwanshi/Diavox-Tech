@@ -15,7 +15,7 @@ interface HeroProps {
 }
 
 export default function Hero({ onNavigate, onOpenAuth }: HeroProps) {
-  const { theme, currentUser } = useStore();
+  const { theme, currentUser, cmsContent } = useStore();
   const [activeTab, setActiveTab] = useState<"telemetry" | "interactive3d">("interactive3d");
 
   const handleCtaClick = () => {
@@ -49,21 +49,25 @@ export default function Hero({ onNavigate, onOpenAuth }: HeroProps) {
             {/* World remote delivery badge */}
             <div className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full text-xs font-mono border transition-all duration-300 bg-cyan-500/10 dark:bg-cyan-950/40 text-cyan-500 border-cyan-400/30">
               <Globe size={13} className="animate-spin-slow" />
-              <span>Serving clients worldwide remotely</span>
+              <span>{cmsContent?.heroBadge || "Serving clients worldwide remotely"}</span>
             </div>
 
             <h1 className="text-4xl sm:text-5xl md:text-7.5xl font-display font-light tracking-tight leading-tight text-slate-900 dark:text-slate-100" id="hero-core-title">
-              Crafting Divine <br className="hidden sm:inline" />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-500 via-amber-200 to-purple-400 font-normal italic">
-                Aesthetic Digital
-              </span>
-              <br className="hidden sm:inline" /> High-Utility Systems
+              {cmsContent?.heroTitle ? (
+                <span>{cmsContent.heroTitle}</span>
+              ) : (
+                <>
+                  Crafting Divine <br className="hidden sm:inline" />
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-500 via-amber-200 to-purple-400 font-normal italic">
+                    Aesthetic Digital
+                  </span>
+                  <br className="hidden sm:inline" /> High-Utility Systems
+                </>
+              )}
             </h1>
 
             <p className="text-base sm:text-lg opacity-80 max-w-2xl font-light leading-relaxed">
-              Diavox Tech helps modern brands establish a strong online presence and automate operational bottlenecks. 
-              We craft high-speed websites, bespoke SEO campaigns, AI automations, and downloadable digital assets 
-              that turn traffic into long-term growth.
+              {cmsContent?.heroSubtitle || "Diavox Tech helps modern brands establish a strong online presence and automate operational bottlenecks. We craft high-speed websites, bespoke SEO campaigns, AI automations, and downloadable digital assets that turn traffic into long-term growth."}
             </p>
 
             {/* Crucial response metrics banner */}
