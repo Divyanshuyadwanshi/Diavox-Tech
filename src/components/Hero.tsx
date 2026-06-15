@@ -108,7 +108,7 @@ export default function Hero({ onNavigate, onOpenAuth }: HeroProps) {
                 onClick={handleCtaClick}
                 className="flex items-center space-x-2 px-6 py-3.5 bg-gradient-to-r from-cyan-500 to-purple-600 hover:brightness-110 text-white font-semibold rounded-xl text-sm transition-all shadow-xl shadow-cyan-500/10 hover:shadow-cyan-500/20 active:scale-98"
               >
-                <span>Request Custom Quote</span>
+                <span>{cmsContent?.heroCtaPrimaryText || "Request Custom Quote"}</span>
                 <ArrowRight size={16} />
               </button>
 
@@ -120,7 +120,7 @@ export default function Hero({ onNavigate, onOpenAuth }: HeroProps) {
                     : "bg-white border-slate-200 hover:bg-slate-50 text-slate-700"
                 }`}
               >
-                <span>Explore Work</span>
+                <span>{cmsContent?.heroCtaSecondaryText || "Explore Work"}</span>
                 <ChevronRight size={15} />
               </button>
 

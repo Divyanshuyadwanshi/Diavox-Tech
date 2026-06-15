@@ -18,7 +18,7 @@ interface HeaderProps {
 }
 
 export default function Header({ onOpenAuth, onNavigate, activeSection }: HeaderProps) {
-  const { currentUser, logout, theme, toggleTheme } = useStore();
+  const { currentUser, logout, theme, toggleTheme, cmsContent } = useStore();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
 
@@ -46,14 +46,14 @@ export default function Header({ onOpenAuth, onNavigate, activeSection }: Header
           id="header-logo-container"
         >
           <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 via-sky-500 to-purple-600 flex items-center justify-center text-white font-display font-bold shadow-lg shadow-cyan-500/10 group-hover:scale-105 transition-transform">
-            D
+            {(cmsContent?.headerLogoTitle || "Diavox").charAt(0).toUpperCase()}
           </div>
           <div className="flex flex-col">
             <span className="font-display font-bold text-lg tracking-tight leading-none text-slate-900 dark:text-white">
-              Diavox <span className="text-cyan-500">Tech</span>
+              {cmsContent?.headerLogoTitle || "Diavox"} <span className="text-cyan-500">{cmsContent?.headerLogoAccent || "Tech"}</span>
             </span>
             <span className="text-[9px] font-mono tracking-widest opacity-60 uppercase mt-0.5">
-              GLOBAL REMOTE
+              {cmsContent?.headerLogoSubtitle || "GLOBAL REMOTE"}
             </span>
           </div>
         </div>

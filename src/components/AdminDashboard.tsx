@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { useStore } from "../store";
+import { useStore, sha256Sync } from "../store";
 
 // Import modular backoffice managers
 import AdminBlogs from "./admin/AdminBlogs";
@@ -17,6 +17,7 @@ import AdminActivePlans from "./admin/AdminActivePlans";
 import AdminPayments from "./admin/AdminPayments";
 import AdminQuotes from "./admin/AdminQuotes";
 import AdminAiTraining from "./admin/AdminAiTraining";
+import AdminCms from "./admin/AdminCms";
 import AdminTeamChats from "./admin/AdminTeamChats";
 import AdminProjectGroups from "./admin/AdminProjectGroups";
 
@@ -311,7 +312,7 @@ export default function AdminDashboard() {
     return roleValue(currentUser.role) > roleValue(targetUser.role);
   };
 
-  const handleCreateTeamMember = (e: React.FormEvent) => {
+  const handleCreateTeamMember = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!teamName || !teamPosition) return;
 
@@ -327,39 +328,47 @@ export default function AdminDashboard() {
     const formattedPos = teamPosition.toLowerCase().replace(/\s+/g, "");
     const resolvedEmail = teamEmail || `${formattedName}.${formattedPos}@diavox.com`;
 
-    addTeamMember(teamName, teamPosition, teamDept, resolvedEmail);
+    let initialPerms = ["view_assigned_projects", "update_progress", "upload_files"];
+    if (teamRole === "secondary_admin") {
+      initialPerms = ["view_assigned_projects", "update_progress", "upload_files", "view_leads", "manage_inquiries", "contact_clients", "upload_designs"];
+    } else if (teamRole === "third_admin") {
+      initialPerms = ["view_assigned_projects", "update_progress", "upload_files", "view_leads", "contact_clients"];
+    }
 
-    // Prompt user fields like portfolio and description directly using our store caching queue
-    setTimeout(() => {
-      const all = useStore.getState().allUsers;
-      const newlyCreated = all.find(u => u.email === resolvedEmail);
+    try {
+      const newlyCreated = await addTeamMember(
+        teamName,
+        teamPosition,
+        teamDept,
+        resolvedEmail,
+        formattedName + "_" + Math.random().toString(36).substring(4),
+        teamRole,
+        initialPerms,
+        sha256Sync("DiavoxPass2026!"),
+        `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(teamName)}`
+      );
+
       if (newlyCreated) {
-        let initialPerms = ["view_assigned_projects", "update_progress", "upload_files"];
-        if (teamRole === "secondary_admin") {
-          initialPerms = ["view_assigned_projects", "update_progress", "upload_files", "view_leads", "manage_inquiries", "contact_clients", "upload_designs"];
-        } else if (teamRole === "third_admin") {
-          initialPerms = ["view_assigned_projects", "update_progress", "upload_files", "view_leads", "contact_clients"];
-        }
-        
-        updateTeamMember(newlyCreated.id, {
-          role: teamRole,
+        await updateTeamMember(newlyCreated.id, {
           portfolio: teamPortfolio || `https://portfolio.diavox.com/${formattedName}`,
-          description: teamDescription || "Diavox system specialist deploying clean standard responsive components.",
-          permissions: initialPerms
+          description: teamDescription || "Diavox system specialist deploying clean standard responsive components."
         });
       }
-    }, 100);
 
-    setTeamName("");
-    setTeamPosition("");
-    setTeamDept("developer");
-    setTeamRole("team_member");
-    setTeamEmail("");
-    setTeamPortfolio("");
-    setTeamDescription("");
-    
-    setDashAlert(`Diavox team member successfully created. System email logged: ${resolvedEmail}`);
-    setTimeout(() => setDashAlert(null), 5000);
+      setTeamName("");
+      setTeamPosition("");
+      setTeamDept("developer");
+      setTeamRole("team_member");
+      setTeamEmail("");
+      setTeamPortfolio("");
+      setTeamDescription("");
+      
+      setDashAlert(`Diavox team account created! Credentials matched. Email: ${resolvedEmail}. Temporary password: DiavoxPass2026!`);
+      setTimeout(() => setDashAlert(null), 5000);
+    } catch (err: any) {
+      setDashAlert(`Error: Could not onboard team account. ${err.message || err}`);
+      setTimeout(() => setDashAlert(null), 7000);
+    }
   };
 
   const handleCreateProject = (e: React.FormEvent) => {
@@ -527,8 +536,8 @@ export default function AdminDashboard() {
             <span>Portfolio</span>
           </button>
 
-          {/* CMS: Visible to secret_admin */}
-          {["secret_admin"].includes(currentUser.role) && (
+          {/* CMS: Visible to secret_admin, primary_admin */}
+          {["secret_admin", "primary_admin"].includes(currentUser.role) && (
             <button
               onClick={() => setActiveTab("cms")}
               className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
@@ -2800,273 +2809,9 @@ export default function AdminDashboard() {
             <AdminAiTraining />
           )}
 
-          {/* TAB 11: WEBSITE CMS CONTROLLER (SECRET ADMIN ONLY) */}
-          {activeTab === "cms" && ["secret_admin"].includes(currentUser.role) && (
-            <div className="space-y-6" id="tab-cms-panel">
-              <div className="border-b dark:border-slate-900 border-slate-100 pb-3 text-left">
-                <h3 className="text-lg font-display font-extrabold flex items-center space-x-2">
-                  <Layout className="text-cyan-500" size={20} />
-                  <span>Website CMS Content Editor (no-code)</span>
-                </h3>
-                <p className="text-xs opacity-65 mt-1 font-light">
-                  Exclusively for the **Secret Admin**. Live edit layout copywriting parameters and drag-and-drop homepage sections without touching any raw code files.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start text-left">
-                
-                {/* Column 1: Copywriting */}
-                <div className="bg-slate-900/30 p-6 rounded-2xl border dark:border-slate-900 border-slate-200 font-sans text-xs space-y-4">
-                  <h4 className="text-xs font-mono font-bold tracking-widest uppercase border-b dark:border-slate-900 pb-2 text-slate-200">Hero Section Content Controls</h4>
-                  
-                  <div className="space-y-3">
-                    <div>
-                      <label className="text-[10px] font-mono opacity-50 block mb-1">Badge Copy Text</label>
-                      <input
-                        type="text"
-                        value={cmsHeroBadge}
-                        onChange={e => setCmsHeroBadge(e.target.value)}
-                        className="w-full bg-slate-950 border dark:border-slate-800 p-2.5 rounded-lg text-white focus:outline-none focus:border-cyan-500/40"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-mono opacity-50 block mb-1">Hero Title Typography Text</label>
-                      <input
-                        type="text"
-                        value={cmsHeroTitle}
-                        onChange={e => setCmsHeroTitle(e.target.value)}
-                        className="w-full bg-slate-950 border dark:border-slate-800 p-2.5 rounded-lg text-white font-bold focus:outline-none focus:border-cyan-500/40"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-mono opacity-50 block mb-1">Hero Body Paragraph Copy</label>
-                      <textarea
-                        value={cmsHeroSubtitle}
-                        onChange={e => setCmsHeroSubtitle(e.target.value)}
-                        rows={5}
-                        className="w-full bg-slate-950 border dark:border-slate-800 p-2.5 rounded-lg text-white focus:outline-none focus:border-cyan-500/40 leading-relaxed"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="pt-2 flex justify-end space-x-2">
-                    <button
-                      onClick={() => {
-                        setCmsHeroTitle("Crafting Divine Aesthetic Digital High-Utility Systems");
-                        setCmsHeroSubtitle("Diavox Tech helps modern brands establish a strong online presence and automate operational bottlenecks. We craft high-speed websites, bespoke SEO campaigns, AI automations, and downloadable digital assets that turn traffic into long-term growth.");
-                        setCmsHeroBadge("Serving clients worldwide remotely");
-                      }}
-                      className="px-4 py-2 border dark:border-slate-850 hover:bg-slate-850 text-slate-300 rounded-lg text-xs font-mono cursor-pointer"
-                    >
-                      Reset Defaults
-                    </button>
-                    <button
-                      onClick={() => {
-                        updateCmsContent({
-                          heroTitle: cmsHeroTitle,
-                          heroSubtitle: cmsHeroSubtitle,
-                          heroBadge: cmsHeroBadge
-                        });
-                        addActivityLog(currentUser.id, "Executed structural Website CMS copy update", "Customized layout title", cmsHeroTitle);
-                        setDashAlert("Website landing page updated in database.");
-                        setTimeout(() => setDashAlert(null), 3000);
-                      }}
-                      className="px-5 py-2 bg-gradient-to-r from-cyan-500 to-purple-600 rounded-lg text-white font-mono font-bold hover:brightness-110 flex items-center space-x-1.5 cursor-pointer"
-                    >
-                      <Save size={13} />
-                      <span>Apply website edits</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Column 2: Drag and Drop Reordering */}
-                <div className="bg-slate-900/30 p-6 rounded-2xl border dark:border-slate-900 border-slate-200 font-sans text-xs space-y-4">
-                  <div className="border-b dark:border-slate-900 pb-2">
-                    <h4 className="text-xs font-mono font-bold tracking-widest uppercase text-slate-200 flex items-center space-x-1.5">
-                      <Layout size={13} className="text-cyan-500" />
-                      <span>Configure Homepage Sections Stack</span>
-                    </h4>
-                    <p className="text-[10px] opacity-60 mt-1">
-                      Drag any section card or use the arrows to reorder. Toggle the eye icon to handle visibility.
-                    </p>
-                  </div>
-
-                  {/* Quick Dynamic Flow Visualizer Indicator */}
-                  <div className="bg-slate-950/40 p-4 rounded-xl border dark:border-slate-850 space-y-1">
-                    <span className="text-[9px] font-mono tracking-widest text-cyan-400 uppercase font-bold">Dynamic Section Flow Stack</span>
-                    <div className="flex flex-wrap gap-1.5 pt-1.5">
-                      {cmsSections.map((sec, idx) => {
-                        const visible = cmsVisibility[sec] !== false;
-                        return (
-                          <React.Fragment key={sec}>
-                            <div className={`p-1.5 rounded text-[10px] font-mono flex items-center space-x-1 ${
-                              visible ? "bg-slate-900 border dark:border-slate-800 text-slate-300" : "bg-slate-950/20 line-through border-slate-900 text-slate-600"
-                            }`}>
-                              <span>{idx + 1}. {sec.toUpperCase()}</span>
-                            </div>
-                            {idx < cmsSections.length - 1 && (
-                              <span className="text-slate-650 text-slate-500 self-center text-xs">→</span>
-                            )}
-                          </React.Fragment>
-                        );
-                      })}
-                    </div>
-                  </div>
-
-                  {/* List of Drag-and-Drop modules */}
-                  <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
-                    {cmsSections.map((secKey, idx) => {
-                      const SECTION_METADATA: Record<string, { title: string; desc: string }> = {
-                        hero: {
-                          title: "Hero Presentation Banner",
-                          desc: "Top segment containing name badge, display typographic title, and primary CTA buttons."
-                        },
-                        services: {
-                          title: "Capabilities & Core Services",
-                          desc: "Aesthetic display grid detailing high-speed websites, SEO, AI pipelines, and digital assets."
-                        },
-                        portfolio: {
-                          title: "Creative Case Studies Portfolio",
-                          desc: "Media showcase of bespoke projects, tech stack indicators, and active service labels."
-                        },
-                        team: {
-                          title: "Specialist Experts Team Directory",
-                          desc: "Staff desk listing with professional roles, key departments, and verified identity badges."
-                        },
-                        reviews: {
-                          title: "Social Proof Client Testimonials",
-                          desc: "True reviews, aggregated ratings, detailed testimonials, and client authentication logs."
-                        },
-                        pricing: {
-                          title: "Flexible Retainer Pricing Packages",
-                          desc: "Dynamic subscription models, design/dev tier details, and milestone invoice simulators."
-                        },
-                        blog: {
-                          title: "Corporate Insights & Blogs",
-                          desc: "Knowledge articles, technology tutorials, search optimization guides, and dev ideas."
-                        },
-                        contact: {
-                          title: "Get in Touch Engagement Desk",
-                          desc: "Direct corporate messaging form, quick physical credentials, and support SLA statements."
-                        }
-                      };
-
-                      const meta = SECTION_METADATA[secKey] || {
-                        title: secKey.toUpperCase() + " Section",
-                        desc: "Custom landing page section content display."
-                      };
-
-                      const isVisible = cmsVisibility[secKey] !== false;
-
-                      return (
-                        <div
-                          key={secKey}
-                          draggable
-                          onDragStart={(e) => handleDragStart(e, idx)}
-                          onDragOver={handleDragOver}
-                          onDrop={(e) => handleDrop(e, idx)}
-                          className={`p-3 rounded-xl border flex items-center justify-between transition-all select-none ${
-                            draggedIndex === idx
-                              ? "bg-cyan-500/10 border-cyan-500 scale-[0.98] opacity-60"
-                              : theme === "dark"
-                              ? "bg-slate-950 border-slate-800 hover:border-slate-700 hover:bg-slate-900/10"
-                              : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50"
-                          } cursor-grab active:cursor-grabbing`}
-                          id={`cms-drag-section-${secKey}`}
-                        >
-                          <div className="flex items-center space-x-2.5 flex-1 min-w-0">
-                            <div className="text-slate-505 text-slate-500 hover:text-slate-300 p-0.5 cursor-grab">
-                              <GripVertical size={14} className="opacity-60" />
-                            </div>
-                            <div className="text-left truncate">
-                              <p className={`text-xs font-bold leading-tight ${
-                                isVisible ? "text-slate-100 dark:text-white" : "text-slate-500 line-through opacity-75"
-                              }`}>
-                                {meta.title}
-                              </p>
-                              <p className="text-[10px] text-slate-500 font-light mt-0.5 truncate max-w-[180px] sm:max-w-[280px]">
-                                {meta.desc}
-                              </p>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center space-x-1.5 shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => moveSectionUp(idx)}
-                              disabled={idx === 0}
-                              className="p-1 rounded bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-850 disabled:opacity-30 disabled:pointer-events-none"
-                              title="Move section up"
-                            >
-                              <ChevronUp size={12} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => moveSectionDown(idx)}
-                              disabled={idx === cmsSections.length - 1}
-                              className="p-1 rounded bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-850 disabled:opacity-30 disabled:pointer-events-none"
-                              title="Move section down"
-                            >
-                              <ChevronDown size={12} />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => toggleSectionVisibility(secKey)}
-                              className={`p-1 rounded border transition-colors ${
-                                isVisible
-                                  ? "bg-cyan-500/10 border-cyan-500/20 text-cyan-400 hover:bg-cyan-500/20"
-                                  : "bg-rose-500/5 border-rose-500/20 text-rose-400 hover:bg-rose-500/10"
-                              }`}
-                              title={isVisible ? "Conceal Section" : "Reveal Section"}
-                            >
-                              {isVisible ? <Eye size={12} /> : <EyeOff size={12} />}
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Reset layout or Apply edits */}
-                  <div className="pt-2 flex justify-between space-x-2">
-                    <button
-                      onClick={() => {
-                        setCmsSections(["hero", "services", "portfolio", "team", "reviews", "pricing", "blog", "contact"]);
-                        setCmsVisibility({
-                          hero: true,
-                          services: true,
-                          portfolio: true,
-                          team: true,
-                          reviews: true,
-                          pricing: true,
-                          blog: true,
-                          contact: true
-                        });
-                      }}
-                      className="px-4 py-2 border dark:border-slate-850 hover:bg-slate-850 text-slate-300 rounded-lg text-xs font-mono cursor-pointer animate-pulse"
-                    >
-                      Reset Layout Defaults
-                    </button>
-                    <button
-                      onClick={() => {
-                        updateCmsContent({
-                          homepageSections: cmsSections,
-                          sectionVisibility: cmsVisibility
-                        });
-                        addActivityLog(currentUser.id, "Configured dynamic homepage sections via cms visual manager", "Applied new sequence layer", cmsSections.filter(k => cmsVisibility[k] !== false).join(" -> "));
-                        setDashAlert("Homepage section ordering and visibility saved.");
-                        setTimeout(() => setDashAlert(null), 3000);
-                      }}
-                      className="px-5 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 rounded-lg text-white font-mono font-bold hover:brightness-110 flex items-center space-x-1.5 cursor-pointer hover:shadow-lg hover:shadow-purple-500/10 transition-all"
-                    >
-                      <Save size={13} />
-                      <span>Apply layout sequence</span>
-                    </button>
-                  </div>
-                </div>
-
-              </div>
-            </div>
+          {/* TAB 11: WEBSITE CMS CONTROLLER (SECRET & PRIMARY ADMIN) */}
+          {activeTab === "cms" && ["secret_admin", "primary_admin"].includes(currentUser.role) && (
+            <AdminCms />
           )}
 
           {/* TAB: SOCIAL MEDIA MANAGEMENT PORTAL */}

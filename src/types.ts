@@ -288,7 +288,28 @@ export interface CmsContent {
     phone: string;
     supportEmail: string;
     businessHours: string;
+    facebook?: string;
+    instagram?: string;
+    linkedin?: string;
+    twitter?: string;
+    youtube?: string;
+    github?: string;
   };
+  fontSans?: string;
+  fontDisplay?: string;
+  fontMono?: string;
+  headerLogoTitle?: string;
+  headerLogoAccent?: string;
+  headerLogoSubtitle?: string;
+  heroCtaPrimaryText?: string;
+  heroCtaSecondaryText?: string;
+  footerLogoText?: string;
+  footerLogoAccent?: string;
+  footerBrandDesc?: string;
+  footerCopyright?: string;
+  footerCredit?: string;
+  footerNotation1?: string;
+  footerNotation2?: string;
 }
 
 export interface MilestonePayment {

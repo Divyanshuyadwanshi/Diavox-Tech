@@ -72,7 +72,7 @@ interface AgencyState {
   updateRequestStatus: (id: string, status: RequestStatus) => void;
   
   // Team management
-  addTeamMember: (name: string, position: string, department: TeamDepartment, email: string) => void;
+  addTeamMember: (name: string, position: string, department: TeamDepartment, email: string, username?: string, role?: UserRole, permissions?: string[], password_hash?: string, avatar_url?: string) => Promise<UserProfile>;
   updateTeamMember: (id: string, updates: Partial<UserProfile>) => void;
   updateUserProfile: (id: string, updates: Partial<UserProfile>) => void;
   deleteTeamMember: (id: string) => void;
@@ -652,6 +652,21 @@ export const useStore = create<AgencyState>((set, get) => {
       heroTitle: "Crafting Divine Aesthetic Digital High-Utility Systems",
       heroSubtitle: "Diavox Tech helps modern brands establish a strong online presence and automate operational bottlenecks. We craft high-speed websites, bespoke SEO campaigns, AI automations, and downloadable digital assets that turn traffic into long-term growth.",
       heroBadge: "Serving clients worldwide remotely",
+      fontSans: "Inter",
+      fontDisplay: "Space Grotesk",
+      fontMono: "JetBrains Mono",
+      headerLogoTitle: "Diavox",
+      headerLogoAccent: "Tech",
+      headerLogoSubtitle: "GLOBAL REMOTE",
+      heroCtaPrimaryText: "Request Custom Quote",
+      heroCtaSecondaryText: "Explore Work",
+      footerLogoText: "Diavox",
+      footerLogoAccent: "Tech",
+      footerBrandDesc: '"Building Digital Experiences, Automating Businesses, Driving Growth." Crafting sub-second applications, custom automated CRM logic, and technical SEO algorithms.',
+      footerCopyright: "© 2026 Diavox Tech Inc. Serving global remote divisions. All rights reserved.",
+      footerCredit: "Made with precision by Diavox Desk",
+      footerNotation1: "Serving clients worldwide remotely.",
+      footerNotation2: "Customer support available with responses within 24 hours.",
       homepageSections: ["hero", "services", "portfolio", "team", "reviews", "pricing", "blog", "contact"],
       sectionVisibility: {
         hero: true,
@@ -789,6 +804,33 @@ export const useStore = create<AgencyState>((set, get) => {
     },
     
     syncSupabase: async () => {
+      // 1. Resolve and synchronize active Supabase Auth session on mount / synckey
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session && session.user) {
+          const currentLocalUser = get().currentUser;
+          if (!currentLocalUser || currentLocalUser.id !== session.user.id) {
+            const { data: dbProf } = await supabase.from("profiles").select("*").eq("id", session.user.id).maybeSingle();
+            if (dbProf) {
+              const synchronizedUser: UserProfile = {
+                id: dbProf.id,
+                email: dbProf.email,
+                name: dbProf.name,
+                role: dbProf.role as UserRole,
+                department: dbProf.department as TeamDepartment,
+                avatar_url: dbProf.avatar_url,
+                username: dbProf.username,
+                permissions: dbProf.skills || dbProf.permissions || []
+              };
+              set({ currentUser: synchronizedUser });
+              saveStateToCache({ currentUser: synchronizedUser });
+            }
+          }
+        }
+      } catch (sessionErr) {
+        console.warn("Session auto-discovery warning:", sessionErr);
+      }
+
       try {
         // Fetch Profiles
         const { data: profilesList } = await supabase.from("profiles").select("*");
@@ -805,21 +847,27 @@ export const useStore = create<AgencyState>((set, get) => {
           const currentVal = roleValues[currentRole] || 0;
           
           let filtered = profilesList;
+          const currentId = get().currentUser?.id;
           filtered = profilesList.filter(p => {
             const pRole = p.role || "client";
             const pVal = roleValues[pRole] || 0;
 
+            // Anyone can view their own profile
+            if (p.id === currentId) {
+              return true;
+            }
+
+            // Secret Admin sees absolutely everyone
+            if (currentRole === "secret_admin") {
+              return true;
+            }
+
             // The Secret Admin account must remain invisible to everyone except: Secret Admin itself, Primary Admin.
             if (pRole === "secret_admin") {
-              return currentRole === "secret_admin" || currentRole === "primary_admin";
+              return currentRole === "primary_admin";
             }
 
-            // Lower roles must never see higher-level roles.
-            if (currentRole === "team_member" || currentRole === "client") {
-              return pVal <= 1;
-            }
-
-            // Administrations see roles below their clearance level
+            // Lower roles must never see higher or equal roles
             return pVal < currentVal;
           });
           
@@ -1068,45 +1116,47 @@ export const useStore = create<AgencyState>((set, get) => {
         }
       }
 
-      // 2. CHECK CUSTOM CREDENTIALS IN profiles TABLE DIRECTLY
+      // 2. PRIMARY AUTHENTICATION PATHWAY: REAL SUPABASE AUTH
       try {
-        const { data: dbProfile } = await supabase
-          .from("profiles")
-          .select("*")
-          .or(`email.eq.${normalizedQuery},username.eq.${normalizedQuery}`)
-          .maybeSingle();
-
-        if (dbProfile) {
-          // Check manual onboard hash
-          if (dbProfile.password_hash) {
-            const h = sha256Sync(password);
-            if (h === dbProfile.password_hash) {
-              const resolvedProfile: UserProfile = {
-                id: dbProfile.id,
-                email: dbProfile.email,
-                name: dbProfile.name,
-                role: dbProfile.role as UserRole,
-                department: dbProfile.department as TeamDepartment,
-                avatar_url: dbProfile.avatar_url,
-                username: dbProfile.username,
-                permissions: dbProfile.skills || dbProfile.permissions || []
-              };
-              set({ currentUser: resolvedProfile });
-              saveStateToCache({ currentUser: resolvedProfile });
-              await get().syncSupabase();
-              return { success: true };
+        let targetEmail = normalizedQuery;
+        
+        // If query is a username (no '@'), resolve it from profiles first
+        if (!normalizedQuery.includes("@")) {
+          try {
+            const { data: uProfile } = await supabase
+              .from("profiles")
+              .select("email")
+              .ilike("username", normalizedQuery)
+              .maybeSingle();
+            if (uProfile && uProfile.email) {
+              targetEmail = uProfile.email;
             }
+          } catch (userResolveErr) {
+            console.warn("Failed resolving username to email:", userResolveErr);
           }
         }
 
-        // 3. STANDARD SUPABASE NETWORK AUTH BYPASS
-        const { data, error } = await supabase.auth.signInWithPassword({ email: email, password });
+        const { data, error } = await supabase.auth.signInWithPassword({ 
+          email: targetEmail, 
+          password 
+        });
+
         if (error) {
-          return { success: false, error: error.message };
+          // If active Supabase Auth tells us email is not confirmed, warn clearly!
+          if (error.message.toLowerCase().includes("confirmed")) {
+            return { success: false, error: "Please verify your email address before logging in." };
+          }
+          return { success: false, error: error.message || "Invalid email/username or password." };
         }
 
-        if (data.user) {
-          const { data: finalProfile } = await supabase.from("profiles").select("*").eq("id", data.user.id).maybeSingle();
+        if (data?.user) {
+          // Standard login successful, fetch the complete profile from profiles table
+          const { data: finalProfile } = await supabase
+            .from("profiles")
+            .select("*")
+            .eq("id", data.user.id)
+            .maybeSingle();
+
           const resolvedProfile: UserProfile = finalProfile ? {
             id: finalProfile.id,
             email: finalProfile.email,
@@ -1118,18 +1168,25 @@ export const useStore = create<AgencyState>((set, get) => {
             permissions: finalProfile.skills || finalProfile.permissions || []
           } : {
             id: data.user.id,
-            email: data.user.email || email,
-            name: data.user.user_metadata?.full_name || email.split("@")[0].toUpperCase(),
+            email: data.user.email || targetEmail,
+            name: data.user.user_metadata?.full_name || data.user.user_metadata?.name || targetEmail.split("@")[0].toUpperCase(),
             role: "client",
-            avatar_url: `https://api.dicebear.com/7.x/initials/svg?seed=${email}`
+            avatar_url: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(targetEmail)}`
           };
+
+          // Back-propagate password hash to the profiles table strictly for metadata reference
+          try {
+            await supabase.from("profiles").update({ password_hash: sha256Sync(password) }).eq("id", resolvedProfile.id);
+          } catch (hashSyncErr) {
+            console.warn("Failed syncing password_hash metadata during login:", hashSyncErr);
+          }
 
           set({ currentUser: resolvedProfile });
           saveStateToCache({ currentUser: resolvedProfile });
           await get().syncSupabase();
           return { success: true };
         }
-        
+
         return { success: false, error: "Authentication yielded null session." };
       } catch (err: any) {
         return { success: false, error: err.message || "Network credentials mismatch." };
@@ -1137,16 +1194,23 @@ export const useStore = create<AgencyState>((set, get) => {
     },
     
     signup: async (email, password, name, role) => {
-      // Public signup must strictly bypass to client-role for maximum protection
       const forcedRole = "client";
+      const normalizedEmail = email.trim().toLowerCase();
+      const secureHash = sha256Sync(password);
+      const generatedUsername = normalizedEmail.split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, "") + "_" + Math.random().toString(36).substring(4);
+      
       try {
         const { data, error } = await supabase.auth.signUp({
-          email,
+          email: normalizedEmail,
           password,
           options: {
             data: {
+              name: name,
               full_name: name,
-              role: forcedRole
+              role: forcedRole,
+              avatar_url: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name)}`,
+              username: generatedUsername,
+              password_hash: secureHash
             }
           }
         });
@@ -1155,21 +1219,40 @@ export const useStore = create<AgencyState>((set, get) => {
           return { success: false, error: error.message };
         }
         
-        if (data.user) {
-          const resolvedProfile: UserProfile = {
-            id: data.user.id,
-            email: email,
-            name: name,
-            role: forcedRole,
-            avatar_url: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name)}`
-          };
-          
-          set({ currentUser: resolvedProfile });
-          saveStateToCache({ currentUser: resolvedProfile });
-          await get().syncSupabase();
-          return { success: true };
+        if (!data.user) {
+          return { success: false, error: "Registration failed to allocate a unique user identity." };
         }
-        return { success: false, error: "Signup yielded null parameters." };
+        
+        const resolvedProfile: UserProfile = {
+          id: data.user.id,
+          email: normalizedEmail,
+          name: name,
+          role: forcedRole,
+          password_hash: secureHash,
+          avatar_url: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name)}`
+        };
+
+        // Insert/upsert newly created profile into profiles table (trigger does this natively, this is just client-side safe backup)
+        try {
+          await supabase.from("profiles").upsert([{
+            id: resolvedProfile.id,
+            email: resolvedProfile.email,
+            name: resolvedProfile.name,
+            role: resolvedProfile.role,
+            avatar_url: resolvedProfile.avatar_url,
+            username: generatedUsername,
+            skills: ["create_requests", "view_own_projects"],
+            permissions: ["create_requests", "view_own_projects"],
+            password_hash: secureHash
+          }], { onConflict: "id" });
+        } catch (profileErr: any) {
+          console.warn("Notice: Client-side profiles backup upsert bypassed (safe as DB trigger handles this):", profileErr.message);
+        }
+        
+        set({ currentUser: resolvedProfile });
+        saveStateToCache({ currentUser: resolvedProfile });
+        await get().syncSupabase();
+        return { success: true };
       } catch (err: any) {
         return { success: false, error: err.message || "Registration failed." };
       }
@@ -1460,42 +1543,119 @@ export const useStore = create<AgencyState>((set, get) => {
     },
     
     // Team management (Synced directly to profiles table)
-    addTeamMember: async (name, position, department, email) => {
+    addTeamMember: async (name, position, department, email, username, role, permissions, password_hash, avatar_url) => {
       const emailFriendlyName = name.toLowerCase().replace(/\s+/g, "");
       const emailFriendlyPosition = position.toLowerCase().replace(/\s+/g, "");
-      const finalEmail = email || `${emailFriendlyName}.${emailFriendlyPosition}@diavox.com`;
+      const finalEmail = (email || `${emailFriendlyName}.${emailFriendlyPosition}@diavox.com`).trim().toLowerCase();
+      const finalRole = role || "team_member";
+      const finalPermissions = permissions || ["view_assigned_projects", "update_progress", "upload_files"];
+      const finalAvatar = avatar_url || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name)}`;
+      
+      const defaultPass = "DiavoxPass2026!";
+      const defaultPassHash = sha256Sync(defaultPass);
+      const finalPasswordHash = password_hash || defaultPassHash;
+      const finalUsername = username || (emailFriendlyName + "_" + Math.random().toString(36).substring(7));
+      
+      let resolvedId = "";
+      
+      // Provision in Supabase Auth using isolated transient client to avoid signing out active Admin session
+      try {
+        const { createClient } = await import("@supabase/supabase-js");
+        const SUPABASE_URL = "https://ranvmnmombkzsmzpiniu.supabase.co";
+        const SUPABASE_ANON_KEY = "sb_publishable_tnMAA_KZfo_Fsfn8eOeAow_oCOO9tv5";
+        
+        const tempSupabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+          auth: {
+            persistSession: false,
+            autoRefreshToken: false,
+            detectSessionInUrl: false,
+            storage: {
+              getItem: () => null,
+              setItem: () => {},
+              removeItem: () => {}
+            }
+          }
+        });
+        
+        const { data: authData, error: authError } = await tempSupabase.auth.signUp({
+          email: finalEmail,
+          password: defaultPass,
+          options: {
+            data: {
+              name: name,
+              full_name: name,
+              role: finalRole,
+              avatar_url: finalAvatar,
+              username: finalUsername,
+              department: department,
+              password_hash: finalPasswordHash
+            }
+          }
+        });
+        
+        if (authError) {
+          throw new Error("Supabase Auth provisioning failed for team member: " + authError.message);
+        } else if (authData && authData.user) {
+          resolvedId = authData.user.id;
+        } else {
+          throw new Error("Supabase Auth did not allocate a real UUID for this candidate.");
+        }
+      } catch (provisionErr: any) {
+        console.error("Could not auto-provision team account in Supabase Auth:", provisionErr);
+        throw provisionErr;
+      }
       
       const newMember: UserProfile = {
-        id: "team-" + Math.random().toString(36).substring(4),
+        id: resolvedId,
         email: finalEmail,
         name,
-        role: "team_member",
+        role: finalRole,
         department,
-        avatar_url: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name)}`,
-        permissions: ["view_assigned_projects", "update_progress", "upload_files"]
+        avatar_url: finalAvatar,
+        username: finalUsername,
+        permissions: finalPermissions,
+        password_hash: finalPasswordHash
       };
       
-      const nextUsers = [...get().allUsers, newMember];
+      const nextUsers = [...get().allUsers.filter(u => u.email !== finalEmail), newMember];
       const updatedMetrics = { ...get().metrics, teamCount: get().metrics.teamCount + 1 };
       
       set({ allUsers: nextUsers, metrics: updatedMetrics });
       saveStateToCache({ allUsers: nextUsers });
 
+      // Insert/upsert into tables for strict relational database persistence
       try {
-        await supabase.from("profiles").insert([{
+        // 1. Upsert profile record
+        await supabase.from("profiles").upsert([{
           id: newMember.id,
           email: newMember.email,
           name: newMember.name,
           role: newMember.role,
           department: newMember.department,
           avatar_url: newMember.avatar_url,
-          username: null,
+          username: newMember.username,
+          password_hash: newMember.password_hash,
           skills: newMember.permissions,
           permissions: newMember.permissions
-        }]);
-      } catch (err) {
-        console.warn("Failed to insert team member to profiles table in Supabase:", err);
+        }], { onConflict: "id" });
+
+        // 2. Insert role reference
+        await supabase.from("user_roles").upsert([{
+          user_id: newMember.id,
+          role: finalRole
+        }], { onConflict: "user_id, role" });
+
+        // 3. Insert team member table details
+        await supabase.from("team_members").upsert([{
+          profile_id: newMember.id,
+          position: position || "Specialist",
+          department: department || "Operations"
+        }], { onConflict: "profile_id" });
+
+      } catch (err: any) {
+        console.warn("Database sync warning for onboarded staff member (can be ignored if trigger auto-populated):", err.message);
       }
+      return newMember;
     },
     
     updateTeamMember: async (id, updates) => {

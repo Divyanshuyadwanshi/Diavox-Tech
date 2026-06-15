@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useStore } from "./store";
+import { supabase } from "./supabase";
 import Header from "./components/Header";
 import Hero from "./components/Hero";
 import Services from "./components/Services";
@@ -65,6 +66,100 @@ export default function App() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, [theme]);
 
+  // Real-time Supabase Auth state change listener
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log("Supabase Auth State changed event:", event, "User ID:", session?.user?.id);
+      
+      if (session?.user) {
+        try {
+          const { data: dbProf } = await supabase
+            .from("profiles")
+            .select("*")
+            .eq("id", session.user.id)
+            .maybeSingle();
+
+          if (dbProf) {
+            const synchronizedUser = {
+              id: dbProf.id,
+              email: dbProf.email,
+              name: dbProf.name,
+              role: dbProf.role,
+              department: dbProf.department,
+              avatar_url: dbProf.avatar_url,
+              username: dbProf.username,
+              permissions: dbProf.skills || dbProf.permissions || []
+            };
+            useStore.setState({ currentUser: synchronizedUser });
+          } else {
+            // Default profile fallback from auth metadata to prevent blocking
+            const nameFromMeta = session.user.user_metadata?.full_name || session.user.user_metadata?.name || session.user.email?.split("@")[0].toUpperCase() || "Operative";
+            const roleFromMeta = session.user.user_metadata?.role || "client";
+            const fallbackUser = {
+              id: session.user.id,
+              email: session.user.email || "",
+              name: nameFromMeta,
+              role: roleFromMeta,
+              avatar_url: session.user.user_metadata?.avatar_url || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(session.user.id)}`,
+              permissions: ["create_requests", "view_own_projects"]
+            };
+            useStore.setState({ currentUser: fallbackUser });
+          }
+        } catch (err) {
+          console.error("Error updating profile in subscription callback:", err);
+        }
+      } else {
+        // Explicit logout state sync
+        useStore.setState({ currentUser: null });
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  // Dynamically load Google Webfonts and override CSS layout custom properties
+  useEffect(() => {
+    const sans = cmsContent?.fontSans || "Inter";
+    const display = cmsContent?.fontDisplay || "Space Grotesk";
+    const mono = cmsContent?.fontMono || "JetBrains Mono";
+
+    // Format query families safe for HTTP requests
+    const uniqueFamilies = Array.from(new Set([sans, display, mono]));
+    const formattedUrl = uniqueFamilies.map(f => f.replace(/\s+/g, "+")).join("&family=");
+
+    // Link loader element
+    let fontLink = document.getElementById("g-fonts-dynamic") as HTMLLinkElement;
+    if (!fontLink) {
+      fontLink = document.createElement("link");
+      fontLink.id = "g-fonts-dynamic";
+      fontLink.rel = "stylesheet";
+      document.head.appendChild(fontLink);
+    }
+    fontLink.href = `https://fonts.googleapis.com/css2?family=${formattedUrl}:wght@300;400;500;600;700;800;905;900&display=swap`;
+
+    // Dynamic style rules override element
+    let customStyleEl = document.getElementById("g-styles-dynamic") as HTMLStyleElement;
+    if (!customStyleEl) {
+      customStyleEl = document.createElement("style");
+      customStyleEl.id = "g-styles-dynamic";
+      document.head.appendChild(customStyleEl);
+    }
+    customStyleEl.innerHTML = `
+      :root {
+        --font-sans: "${sans}", ui-sans-serif, system-ui, -apple-system, sans-serif !important;
+        --font-mono: "${mono}", ui-monospace, monospace !important;
+      }
+      .font-display {
+        font-family: "${display}", "${sans}", ui-sans-serif, system-ui, sans-serif !important;
+      }
+      body {
+        font-family: var(--font-sans);
+      }
+    `;
+  }, [cmsContent?.fontSans, cmsContent?.fontDisplay, cmsContent?.fontMono]);
+
   const handleNavigate = (sectionId: string) => {
     setActiveSection(sectionId);
     
@@ -82,6 +177,46 @@ export default function App() {
   };
 
   const isShowingDashboard = ["admin-dash", "client-dash", "team-dash"].includes(activeSection);
+
+  const renderCustomSectionsByPosition = (pos: "Header" | "Footer") => {
+    if (isShowingDashboard) return null;
+    return (cmsContent?.customSections || [])
+      .filter(cs => cs.position === pos && cs.visible !== false)
+      .map(customSec => (
+        <section
+          key={customSec.id}
+          id={`home-section-${customSec.id}`}
+          style={{
+            backgroundColor: customSec.backgroundColor || undefined,
+            color: customSec.textColor || undefined
+          }}
+          className="py-16 md:py-24 text-left transition-colors duration-300 border-b border-white/5"
+        >
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+            <div className="space-y-4">
+              <span className="text-xs font-mono uppercase tracking-widest text-cyan-400 font-bold block">
+                {customSec.subtitle || "Custom Block Extension"}
+              </span>
+              <h2 className="text-3xl sm:text-4xl md:text-5xl font-display font-bold tracking-tight">
+                {customSec.title}
+              </h2>
+            </div>
+            
+            {customSec.description && (
+              <p className="text-sm sm:text-base opacity-85 max-w-4xl font-sans font-light leading-relaxed">
+                {customSec.description}
+              </p>
+            )}
+            
+            {customSec.content && (
+              <div className="text-xs sm:text-sm opacity-80 max-w-4xl font-sans font-light leading-relaxed whitespace-pre-wrap border-t border-slate-700/30 pt-4">
+                {customSec.content}
+              </div>
+            )}
+          </div>
+        </section>
+      ));
+  };
 
   return (
     <div className={`min-h-screen flex flex-col font-sans transition-colors duration-300 ${
@@ -221,7 +356,9 @@ export default function App() {
             )}
           </div>
         ) : (
-          <div id="landing-sections-stack">
+          <>
+            {renderCustomSectionsByPosition("Header")}
+            <div id="landing-sections-stack">
             {((cmsContent && cmsContent.homepageSections) || ["hero", "services", "portfolio", "team", "reviews", "pricing", "blog", "contact"]).map((sectionKey) => {
               const rootCms = cmsContent || { sectionVisibility: {} };
               const visible = rootCms.sectionVisibility ? rootCms.sectionVisibility[sectionKey] !== false : true;
@@ -299,11 +436,53 @@ export default function App() {
                       />
                     </div>
                   );
-                default:
+                default: {
+                  if (sectionKey.startsWith("custom-")) {
+                    const customSec = (cmsContent?.customSections || []).find(cs => cs.id === sectionKey);
+                    if (customSec && customSec.visible !== false) {
+                      return (
+                        <section
+                          key={customSec.id}
+                          id={`home-section-${customSec.id}`}
+                          style={{
+                            backgroundColor: customSec.backgroundColor || undefined,
+                            color: customSec.textColor || undefined
+                          }}
+                          className="py-16 md:py-24 text-left transition-colors duration-300 border-b border-white/5"
+                        >
+                          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
+                            <div className="space-y-2">
+                              <span className="text-xs font-mono uppercase tracking-widest text-cyan-400 font-bold block">
+                                {customSec.subtitle || "Custom Block Extension"}
+                              </span>
+                              <h2 className="text-3xl sm:text-4xl md:text-5xl font-display font-bold tracking-tight">
+                                {customSec.title}
+                              </h2>
+                            </div>
+                            
+                            {customSec.description && (
+                              <p className="text-sm sm:text-base opacity-85 max-w-4xl font-sans font-light leading-relaxed">
+                                {customSec.description}
+                              </p>
+                            )}
+                            
+                            {customSec.content && (
+                              <div className="text-xs sm:text-sm opacity-80 max-w-4xl font-sans font-light leading-relaxed whitespace-pre-wrap border-t border-slate-700/30 pt-4">
+                                {customSec.content}
+                              </div>
+                            )}
+                          </div>
+                        </section>
+                      );
+                    }
+                  }
                   return null;
+                }
               }
             })}
           </div>
+          {renderCustomSectionsByPosition("Footer")}
+          </>
         )}
       </main>
 
@@ -319,25 +498,35 @@ export default function App() {
           <div className="md:col-span-5 space-y-4" id="footer-brandbox">
             <div className="flex items-center space-x-2.5">
               <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm">
-                D
+                {(cmsContent?.footerLogoText || "Diavox").charAt(0).toUpperCase()}
               </div>
               <span className="font-display font-black text-slate-900 dark:text-white tracking-tight">
-                Diavox <span className="text-cyan-500">Tech</span>
+                {cmsContent?.footerLogoText || "Diavox"} <span className="text-cyan-500">{cmsContent?.footerLogoAccent || "Tech"}</span>
               </span>
             </div>
             
             <p className="text-xs leading-relaxed max-w-sm font-sans font-light">
-              "Building Digital Experiences, Automating Businesses, Driving Growth." Crafting sub-second applications, custom automated CRM logic, and technical SEO algorithms.
+              {cmsContent?.footerBrandDesc || '"Building Digital Experiences, Automating Businesses, Driving Growth." Crafting sub-second applications, custom automated CRM logic, and technical SEO algorithms.'}
             </p>
 
             {/* Dynamic Social Icons */}
             <div className="flex items-center space-x-2.5 py-1" id="footer-social-panel">
               {socialMediaLinks.filter(link => link.visible).map((link) => {
                 const IconComponent = getSocialIcon(link.icon);
+                let url = link.url;
+                if (cmsContent && cmsContent.contactSettings) {
+                  const platformKey = link.icon.toLowerCase();
+                  if (platformKey === "facebook" && cmsContent.contactSettings.facebook) url = cmsContent.contactSettings.facebook;
+                  else if (platformKey === "instagram" && cmsContent.contactSettings.instagram) url = cmsContent.contactSettings.instagram;
+                  else if (platformKey === "linkedin" && cmsContent.contactSettings.linkedin) url = cmsContent.contactSettings.linkedin;
+                  else if (platformKey === "x" && cmsContent.contactSettings.twitter) url = cmsContent.contactSettings.twitter;
+                  else if (platformKey === "youtube" && cmsContent.contactSettings.youtube) url = cmsContent.contactSettings.youtube;
+                  else if (platformKey === "github" && cmsContent.contactSettings.github) url = cmsContent.contactSettings.github;
+                }
                 return (
                   <a
                     key={link.id}
-                    href={link.url}
+                    href={url}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="p-2 rounded-lg border border-slate-200 dark:border-slate-800/60 bg-slate-500/5 hover:bg-gradient-to-tr hover:from-cyan-500 hover:to-purple-600 hover:text-white hover:border-transparent transition-all duration-300"
@@ -352,11 +541,11 @@ export default function App() {
             <div className="space-y-1.5 pt-2 font-mono text-[10px]" id="footer-notations">
               <p className="flex items-center space-x-2 text-cyan-550 dark:text-cyan-400 font-semibold">
                 <Globe size={12} />
-                <span>Serving clients worldwide remotely.</span>
+                <span>{cmsContent?.footerNotation1 || "Serving clients worldwide remotely."}</span>
               </p>
               <p className="flex items-center space-x-2">
                 <ShieldCheck size={12} className="text-emerald-500" />
-                <span>Customer support available with responses within 24 hours.</span>
+                <span>{cmsContent?.footerNotation2 || "Customer support available with responses within 24 hours."}</span>
               </p>
             </div>
           </div>
@@ -380,9 +569,9 @@ export default function App() {
 
         {/* Legal copyrights */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-12 pt-8 border-t dark:border-slate-900 border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between text-[10px] opacity-50 gap-4">
-          <p>© 2026 Diavox Tech Inc. Serving global remote divisions. All rights reserved.</p>
+          <p>{cmsContent?.footerCopyright || "© 2026 Diavox Tech Inc. Serving global remote divisions. All rights reserved."}</p>
           <p className="flex items-center space-x-1 font-sans">
-            <span>Made with precision by Diavox Desk</span>
+            <span>{cmsContent?.footerCredit || "Made with precision by Diavox Desk"}</span>
             <Heart size={10} className="text-rose-500 fill-rose-500" />
           </p>
         </div>

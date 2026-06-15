@@ -77,30 +77,24 @@ export default function AdminTeamProfiles() {
       // Creating new staff account
       const securePass = tempPassword || "DiavoxPass2026!";
       const securePassHash = sha256Sync(securePass);
-      // Let's create user with username and custom secure parameters 
-      const newUserId = "team-" + Math.random().toString(36).substring(4);
+      const finalAvatar = avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name)}`;
 
-      // Add users list locally in store via updateTeamMember / manual push
-      // We can trigger addTeamMember baseline first or update manually
-      addTeamMember(name, "Specialist", department, email);
-      
-      // Since addTeamMember generates baseline profile, let's locate the newly inserted member and refine with our rich states
-      const newlyCreatedList = useStore.getState().allUsers;
-      const createdMember = newlyCreatedList[newlyCreatedList.length - 1];
-      if (createdMember) {
-        updateTeamMember(createdMember.id, {
-          username: username.trim().toLowerCase(),
-          role,
-          permissions,
-          password_hash: securePassHash,
-          avatar_url: avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name)}`
-        });
-      }
+      addTeamMember(
+        name,
+        "Specialist",
+        department,
+        email,
+        username.trim().toLowerCase(),
+        role,
+        permissions,
+        securePassHash,
+        finalAvatar
+      );
 
       addActivityLog(
-        currentUser.id, 
-        `Onboarded new team profile: ${name} (Username: @${username})`, 
-        "Account created", 
+        currentUser.id,
+        `Onboarded new team profile: ${name} (Username: @${username})`,
+        "Account created",
         `Temporary Credential Secure Password assigned: ${securePass} (SHA-256: ${securePassHash.substring(0, 8)}...)`
       );
     }
@@ -401,9 +395,7 @@ export default function AdminTeamProfiles() {
                       @{user.username || "unset_handle"}
                     </p>
                     <p className="text-[10px] font-mono font-bold text-cyan-405 uppercase tracking-wide mt-1">
-                      {user.role === "primary_admin" ? "PRIMARY ADMIN" : 
-                       user.role === "secondary_admin" ? "SECONDARY ADMIN" :
-                       user.role === "third_admin" ? "THIRD ADMIN" : "OPERATIVE"}
+                      {["primary_admin", "secondary_admin", "third_admin"].includes(user.role) ? "ADMIN" : "OPERATIVE"}
                     </p>
                   </div>
                 </div>

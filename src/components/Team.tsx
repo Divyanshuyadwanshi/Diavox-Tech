@@ -23,9 +23,7 @@ export default function Team({ preview, onNavigate }: TeamProps) {
   const displayedTeam = preview ? teamMembers.slice(0, 4) : teamMembers;
 
   const getRoleLabel = (role: string) => {
-    if (role === "primary_admin") return "Primary Administrator";
-    if (role === "secondary_admin") return "Secondary Admin Manager";
-    if (role === "third_admin") return "Third Admin (Operations)";
+    if (["primary_admin", "secondary_admin", "third_admin"].includes(role)) return "Admin";
     return "Staff Development Engineer";
   };
 
