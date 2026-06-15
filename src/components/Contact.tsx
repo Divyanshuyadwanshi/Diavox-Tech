@@ -27,7 +27,14 @@ interface ContactProps {
 }
 
 export default function Contact({ onOpenAuth, onNavigate }: ContactProps) {
-  const { theme, currentUser, submitRequest } = useStore();
+  const { theme, currentUser, submitRequest, cmsContent } = useStore();
+  const contact = cmsContent?.contactSettings || {
+    whatsapp: "911234567890",
+    email: "hello@diavox.com",
+    phone: "+1 (800) 555-3210",
+    supportEmail: "support@diavox.com",
+    businessHours: "Mon - Fri: 9:00 AM - 6:00 PM (GMT-5)"
+  };
   const [successMsg, setSuccessMsg] = useState<boolean>(false);
   
   // React Hook Form
@@ -99,7 +106,7 @@ export default function Contact({ onOpenAuth, onNavigate }: ContactProps) {
             <div className="space-y-4" id="contact-methods-box">
               {/* WhatsApp Option */}
               <a
-                href="https://wa.me/911234567890?text=Hello%20Diavox%2C%20I'd%20love%20to%20discuss%20a%20development%20project."
+                href={`https://wa.me/${contact.whatsapp.replace(/[^0-9]/g, "")}?text=Hello%20Diavox%2C%20I'd%20love%20to%20discuss%20a%20development%20project.`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className={`p-5 rounded-xl border flex items-start space-x-4 hover:-translate-y-0.5 transition-all block ${
@@ -124,7 +131,7 @@ export default function Contact({ onOpenAuth, onNavigate }: ContactProps) {
 
               {/* Email Option */}
               <a
-                href="mailto:hello@diavox.com?subject=Project%20Inquiry"
+                href={`mailto:${contact.email}?subject=Project%20Inquiry`}
                 className={`p-5 rounded-xl border flex items-start space-x-4 hover:-translate-y-0.5 transition-all block ${
                   theme === "dark"
                     ? "bg-slate-950 border-slate-900 hover:border-cyan-500/30 text-white"
@@ -136,14 +143,14 @@ export default function Contact({ onOpenAuth, onNavigate }: ContactProps) {
                 </div>
                 <div className="text-left">
                   <span className="text-[10px] font-mono tracking-widest text-cyan-400 font-semibold uppercase block">General Inquiries</span>
-                  <h4 className="text-sm font-bold font-display mt-0.5">hello@diavox.com</h4>
+                  <h4 className="text-sm font-bold font-display mt-0.5">{contact.email}</h4>
                   <p className="text-xs opacity-75 mt-1">Submit attachments, blueprints, or RFP documents directly for general review.</p>
                 </div>
               </a>
 
               {/* Phone Option */}
               <a
-                href="tel:+18005553210"
+                href={`tel:${contact.phone.replace(/[^0-9+]/g, "")}`}
                 className={`p-5 rounded-xl border flex items-start space-x-4 hover:-translate-y-0.5 transition-all block ${
                   theme === "dark"
                     ? "bg-slate-950 border-slate-900 hover:border-purple-500/30 text-white"
@@ -155,10 +162,48 @@ export default function Contact({ onOpenAuth, onNavigate }: ContactProps) {
                 </div>
                 <div className="text-left">
                   <span className="text-[10px] font-mono tracking-widest text-purple-400 font-semibold uppercase block">Corporate Hot line</span>
-                  <h4 className="text-sm font-bold font-display mt-0.5">+1 (800) 555-3210</h4>
+                  <h4 className="text-sm font-bold font-display mt-0.5">{contact.phone}</h4>
                   <p className="text-xs opacity-75 mt-1">Speak directly with sales officers. Calls answered within minutes.</p>
                 </div>
               </a>
+
+              {/* Chat With Us Option */}
+              <div
+                onClick={() => {
+                  if (!currentUser) {
+                    localStorage.setItem("redirect_after_login", "chat");
+                    onOpenAuth();
+                  } else {
+                    localStorage.setItem("preselected_tab", "chat");
+                    if (["primary_admin", "secondary_admin", "secret_admin", "third_admin"].includes(currentUser.role)) {
+                      onNavigate("admin-dash");
+                    } else if (currentUser.role === "team_member") {
+                      onNavigate("team-dash");
+                    } else {
+                      onNavigate("client-dash");
+                    }
+                  }
+                }}
+                className={`p-5 rounded-xl border flex items-start space-x-4 hover:-translate-y-0.5 hover:scale-[1.01] transition-all cursor-pointer block ${
+                  theme === "dark"
+                    ? "bg-slate-950 border-slate-900 hover:border-cyan-500/30 text-white"
+                    : "bg-white border-slate-200 hover:border-cyan-500 text-slate-950 shadow-sm"
+                }`}
+                id="btn-chat-with-us-card"
+              >
+                <div className="p-3 bg-cyan-500/10 text-cyan-400 rounded-lg shrink-0">
+                  <MessageCircle size={20} />
+                </div>
+                <div className="text-left">
+                  <span className="text-[10px] font-mono tracking-widest text-cyan-400 font-bold uppercase block">Omni-Channel Helpdesk</span>
+                  <h4 className="text-sm font-bold font-display mt-0.5">Chat With Us</h4>
+                  <p className="text-xs opacity-75 mt-1">Our technical leaders are available via WhatsApp, Email, Phone, and the secure Enterprise Chat room.</p>
+                  <span className="text-xs font-mono text-cyan-400 font-semibold inline-flex items-center space-x-1 mt-2">
+                    <span>Enter Enterprise Chat</span>
+                    <ChevronRight size={12} />
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
 

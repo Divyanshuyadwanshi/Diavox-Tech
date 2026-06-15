@@ -5,7 +5,7 @@
 
 import React, { useState } from "react";
 import { useStore } from "../store";
-import { Check, ArrowUpRight, CheckCircle2, ShieldCheck, Globe, CreditCard } from "lucide-react";
+import { Check, ArrowUpRight, CheckCircle2, ShieldCheck, Globe, CreditCard, X, MessageSquare } from "lucide-react";
 
 interface PricingProps {
   onOpenAuth: () => void;
@@ -49,17 +49,89 @@ export default function Pricing({ onOpenAuth, onNavigate, preview }: PricingProp
     }
   };
 
+  const [selectedPlan, setSelectedPlan] = useState<{
+    optionTitle: string;
+    tierName: string;
+    price: string;
+    type: string;
+  } | null>(null);
+
   const handlePurchase = (optionTitle: string, tierName: string) => {
     if (!currentUser) {
       onOpenAuth();
     } else {
-      purchasePlan(`${optionTitle} (${tierName})` as any, isAnnual);
-      setNotification(`Successfully registered your request for Diavox ${optionTitle} - ${tierName}! View your active billing inside your client dashboard.`);
-      setTimeout(() => {
-        setNotification(null);
-        onNavigate("client-dash");
-      }, 3500);
+      const option = pricingOptions.find(o => o.title === optionTitle);
+      const tier = option?.tiers.find(t => t.name === tierName);
+      const displayPrice = tier ? getDisplayPriceString(tier, option?.type || "one-time") : "";
+      setSelectedPlan({
+        optionTitle,
+        tierName,
+        price: displayPrice,
+        type: option?.type || "one-time"
+      });
     }
+  };
+
+  const executeRazorpayPayment = () => {
+    if (!selectedPlan) return;
+    
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    script.onload = () => {
+      const cleanPrice = selectedPlan.price.replace(/[^0-9]/g, "");
+      const finalAmount = (parseInt(cleanPrice) || 500) * 100; // paise
+
+      const options = {
+        key: "rzp_test_T0OlV0a77lOpMA",
+        amount: finalAmount,
+        currency: activeCurrency === "INR" ? "INR" : "USD",
+        name: "Diavox Tech",
+        description: `Secure Settlement: ${selectedPlan.optionTitle} - ${selectedPlan.tierName}`,
+        image: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=80&h=80",
+        handler: function (response: any) {
+          purchasePlan(`${selectedPlan.optionTitle} (${selectedPlan.tierName})` as any, isAnnual);
+          
+          const state = useStore.getState();
+          const invoiceId = "inv-" + Math.random().toString(36).substring(4);
+          
+          state.addPayment({
+            payment_id: response.razorpay_payment_id || "pay_" + Math.random().toString(36).substring(4),
+            transaction_id: "txn_" + Math.random().toString(36).substring(4),
+            amount: selectedPlan.price,
+            method: "Razorpay Checkout (UPI)",
+            date: new Date().toISOString().split("T")[0],
+            invoice_id: invoiceId,
+            client_id: currentUser.id
+          });
+
+          state.addActivityLog(
+            currentUser.id,
+            `Processed payment for ${selectedPlan.optionTitle} (${selectedPlan.tierName}) with payment code ID ${response.razorpay_payment_id}`
+          );
+
+          setNotification(`Invoice Settlement Success! Registered ${selectedPlan.optionTitle} - ${selectedPlan.tierName} using Razorpay Autopay! Code: ${response.razorpay_payment_id || "Sucess"}`);
+          setSelectedPlan(null);
+
+          setTimeout(() => {
+            setNotification(null);
+            onNavigate("client-dash");
+          }, 3500);
+        },
+        prefill: {
+          name: currentUser.name,
+          email: currentUser.email,
+        },
+        theme: {
+          color: "#06b6d4"
+        }
+      };
+
+      const rzp = new (window as any).Razorpay(options);
+      rzp.open();
+    };
+    
+    document.body.appendChild(script);
   };
 
   return (
@@ -277,6 +349,67 @@ export default function Pricing({ onOpenAuth, onNavigate, preview }: PricingProp
             Settle Custom SLA
           </button>
         </div>
+
+        {/* Bespoke option choice dialog modal */}
+        {selectedPlan && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-fade-in" id="pricing-choice-modal">
+            <div className={`w-full max-w-md p-6 rounded-2xl shadow-2xl border transition-all duration-300 ${
+              theme === "dark" 
+                ? "bg-slate-900 border-slate-800 text-white" 
+                : "bg-white border-slate-200 text-slate-900"
+            }`}>
+              
+              <div className="flex items-center justify-between border-b dark:border-slate-800 border-slate-100 pb-4 mb-4">
+                <div className="flex items-center space-x-2">
+                  <CreditCard className="text-cyan-500" size={18} />
+                  <span className="text-xs font-mono font-bold tracking-wider uppercase text-cyan-500">Checkout Options</span>
+                </div>
+                <button 
+                  onClick={() => setSelectedPlan(null)}
+                  className="p-1.5 rounded-lg opacity-60 hover:opacity-100 hover:bg-slate-500/10 transition-colors"
+                  aria-label="Close dialog"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+
+              <div className="space-y-3 mb-6">
+                <h4 className="text-lg font-display font-bold">Configure {selectedPlan.optionTitle}</h4>
+                <p className="text-xs opacity-75 font-sans leading-relaxed">
+                  Choose how you would like to settle the <span className="font-bold text-cyan-400">{selectedPlan.tierName} Tier</span>. 
+                  You can coordinate terms directly with our core engineering specialists or settle the invoice immediately in full.
+                </p>
+
+                <div className="p-3.5 rounded-xl dark:bg-slate-950/40 bg-slate-50 border dark:border-slate-800 border-slate-200/60 font-mono text-xs flex justify-between items-center">
+                  <span className="opacity-60 text-[10px] uppercase">Plan Cost:</span>
+                  <span className="text-base font-black text-cyan-400 font-display">{selectedPlan.price}</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <button
+                  onClick={() => {
+                    setSelectedPlan(null);
+                    onNavigate("client-dash");
+                  }}
+                  className="p-3 rounded-xl border dark:border-slate-800 dark:hover:bg-slate-800 border-slate-200 hover:bg-slate-50 font-mono text-xs font-bold transition-all flex items-center justify-center space-x-2 text-left"
+                >
+                  <MessageSquare size={13} className="text-cyan-500" />
+                  <span>Talk With Team</span>
+                </button>
+
+                <button
+                  onClick={executeRazorpayPayment}
+                  className="p-3 rounded-xl bg-gradient-to-r from-cyan-500 to-purple-600 hover:brightness-115 text-white font-mono text-xs font-bold transition-all shadow-md shadow-cyan-500/10 flex items-center justify-center space-x-2"
+                >
+                  <CreditCard size={13} />
+                  <span>Pay Now (Razorpay)</span>
+                </button>
+              </div>
+
+            </div>
+          </div>
+        )}
 
       </div>
     </section>

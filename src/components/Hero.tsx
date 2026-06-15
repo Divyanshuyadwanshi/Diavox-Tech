@@ -16,13 +16,20 @@ interface HeroProps {
 
 export default function Hero({ onNavigate, onOpenAuth }: HeroProps) {
   const { theme, currentUser, cmsContent } = useStore();
+  const contact = cmsContent?.contactSettings || {
+    whatsapp: "911234567890",
+    email: "hello@diavox.com",
+    phone: "+1 (800) 555-3210",
+    supportEmail: "support@diavox.com",
+    businessHours: "Mon - Fri: 9:00 AM - 6:00 PM (GMT-5)"
+  };
   const [activeTab, setActiveTab] = useState<"telemetry" | "interactive3d">("interactive3d");
 
   const handleCtaClick = () => {
     if (!currentUser) {
       onOpenAuth();
     } else {
-      onNavigate("contact");
+      onNavigate("contact-page");
     }
   };
 
@@ -54,7 +61,9 @@ export default function Hero({ onNavigate, onOpenAuth }: HeroProps) {
 
             <h1 className="text-4xl sm:text-5xl md:text-7.5xl font-display font-light tracking-tight leading-tight text-slate-900 dark:text-slate-100" id="hero-core-title">
               {cmsContent?.heroTitle ? (
-                <span>{cmsContent.heroTitle}</span>
+                <span className="text-slate-900 dark:text-slate-100 transition-colors duration-300">
+                  {cmsContent.heroTitle}
+                </span>
               ) : (
                 <>
                   Crafting Divine <br className="hidden sm:inline" />
@@ -104,7 +113,7 @@ export default function Hero({ onNavigate, onOpenAuth }: HeroProps) {
               </button>
 
               <button
-                onClick={() => onNavigate("portfolio")}
+                onClick={() => onNavigate("portfolio-page")}
                 className={`flex items-center space-x-1 px-5 py-3.5 font-medium rounded-xl text-sm transition-colors border ${
                   theme === "dark"
                     ? "bg-slate-900 border-slate-800 hover:bg-slate-800 text-slate-200"
@@ -116,7 +125,7 @@ export default function Hero({ onNavigate, onOpenAuth }: HeroProps) {
               </button>
 
               <a
-                href="https://wa.me/911234567890?text=Hello%20Diavox%20Tech%2C%20I%20would%20like%20to%20inquire%20about%20your%20services."
+                href={`https://wa.me/${contact.whatsapp.replace(/[^0-9]/g, "")}?text=Hello%20Diavox%20Tech%2C%20I%20would%20like%20to%20inquire%20about%20your%20services.`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center space-x-1.5 px-4 py-3.5 text-xs text-emerald-500 hover:text-emerald-400 transition-colors font-mono"

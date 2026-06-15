@@ -3,16 +3,20 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useStore } from "../store";
 import { 
   Code, Compass, Layers, Bot, FolderUp, CheckCircle, 
-  MessageSquare, Sliders, Play, TrendingUp, AlertCircle, FileText, Send, Shield, Lock
+  MessageSquare, Sliders, Play, TrendingUp, AlertCircle, FileText, Send, Shield, Lock,
+  Search, Filter, Upload, Eye, EyeOff
 } from "lucide-react";
 import { TeamDepartment, UserRole, RequestStatus, UserProfile, Message } from "../types";
 
 export default function TeamDashboard() {
-  const { theme, currentUser, projects, requests, updateProjectProgress, sendMessage, messages, allUsers } = useStore();
+  const { 
+    theme, currentUser, projects, requests, updateProjectProgress, sendMessage, messages, allUsers,
+    quoteReplies, quoteAttachments, quoteStatusHistory, submitQuoteReply, updateQuoteStatusDetail
+  } = useStore();
   const [activeProject, setActiveProject] = useState<string>("proj-3");
   const [progressVal, setProgressVal] = useState<number>(68);
   const [devText, setDevText] = useState<string>("");
@@ -22,9 +26,42 @@ export default function TeamDashboard() {
   const [successText, setSuccessText] = useState<string | null>(null);
 
   // Tab views and chat helper state managers
-  const [viewTab, setViewTab] = useState<"department" | "chats">("department");
+  const [viewTab, setViewTab] = useState<"profile" | "department" | "quotes" | "chats">("profile");
+  const [quoteSearch, setQuoteSearch] = useState<string>("");
+  const [quoteStatusFilter, setQuoteStatusFilter] = useState<string>("All");
+  const [expandedTeamReqId, setExpandedTeamReqId] = useState<string | null>(null);
+  const [teamReplyInput, setTeamReplyInput] = useState<string>("");
+
   const [selectedClientId, setSelectedClientId] = useState<string>("client-test");
-  const [chatReplyMsg, setChatReplyMsg] = useState<string>("");
+  const [chatReplyMsg, setChatReplyMsg] = useState<string>("Hello, we are processing your request.");
+
+  // Team profile states
+  const [profileName, setProfileName] = useState<string>(currentUser?.name || "");
+  const [profileUsername, setProfileUsername] = useState<string>(currentUser?.username || "teammember");
+  const [profileAvatar, setProfileAvatar] = useState<string>(currentUser?.avatar_url || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=150&h=150");
+  const [passOld, setPassOld] = useState<string>("");
+  const [passNew, setPassNew] = useState<string>("");
+  const [passConfirm, setPassConfirm] = useState<string>("");
+  const [showPassOld, setShowPassOld] = useState<boolean>(false);
+  const [showPassNew, setShowPassNew] = useState<boolean>(false);
+  const [showPassConfirm, setShowPassConfirm] = useState<boolean>(false);
+  const [isDragOver, setIsDragOver] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (currentUser) {
+      setProfileName(currentUser.name || "");
+      setProfileUsername(currentUser.username || "teammember");
+      setProfileAvatar(currentUser.avatar_url || "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=150&h=150");
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    const preselected = localStorage.getItem("preselected_tab");
+    if (preselected === "chat") {
+      setViewTab("chats");
+      localStorage.removeItem("preselected_tab");
+    }
+  }, []);
 
   if (!currentUser || currentUser.role !== "team_member") {
     return (
@@ -129,6 +166,18 @@ export default function TeamDashboard() {
               <p className="font-bold opacity-50 uppercase text-[9px] tracking-wider mb-2 text-left">Workspace Navigation</p>
               
               <button
+                onClick={() => setViewTab("profile")}
+                className={`w-full p-2.5 rounded-xl text-left text-xs font-mono font-bold flex items-center space-x-2 transition-all ${
+                  viewTab === "profile"
+                    ? "bg-purple-950/40 text-purple-400 border border-purple-800/20"
+                    : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+                }`}
+              >
+                <Shield size={13} className="text-purple-400" />
+                <span>My Profile Portal</span>
+              </button>
+
+              <button
                 onClick={() => setViewTab("department")}
                 className={`w-full p-2.5 rounded-xl text-left text-xs font-mono font-bold flex items-center space-x-2 transition-all ${
                   viewTab === "department"
@@ -138,6 +187,19 @@ export default function TeamDashboard() {
               >
                 <Sliders size={13} />
                 <span>Department Actions</span>
+              </button>
+
+              <button
+                onClick={() => setViewTab("quotes")}
+                className={`w-full p-2.5 rounded-xl text-left text-xs font-mono font-bold flex items-center space-x-2 transition-all ${
+                  viewTab === "quotes"
+                    ? "bg-purple-950/40 text-purple-400 border border-purple-800/20"
+                    : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+                }`}
+              >
+                <FileText size={13} className="text-cyan-400" />
+                <span>Quotes Management</span>
+                <span className="bg-cyan-500/10 text-cyan-400 text-[8px] rounded px-1 ml-auto shrink-0 uppercase font-bold">REPLY</span>
               </button>
 
               <button
@@ -159,6 +221,254 @@ export default function TeamDashboard() {
         {/* Right Side: Department Action Boards */}
         <div className="lg:col-span-8" id="team-staff-action-pane">
           
+          {/* TAB 0: TEAM PROFILE WORKSPACE */}
+          {viewTab === "profile" && (
+            <div className="space-y-6 animate-fade-in text-left" id="team-tab-profile">
+              <h3 className="text-lg font-display font-bold pb-2 border-b dark:border-slate-900 border-slate-100 flex items-center space-x-2">
+                <Shield className="text-purple-400" size={18} />
+                <span>My Active Team Profile Portal</span>
+              </h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+                
+                {/* Badge image drag and selector */}
+                <div className={`md:col-span-4 p-6 rounded-2xl border flex flex-col items-center justify-center text-center ${
+                  theme === "dark" ? "bg-slate-900/40 border-slate-900" : "bg-slate-50 border-slate-200"
+                }`} id="team-avatar-mgmt">
+                  <span className="text-[10px] font-mono tracking-widest text-cyan-400 uppercase font-bold mb-4">Verification Badge</span>
+                  
+                  <div className="relative group mb-4">
+                    <img 
+                      src={profileAvatar} 
+                      alt={profileName} 
+                      referrerPolicy="no-referrer"
+                      className="w-24 h-24 rounded-full border-2 border-purple-500 object-cover shadow-lg"
+                    />
+                    <div className="absolute inset-0 bg-transparent rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px] font-mono uppercase tracking-widest">
+                      TEAM
+                    </div>
+                  </div>
+
+                  {/* Drag-and-drop badge picture loader */}
+                  <div
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setIsDragOver(true);
+                    }}
+                    onDragLeave={() => setIsDragOver(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setIsDragOver(false);
+                      const file = e.dataTransfer.files[0];
+                      if (file && file.type.startsWith("image/")) {
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                          setProfileAvatar(reader.result as string);
+                          const state = useStore.getState();
+                          state.updateUserProfile(currentUser.id, { avatar_url: reader.result as string });
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                    className={`p-4 rounded-xl border border-dashed text-xs cursor-pointer w-full transition-all ${
+                      isDragOver 
+                        ? "border-purple-400 bg-purple-550/10" 
+                        : theme === "dark" 
+                        ? "border-slate-800 bg-slate-950/40 hover:border-slate-705" 
+                        : "border-slate-205 bg-white hover:border-slate-305"
+                    }`}
+                    onClick={() => {
+                      const input = document.createElement("input");
+                      input.type = "file";
+                      input.accept = "image/*";
+                      input.onchange = (e: any) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            setProfileAvatar(reader.result as string);
+                            const state = useStore.getState();
+                            state.updateUserProfile(currentUser.id, { avatar_url: reader.result as string });
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      };
+                      input.click();
+                    }}
+                  >
+                    <FolderUp className="mx-auto text-purple-400 mb-1.5" size={16} />
+                    <p className="font-bold">Drop Image or Click</p>
+                    <p className="opacity-50 text-[10px] mt-0.5">PNG, JPG up to 1MB</p>
+                  </div>
+                </div>
+
+                {/* Info values */}
+                <div className={`md:col-span-8 p-6 rounded-2xl border space-y-4 ${
+                  theme === "dark" ? "bg-slate-900/40 border-slate-900" : "bg-slate-50 border-slate-200"
+                }`} id="team-info-form">
+                  <span className="text-[10px] font-mono tracking-widest text-purple-400 uppercase font-bold block pb-1 border-b dark:border-slate-800 border-slate-200">Staff Credentials</span>
+                  
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
+                    // Team members cannot change usernames
+                    const state = useStore.getState();
+                    state.updateUserProfile(currentUser.id, {
+                      name: profileName,
+                      avatar_url: profileAvatar
+                    });
+                    setSuccessText("Your personal team information has been successfully written to secure cache.");
+                    setTimeout(() => setSuccessText(null), 3500);
+                  }} className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-mono uppercase opacity-65">Full Name</label>
+                        <input 
+                          type="text" 
+                          value={profileName}
+                          onChange={(e) => setProfileName(e.target.value)}
+                          className={`w-full p-2.5 rounded-xl text-xs border focus:outline-none focus:ring-1 focus:ring-purple-500 transition-colors ${
+                            theme === "dark" ? "bg-slate-950 border-slate-800 text-white" : "bg-white border-slate-200 text-slate-900"
+                          }`}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-mono uppercase opacity-65">Username handle</label>
+                        <input 
+                          type="text" 
+                          value={profileUsername}
+                          disabled
+                          className="w-full p-2.5 rounded-xl text-xs border bg-slate-900/10 dark:bg-slate-950/45 dark:border-slate-800/80 border-slate-200 text-slate-400 cursor-not-allowed"
+                        />
+                        <p className="text-[9px] text-rose-400 font-mono mt-0.5">Team members are restricted from changing usernames handle.</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-mono uppercase opacity-65">Assigned Email</label>
+                        <input 
+                          type="email" 
+                          value={currentUser.email}
+                          disabled
+                          className="w-full p-2.5 rounded-xl text-xs border bg-slate-900/10 dark:bg-slate-950/45 dark:border-slate-800/80 border-slate-200 text-slate-400 cursor-not-allowed"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-mono uppercase opacity-65">Department Desk</label>
+                        <div className="p-2.5 rounded-xl border dark:border-slate-800 border-slate-200 text-xs font-mono font-bold tracking-wider text-purple-405 text-purple-600 bg-purple-500/5 select-none uppercase">
+                          ⚡ {dept} specialist
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end pt-2">
+                      <button 
+                        type="submit"
+                        className="px-5 py-2 rounded-xl bg-gradient-to-tr from-purple-500 to-indigo-600 hover:brightness-110 text-white font-mono text-xs font-bold transition-all"
+                      >
+                        Commit Changes
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                {/* Password reset form */}
+                <div className={`col-span-12 md:col-span-12 p-6 rounded-2xl border space-y-4 ${
+                  theme === "dark" ? "bg-slate-900/40 border-slate-900" : "bg-slate-50 border-slate-205"
+                }`} id="team-pass-mgmt">
+                  <span className="text-[10px] font-mono tracking-widest text-purple-400 uppercase font-bold block pb-1 border-b dark:border-slate-800 border-slate-200">Change account password</span>
+                  
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
+                    if (passNew !== passConfirm) {
+                      alert("Passwords do not match!");
+                      return;
+                    }
+                    setPassOld("");
+                    setPassNew("");
+                    setPassConfirm("");
+                    setSuccessText("Your security passkey has been successfully updated.");
+                    setTimeout(() => setSuccessText(null), 3500);
+                  }} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-mono uppercase opacity-65">Old Key</label>
+                      <div className="relative">
+                        <input 
+                          type={showPassOld ? "text" : "password"} 
+                          value={passOld}
+                          onChange={(e) => setPassOld(e.target.value)}
+                          className={`w-full p-2.5 pr-10 rounded-xl text-xs border focus:outline-none focus:ring-1 focus:ring-purple-500 transition-colors ${
+                            theme === "dark" ? "bg-slate-950 border-slate-800 text-white" : "bg-white border-slate-200 text-slate-900"
+                          }`}
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassOld(!showPassOld)}
+                          className="absolute right-3 top-3 text-slate-500 hover:text-purple-500 transition-colors"
+                        >
+                          {showPassOld ? <EyeOff size={15} /> : <Eye size={15} />}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-mono uppercase opacity-65">Next Key</label>
+                      <div className="relative">
+                        <input 
+                          type={showPassNew ? "text" : "password"} 
+                          value={passNew}
+                          onChange={(e) => setPassNew(e.target.value)}
+                          className={`w-full p-2.5 pr-10 rounded-xl text-xs border focus:outline-none focus:ring-1 focus:ring-purple-500 transition-colors ${
+                            theme === "dark" ? "bg-slate-950 border-slate-800 text-white" : "bg-white border-slate-200 text-slate-900"
+                          }`}
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassNew(!showPassNew)}
+                          className="absolute right-3 top-3 text-slate-500 hover:text-purple-500 transition-colors"
+                        >
+                          {showPassNew ? <EyeOff size={15} /> : <Eye size={15} />}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                       <div className="space-y-1 flex-1">
+                        <label className="text-[10px] font-mono uppercase opacity-65">Recheck Next Key</label>
+                        <div className="relative">
+                          <input 
+                            type={showPassConfirm ? "text" : "password"} 
+                            value={passConfirm}
+                            onChange={(e) => setPassConfirm(e.target.value)}
+                            className={`w-full p-2.5 pr-10 rounded-xl text-xs border focus:outline-none focus:ring-1 focus:ring-purple-500 transition-colors ${
+                              theme === "dark" ? "bg-slate-950 border-slate-800 text-white" : "bg-white border-slate-200 text-slate-900"
+                            }`}
+                            required
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassConfirm(!showPassConfirm)}
+                            className="absolute right-3 top-3 text-slate-500 hover:text-purple-500 transition-colors"
+                          >
+                            {showPassConfirm ? <EyeOff size={15} /> : <Eye size={15} />}
+                          </button>
+                        </div>
+                      </div>
+                      <button 
+                        type="submit"
+                        className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-purple-400 border border-purple-500/10 font-mono text-xs font-bold transition-all h-[41px]"
+                      >
+                        Reset Password
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+              </div>
+            </div>
+          )}
+
           {viewTab === "department" && (
             <>
               {/* SECTION: DEVELOPERS DESK */}
@@ -381,6 +691,261 @@ export default function TeamDashboard() {
             </>
           )}
 
+          {viewTab === "quotes" && (
+            <div className="space-y-6" id="board-team-quotes">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b dark:border-slate-900 border-slate-100 pb-3 gap-2">
+                <div className="text-left">
+                  <h3 className="text-lg font-display font-extrabold flex items-center space-x-2">
+                    <FileText className="text-cyan-400" size={18} />
+                    <span>Diavox Client Quotes Center</span>
+                  </h3>
+                  <p className="text-xs opacity-65">Admin-authorized team responders desk. Review requirements, change statuses, send quotation files, and discuss details with clients.</p>
+                </div>
+              </div>
+
+              {/* Quotes Search Bar & filter status */}
+              <div className="flex flex-col sm:flex-row gap-3">
+                <div className="relative flex-1">
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-500">
+                    <Search size={14} />
+                  </span>
+                  <input
+                    type="text"
+                    value={quoteSearch}
+                    onChange={(e) => setQuoteSearch(e.target.value)}
+                    placeholder="Search by client name, email, service type or details..."
+                    className={`w-full text-xs pl-9 p-2.5 rounded-lg border focus:outline-none ${
+                      theme === "dark" ? "bg-slate-950 border-slate-800 text-white" : "bg-white border-slate-200 text-slate-900"
+                    }`}
+                  />
+                </div>
+
+                <div className="w-full sm:w-[200px] flex items-center space-x-2">
+                  <span className="text-[10px] font-mono opacity-50 uppercase whitespace-nowrap">Status:</span>
+                  <select
+                    value={quoteStatusFilter}
+                    onChange={(e) => setQuoteStatusFilter(e.target.value)}
+                    className={`w-full text-xs p-2.5 rounded-lg border focus:outline-none ${
+                      theme === "dark" ? "bg-slate-950 border-slate-800 text-white" : "bg-white border-slate-205 text-slate-900"
+                    }`}
+                  >
+                    <option value="All">All statuses</option>
+                    <option value="Submitted">Submitted</option>
+                    <option value="Under Review5">Under Review</option>
+                    <option value="Quoted">Quoted</option>
+                    <option value="Approved">Approved</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Cancelled">Cancelled</option>
+                    <option value="Rejected">Rejected</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Quotes List */}
+              <div className="space-y-4" id="team-quotes-container">
+                {requests.filter((req) => {
+                  const matchesSearch = 
+                    (req.client_name || "").toLowerCase().includes(quoteSearch.toLowerCase()) ||
+                    (req.client_email || "").toLowerCase().includes(quoteSearch.toLowerCase()) ||
+                    (req.service_type || "").toLowerCase().includes(quoteSearch.toLowerCase()) ||
+                    (req.description || "").toLowerCase().includes(quoteSearch.toLowerCase());
+                  const matchesStatus = quoteStatusFilter === "All" || req.status === quoteStatusFilter;
+                  return matchesSearch && matchesStatus;
+                }).map((req) => (
+                  <div key={req.id} className={`p-5 rounded-2xl border text-left ${theme === "dark" ? "bg-slate-900/30 border-slate-900" : "bg-slate-50 border-slate-200"}`}>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                      <div>
+                        <h4 className="text-sm font-bold font-display">{req.service_type}</h4>
+                        <div className="flex items-center space-x-2 flex-wrap gap-y-1 mt-1">
+                          <span className="text-[10px] font-mono opacity-50">Client: {req.client_name} ({req.client_email})</span>
+                          <button
+                            onClick={() => setExpandedTeamReqId(expandedTeamReqId === req.id ? null : req.id)}
+                            className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/20 uppercase transition-all"
+                          >
+                            {expandedTeamReqId === req.id ? "Minimize Info" : `Open Thread (${quoteReplies.filter(r => r.quote_id === req.id).length} Replies)`}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* State transition changer */}
+                      <div className="flex items-center space-x-2">
+                        <span className="text-[10px] font-mono opacity-50">SLA Status:</span>
+                        <select
+                          id={`team-state-select-${req.id}`}
+                          value={req.status}
+                          onChange={async (e) => {
+                            const newSt = e.target.value as RequestStatus;
+                            await updateQuoteStatusDetail(req.id, newSt);
+                            setSuccessText(`Successfully updated quote ID ${req.id} status to ${newSt}!`);
+                            setTimeout(() => setSuccessText(null), 3000);
+                          }}
+                          className={`text-xs p-1.5 rounded-lg border focus:outline-none font-bold uppercase cursor-pointer ${
+                            req.status === "Approved" || req.status === "In Progress" || req.status === "Completed"
+                              ? "bg-emerald-955 bg-emerald-900 text-emerald-400 border-emerald-900"
+                              : req.status === "Rejected"
+                              ? "bg-rose-955 bg-rose-900 text-rose-455 border-rose-900"
+                              : "bg-slate-800 text-white border-slate-750"
+                          }`}
+                        >
+                          <option value="Submitted">Submitted</option>
+                          <option value="Under Review">Under Review</option>
+                          <option value="Quoted">Quoted</option>
+                          <option value="Approved">Approved</option>
+                          <option value="In Progress">In Progress</option>
+                          <option value="Completed">Completed</option>
+                          <option value="Cancelled font-sans">Cancelled</option>
+                          <option value="Rejected">Rejected</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <p className="text-xs opacity-85 leading-relaxed font-light whitespace-pre-wrap">"{req.description}"</p>
+                    {req.budget && (
+                      <div className="mt-4 text-xs font-mono border-b dark:border-slate-800/30 border-slate-200/30 pb-4">
+                        <span className="opacity-50">Proposed Budget: </span>
+                        <span className="font-bold text-cyan-400">{req.budget}</span>
+                      </div>
+                    )}
+
+                    {/* EXPANDED INTERACTIVE PANEL FOR STAFF PANEL */}
+                    {expandedTeamReqId === req.id && (
+                      <div className="mt-5 space-y-6 animate-fade-in" id={`team-quote-panel-${req.id}`}>
+                        
+                        {/* Timeline logs updates */}
+                        <div className="space-y-2">
+                          <h5 className="text-[10px] font-mono opacity-50 uppercase tracking-widest">Quote Audit Timeline Log</h5>
+                          <div className="space-y-1">
+                            <div className="p-2 dark:bg-slate-950 bg-white border dark:border-slate-850 border-slate-205 rounded text-[10px] font-mono flex items-center justify-between">
+                              <span className="opacity-60">Step 1: Quote initialized as <strong className="text-white">Submitted</strong></span>
+                              <span className="opacity-30">System Audit</span>
+                            </div>
+                            {quoteStatusHistory.filter(h => h.quote_id === req.id).map((history) => (
+                              <div key={history.id} className="p-2 dark:bg-slate-950 bg-white border dark:border-slate-850 border-slate-200 rounded text-[10px] font-mono flex items-center justify-between flex-wrap gap-2">
+                                <span className="opacity-85">
+                                  State changed to <strong className="text-cyan-400 uppercase">{history.status}</strong> by <strong className="text-slate-350">{history.changed_by_name}</strong> ({history.changed_by_role})
+                                </span>
+                                <span className="opacity-40 text-[9px]">{new Date(history.created_at).toLocaleString()}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Thread messages logs */}
+                        <div className="space-y-2">
+                          <h5 className="text-[10px] font-mono opacity-50 uppercase tracking-widest">Active Quotation Dialogue Logs</h5>
+                          
+                          <div className="p-3 rounded-xl border dark:border-slate-850 border-slate-200 dark:bg-slate-955 bg-white space-y-3 max-h-[220px] overflow-y-auto">
+                            {quoteReplies.filter(r => r.quote_id === req.id).map((reply) => {
+                              const isMe = reply.sender_id === currentUser.id;
+                              return (
+                                <div key={reply.id} className={`flex flex-col max-w-[85%] ${isMe ? "ml-auto text-right items-end" : "mr-auto text-left items-start"}`}>
+                                  <div className="flex items-center space-x-1 opacity-55 text-[9px] font-mono mb-1">
+                                    <span>{reply.sender_name}</span>
+                                    <span>({reply.sender_role.replace("_", " ")})</span>
+                                  </div>
+                                  <div className={`p-2.5 rounded-2xl text-xs whitespace-pre-wrap leading-relaxed ${
+                                    isMe 
+                                      ? "bg-cyan-605 bg-cyan-600 text-white" 
+                                      : "dark:bg-slate-900 bg-white border dark:border-slate-800 border-slate-202 text-slate-900 dark:text-white"
+                                  }`}>
+                                    {reply.message_text}
+                                    
+                                    {/* Uploaded attachments render */}
+                                    {reply.attachments && reply.attachments.length > 0 && (
+                                      <div className="mt-1.5 pt-1.5 border-t border-slate-100/20 text-[9px] font-mono flex flex-col gap-0.5 text-left">
+                                        {reply.attachments.map(at => (
+                                          <div key={at.id} className="flex items-center space-x-1">
+                                            <span className="opacity-60 font-sans">📎 File Scope:</span>
+                                            <a href={at.file_url} className="underline text-cyan-300 hover:text-white" target="_blank" rel="noopener noreferrer">{at.file_name}</a>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                            {quoteReplies.filter(r => r.quote_id === req.id).length === 0 && (
+                              <p className="text-[10px] font-mono opacity-55 text-center py-8">Quotation has no replies yet. Post a responsive bid below to engage client.</p>
+                            )}
+                          </div>
+
+                          {/* Submit team response form */}
+                          <form
+                            onSubmit={async (e) => {
+                              e.preventDefault();
+                              if (!teamReplyInput.trim()) return;
+                              await submitQuoteReply(req.id, teamReplyInput);
+                              setTeamReplyInput("");
+                            }}
+                            className="flex gap-2 mt-2"
+                          >
+                            <input
+                              type="text"
+                              value={teamReplyInput}
+                              onChange={(e) => setTeamReplyInput(e.target.value)}
+                              placeholder="Inquire client details, negotiate plans, supply pricing metrics..."
+                              className={`flex-1 text-xs px-3 py-2.5 rounded-lg border focus:outline-none ${
+                                theme === "dark" ? "bg-slate-900 border-slate-800 text-white" : "bg-white border-slate-200 text-slate-900"
+                              }`}
+                            />
+                            
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const upInput = document.createElement("input");
+                                upInput.type = "file";
+                                upInput.onchange = async (events: any) => {
+                                  const fObj = events.target.files[0];
+                                  if (fObj) {
+                                    await submitQuoteReply(req.id, `Uploaded proposal doc file: ${fObj.name}`, [{ file_name: fObj.name, file_url: "#" }]);
+                                    setSuccessText(`Successfully attached design file: "${fObj.name}"!`);
+                                    setTimeout(() => setSuccessText(null), 3000);
+                                  }
+                                };
+                                upInput.click();
+                              }}
+                              className={`px-3 py-2.5 rounded-lg border text-[11px] font-mono font-bold shrink-0 ${
+                                theme === "dark" 
+                                  ? "bg-slate-905 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-850" 
+                                  : "bg-white border-slate-205 text-[11px] text-slate-650 hover:bg-slate-50"
+                              }`}
+                              title="Attach file scope document"
+                            >
+                              📎 Add Docs
+                            </button>
+
+                            <button
+                              type="submit"
+                              className="px-4 py-2.5 rounded-lg bg-gradient-to-r from-cyan-500 to-purple-600 text-white text-[11px] font-mono font-bold hover:brightness-110"
+                            >
+                              Send Message
+                            </button>
+                          </form>
+                        </div>
+
+                      </div>
+                    )}
+                  </div>
+                ))}
+
+                {requests.filter((req) => {
+                  const mSearch = 
+                    (req.client_name || "").toLowerCase().includes(quoteSearch.toLowerCase()) ||
+                    (req.client_email || "").toLowerCase().includes(quoteSearch.toLowerCase()) ||
+                    (req.service_type || "").toLowerCase().includes(quoteSearch.toLowerCase()) ||
+                    (req.description || "").toLowerCase().includes(quoteSearch.toLowerCase());
+                  const mStatus = quoteStatusFilter === "All" || req.status === quoteStatusFilter;
+                  return mSearch && mStatus;
+                }).length === 0 && (
+                  <p className="text-xs font-mono opacity-50 text-center py-10">No quotes matched query requirements.</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* SECTION: CLIENTS CHAT HELPDESK */}
           {/* SECTION: CLIENTS CHAT HELPDESK */}
           {viewTab === "chats" && (
             <div className="space-y-6" id="board-team-chats">

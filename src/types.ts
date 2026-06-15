@@ -14,9 +14,11 @@ export interface UserProfile {
   role: UserRole;
   department?: TeamDepartment;
   avatar_url?: string;
+  username?: string;
   permissions?: string[]; // e.g. ["view_leads", "manage_projects", "upload_designs", "manage_seo", "view_reports"]
   portfolio?: string;
   description?: string;
+  password_hash?: string;
 }
 
 export interface PricingTierObj {
@@ -38,9 +40,11 @@ export interface PricingOption {
 
 export type RequestStatus = 
   | "Submitted"
+  | "Reviewing"
   | "Under Review"
   | "Quoted"
   | "Approved"
+  | "Rejected"
   | "In Progress"
   | "Completed"
   | "Cancelled";
@@ -55,6 +59,47 @@ export interface ServiceRequest {
   budget?: string;
   status: RequestStatus;
   created_at: string;
+  attachments?: QuoteAttachment[];
+}
+
+export interface QuoteReply {
+  id: string;
+  quote_id: string;
+  sender_id: string;
+  sender_name: string;
+  sender_role: UserRole;
+  message_text: string;
+  created_at: string;
+  attachments?: QuoteAttachment[];
+}
+
+export interface QuoteAttachment {
+  id: string;
+  quote_id?: string;
+  reply_id?: string;
+  file_name: string;
+  file_url: string;
+  file_size?: string;
+  created_at: string;
+}
+
+export interface QuoteStatusHistory {
+  id: string;
+  quote_id: string;
+  status: RequestStatus;
+  changed_by_name: string;
+  changed_by_role: UserRole;
+  notes?: string;
+  created_at: string;
+}
+
+export interface Conversation {
+  id: string;
+  name: string; // Name of group chat or other participant
+  type: "personal" | "group" | "team_team" | "team_admin" | "admin_admin" | "client_team";
+  created_at: string;
+  participants: string[]; // List of user Profile IDs
+  typing_users?: string[]; // list of user IDs currently typing
 }
 
 export interface Project {
@@ -140,6 +185,12 @@ export interface Message {
   recipient_id: string; // "team" or specific client ID
   message_text: string;
   created_at: string;
+  conversation_id?: string;
+  file_url?: string;
+  file_name?: string;
+  file_size?: string;
+  is_image?: boolean;
+  is_read?: boolean;
 }
 
 export interface Notification {
@@ -212,6 +263,32 @@ export interface CmsContent {
   heroBadge: string;
   homepageSections?: string[];
   sectionVisibility?: { [key: string]: boolean };
+  sectionColors?: { [key: string]: { bg: string; text: string } };
+  sectionTitles?: { [key: string]: string };
+  sectionSubtitles?: { [key: string]: string };
+  sectionDescriptions?: { [key: string]: string };
+  sectionButtons?: { [key: string]: { text: string; link: string } };
+  faqs?: Array<{ id: string; question: string; answer: string }>;
+  services?: Array<{ id: string; title: string; description: string; icon: string }>;
+  customSections?: Array<{
+    id: string;
+    title: string;
+    subtitle?: string;
+    description?: string;
+    content?: string;
+    position: "Header" | "Body" | "Footer";
+    backgroundColor?: string;
+    textColor?: string;
+    visible?: boolean;
+    displayOrder: number;
+  }>;
+  contactSettings?: {
+    whatsapp: string;
+    email: string;
+    phone: string;
+    supportEmail: string;
+    businessHours: string;
+  };
 }
 
 export interface MilestonePayment {
@@ -227,3 +304,84 @@ export interface MilestonePayment {
   final_amount: number;
   total_budget: number;
 }
+
+export interface SocialMediaLink {
+  id: string;
+  platform: string;
+  url: string;
+  icon: string;
+  display_order: number;
+  visible: boolean;
+  created_at: string;
+}
+
+export interface PortfolioItem {
+  id: string;
+  title: string;
+  description: string;
+  category: string;
+  image_url: string;
+  is_featured: boolean;
+  live_url?: string;
+  created_at: string;
+}
+
+export interface PrivateMessage {
+  id: string;
+  sender_id: string;
+  sender_name: string;
+  recipient_id: string;
+  message_text: string;
+  created_at: string;
+}
+
+export interface TeamGroup {
+  id: string;
+  name: string;
+  description?: string;
+  created_at: string;
+}
+
+export interface TeamMessage {
+  id: string;
+  group_id: string; // "global" or specific team group ID
+  sender_id: string;
+  sender_name: string;
+  sender_role: string;
+  message_text: string;
+  file_url?: string;
+  file_name?: string;
+  is_image?: boolean;
+  created_at: string;
+}
+
+export interface ProjectGroup {
+  id: string;
+  project_id: string;
+  name: string;
+  assigned_members: string[]; // UserProfile ids
+  created_at: string;
+}
+
+export interface AiTrainingFile {
+  id: string;
+  title: string;
+  file_type: "pdf" | "faq" | "pricing" | "blog" | "service_info" | "project_info";
+  content: string; // text representation
+  uploaded_by_id: string;
+  uploaded_by_name: string;
+  created_at: string;
+}
+
+export interface PlanApproval {
+  id: string;
+  client_id: string;
+  client_name: string;
+  plan_name: "Starter" | "Professional" | "Enterprise";
+  price: string;
+  billing_cycle: "Monthly" | "Annually";
+  status: "Pending Approval" | "Approved" | "Rejected";
+  created_at: string;
+}
+
+

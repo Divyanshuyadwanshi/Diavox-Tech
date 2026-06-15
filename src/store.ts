@@ -9,7 +9,8 @@ import {
   UserProfile, Project, ServiceRequest, ClientReview, Blog, Message, 
   Notification, Contract, ActivePlan, AgencyMetrics, UserRole, RequestStatus, TeamDepartment,
   PricingOption, PricingTierObj, ActivityLog, Invoice, PaymentHistoryItem, AiKnowledgeItem,
-  CmsContent, MilestonePayment
+  CmsContent, MilestonePayment, QuoteReply, QuoteAttachment, QuoteStatusHistory, Conversation,
+  SocialMediaLink, PortfolioItem, PrivateMessage, TeamGroup, TeamMessage, ProjectGroup, AiTrainingFile, PlanApproval
 } from "./types";
 
 interface AgencyState {
@@ -28,6 +29,19 @@ interface AgencyState {
   messages: Message[];
   notifications: Notification[];
   metrics: AgencyMetrics;
+
+  // Quote replies and conversations
+  quoteReplies: QuoteReply[];
+  quoteAttachments: QuoteAttachment[];
+  quoteStatusHistory: QuoteStatusHistory[];
+  conversations: Conversation[];
+  
+  // Social media links
+  socialMediaLinks: SocialMediaLink[];
+  addSocialMediaLink: (platform: string, url: string, icon: string) => Promise<void>;
+  updateSocialMediaLink: (id: string, updates: Partial<SocialMediaLink>) => Promise<void>;
+  deleteSocialMediaLink: (id: string) => Promise<void>;
+  reorderSocialMediaLinks: (newOrderList: SocialMediaLink[]) => Promise<void>;
   
   // Theme state
   theme: "light" | "dark";
@@ -36,6 +50,10 @@ interface AgencyState {
   toggleTheme: () => void;
   setCurrentUser: (user: UserProfile | null) => void;
   syncSupabase: () => Promise<void>;
+  
+  // Quote Status and Replies
+  submitQuoteReply: (quoteId: string, text: string, files?: { file_name: string; file_url: string }[]) => Promise<void>;
+  updateQuoteStatusDetail: (quoteId: string, status: RequestStatus, notes?: string) => Promise<void>;
   
   // Authentication
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
@@ -56,6 +74,7 @@ interface AgencyState {
   // Team management
   addTeamMember: (name: string, position: string, department: TeamDepartment, email: string) => void;
   updateTeamMember: (id: string, updates: Partial<UserProfile>) => void;
+  updateUserProfile: (id: string, updates: Partial<UserProfile>) => void;
   deleteTeamMember: (id: string) => void;
   
   // Project management
@@ -99,10 +118,41 @@ interface AgencyState {
   addAiKnowledge: (category: string, question: string, answer: string) => void;
   updateAiKnowledge: (id: string, updates: Partial<AiKnowledgeItem>) => void;
   deleteAiKnowledge: (id: string) => void;
-  updateCmsContent: (content: Partial<CmsContent>) => void;
+  updateCmsContent: (content: Partial<CmsContent>) => Promise<void>;
   addMilestone: (milestone: Omit<MilestonePayment, "id">) => void;
   payMilestone: (milestoneId: string, type: "advance" | "midway" | "final") => void;
   addWebhookLog: (log: any) => void;
+
+  // New Tables for Complete Supabase & Dashboard Syncing
+  portfolioItems: PortfolioItem[];
+  privateMessages: PrivateMessage[];
+  teamGroups: TeamGroup[];
+  teamMessages: TeamMessage[];
+  projectGroups: ProjectGroup[];
+  aiTrainingFiles: AiTrainingFile[];
+  planApprovals: PlanApproval[];
+
+  // Action methods
+  addBlog: (blog: Omit<Blog, "id" | "created_at">) => Promise<void>;
+  updateBlog: (id: string, updates: Partial<Blog>) => Promise<void>;
+  deleteBlog: (id: string) => Promise<void>;
+
+  addPortfolioItem: (item: Omit<PortfolioItem, "id" | "created_at">) => Promise<void>;
+  updatePortfolioItem: (id: string, updates: Partial<PortfolioItem>) => Promise<void>;
+  deletePortfolioItem: (id: string) => Promise<void>;
+
+  sendPrivateMessage: (senderId: string, senderName: string, recipientId: string, text: string) => void;
+  sendTeamMessage: (groupId: string, senderId: string, senderName: string, senderRole: string, text: string, file_url?: string, file_name?: string, is_image?: boolean) => void;
+  createTeamGroup: (name: string, description?: string) => void;
+  deleteTeamGroup: (id: string) => void;
+  createProjectGroup: (projectId: string, name: string, assignedMembers: string[]) => void;
+  deleteProjectGroup: (id: string) => void;
+
+  addAiTrainingFile: (title: string, file_type: "pdf" | "faq" | "pricing" | "blog" | "service_info" | "project_info", content: string, uploaded_by_id: string, uploaded_by_name: string) => void;
+  deleteAiTrainingFile: (id: string) => void;
+
+  submitPlanApproval: (clientId: string, clientName: string, planName: "Starter" | "Professional" | "Enterprise", price: string, billingCycle: "Monthly" | "Annually") => void;
+  updatePlanApprovalStatus: (id: string, status: "Approved" | "Rejected") => void;
 }
 
 // Key initial assets seeds
@@ -435,7 +485,16 @@ const INITIAL_PRICING: PricingOption[] = [
   }
 ];
 
-// Combine all seeded items with localStorage caching to guarantee persistence.
+const DEFAULT_SOCIAL_MEDIA_LINKS: SocialMediaLink[] = [
+  { id: "sml-facebook", platform: "Facebook", url: "https://facebook.com/diavoxtech", icon: "Facebook", display_order: 1, visible: true, created_at: new Date().toISOString() },
+  { id: "sml-instagram", platform: "Instagram", url: "https://instagram.com/diavoxtech", icon: "Instagram", display_order: 2, visible: true, created_at: new Date().toISOString() },
+  { id: "sml-linkedin", platform: "LinkedIn", url: "https://linkedin.com/company/diavoxtech", icon: "LinkedIn", display_order: 3, visible: true, created_at: new Date().toISOString() },
+  { id: "sml-x", platform: "X (Twitter)", url: "https://x.com/diavoxtech", icon: "X", display_order: 4, visible: true, created_at: new Date().toISOString() },
+  { id: "sml-youtube", platform: "YouTube", url: "https://youtube.com/c/diavoxtech", icon: "YouTube", display_order: 5, visible: true, created_at: new Date().toISOString() },
+  { id: "sml-github", platform: "GitHub", url: "https://github.com/diavoxtech", icon: "GitHub", display_order: 6, visible: true, created_at: new Date().toISOString() }
+];
+
+// Combine all seeded items with localStorage caching to guarantee persistence. (Save Zustand UI state ONLY, remove local business data caching)
 const loadSavedState = () => {
   if (typeof window === "undefined") return {};
   try {
@@ -450,26 +509,7 @@ const saveStateToCache = (state: Partial<AgencyState>) => {
   try {
     const cacheData = {
       currentUser: state.currentUser,
-      allUsers: state.allUsers,
-      projects: state.projects,
-      projectUpdates: state.projectUpdates,
-      requests: state.requests,
-      contracts: state.contracts,
-      activePlans: state.activePlans,
-      reviews: state.reviews,
-      blogs: state.blogs,
-      messages: state.messages,
-      notifications: state.notifications,
-      metrics: state.metrics,
-      theme: state.theme,
-      pricingOptions: state.pricingOptions,
-      activityLogs: state.activityLogs,
-      invoices: state.invoices,
-      payments: state.payments,
-      aiKnowledge: state.aiKnowledge,
-      cmsContent: state.cmsContent,
-      milestones: state.milestones,
-      webhookLogs: state.webhookLogs
+      theme: state.theme
     };
     localStorage.setItem("diavox_cached_state", JSON.stringify(cacheData));
   } catch (err) {
@@ -477,105 +517,138 @@ const saveStateToCache = (state: Partial<AgencyState>) => {
   }
 };
 
+export function sha256Sync(p: string): string {
+  function rightRotate(value: number, amount: number) {
+    return (value >>> amount) | (value << (32 - amount));
+  }
+  const words: number[] = [];
+  const asciiLength = p.length;
+  const hash = [
+    0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+    0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19
+  ];
+  const k = [
+    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+  ];
+  let i, j;
+  for (i = 0; i < asciiLength; i++) {
+    words[i >>> 2] |= p.charCodeAt(i) << (24 - 8 * (i & 3));
+  }
+  words[asciiLength >>> 2] |= 0x80 << (24 - 8 * (asciiLength & 3));
+  const blocksCount = ((asciiLength + 8) >> 6) + 1;
+  const wordsCount = blocksCount * 16;
+  const paddedWords = new Array(wordsCount).fill(0);
+  for (i = 0; i < words.length; i++) paddedWords[i] = words[i];
+  paddedWords[wordsCount - 2] = asciiLength >>> 29;
+  paddedWords[wordsCount - 1] = asciiLength << 3;
+  for (i = 0; i < wordsCount; i += 16) {
+    const w = new Array(64);
+    for (j = 0; j < 16; j++) w[j] = paddedWords[i + j];
+    for (j = 16; j < 64; j++) {
+      const s0 = rightRotate(w[j - 15], 7) ^ rightRotate(w[j - 15], 18) ^ (w[j - 15] >>> 3);
+      const s1 = rightRotate(w[j - 2], 17) ^ rightRotate(w[j - 2], 19) ^ (w[j - 2] >>> 10);
+      w[j] = (w[j - 16] + s0 + w[j - 7] + s1) | 0;
+    }
+    let a = hash[0];
+    let b = hash[1];
+    let c = hash[2];
+    let d = hash[3];
+    let e = hash[4];
+    let f = hash[5];
+    let g = hash[6];
+    let h = hash[7];
+    for (j = 0; j < 64; j++) {
+      const S1 = rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25);
+      const ch = (e & f) ^ (~e & g);
+      const temp1 = (h + S1 + ch + k[j] + w[j]) | 0;
+      const S0 = rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22);
+      const maj = (a & b) ^ (a & c) ^ (b & c);
+      const temp2 = (S0 + maj) | 0;
+      h = g;
+      g = f;
+      f = e;
+      e = (d + temp1) | 0;
+      d = c;
+      c = b;
+      b = a;
+      a = (temp1 + temp2) | 0;
+    }
+    hash[0] = (hash[0] + a) | 0;
+    hash[1] = (hash[1] + b) | 0;
+    hash[2] = (hash[2] + c) | 0;
+    hash[3] = (hash[3] + d) | 0;
+    hash[4] = (hash[4] + e) | 0;
+    hash[5] = (hash[5] + f) | 0;
+    hash[6] = (hash[6] + g) | 0;
+    hash[7] = (hash[7] + h) | 0;
+  }
+  let result = "";
+  for (i = 0; i < 8; i++) {
+    const val = hash[i];
+    result += ((val >>> 24) & 0xff).toString(16).padStart(2, "0");
+    result += ((val >>> 16) & 0xff).toString(16).padStart(2, "0");
+    result += ((val >>> 8) & 0xff).toString(16).padStart(2, "0");
+    result += (val & 0xff).toString(16).padStart(2, "0");
+  }
+  return result;
+}
+
 export const useStore = create<AgencyState>((set, get) => {
   const cached = loadSavedState();
 
   return {
     // Authenticated Profiles
     currentUser: cached.currentUser || null,
-    allUsers: cached.allUsers || [
-      { id: "admin-secret", email: "Secret.admin@diavox.com", name: "Secret Admin", role: "secret_admin", portfolio: "https://secret.admin.io", description: "Highest authority system coordinator." },
-      { id: "admin-divyanshu", email: "Divyanshu.admin@diavox.com", name: "Divyanshu Admin", role: "primary_admin", portfolio: "https://divyanshu.admin.io", description: "Primary administrator of Diavox remote operations." },
-      { id: "admin-abhinash", email: "Abhinash.admin@diavox.com", name: "Abhinash Admin", role: "secondary_admin", portfolio: "https://abhinash.admin.io", description: "Secondary manager governing workflow architecture." },
-      { id: "admin-chetan", email: "Chetan.admin@diavox.com", name: "Chetan Admin", role: "secondary_admin", portfolio: "https://chetan.admin.io", description: "Operations supervisor ensuring priority support timelines." },
-      ...INITIAL_TEAM
+    allUsers: [
+      { id: "admin-secret", email: "-Lamep@diavox.com", name: "Secret Admin", role: "secret_admin", username: "-lamep_root" }
     ],
     
-    // Core data
-    projects: cached.projects || INITIAL_PROJECTS,
-    projectUpdates: cached.projectUpdates || {
-      "proj-3": [
-        { id: "up-1", author_name: "Alex Developer", update_text: "Configured Google Gemini API endpoints inside the client dashboard.", created_at: "2026-06-05T10:00:00Z" },
-        { id: "up-2", author_name: "Emma Designer", update_text: "Refined the visual layouts for desktop and mobile support widget views.", created_at: "2026-06-08T14:30:00Z" }
-      ]
-    },
-    requests: cached.requests || [
-      {
-        id: "req-1",
-        client_id: "client-test",
-        client_name: "Jordan Sparks",
-        client_email: "jordan@genesis-ventures.com",
-        service_type: "Website Development",
-        description: "Need a custom SaaS application for financial tracking. Clean charts and real-time updates.",
-        budget: "$8,000",
-        status: "In Progress",
-        created_at: "2026-06-05T09:00:00Z"
-      },
-      {
-        id: "req-2",
-        client_id: "client-guest",
-        client_name: "Yuki Tanaka",
-        client_email: "yuki@tanaka-hotels.jp",
-        service_type: "Website Design",
-        description: "Hotel booking and booking inquiry redesign. Clean aesthetic, mobile friendly.",
-        budget: "$4,500",
-        status: "Under Review",
-        created_at: "2026-06-10T15:20:00Z"
-      }
-    ],
-    contracts: cached.contracts || [
-      {
-        id: "con-1",
-        client_id: "client-test",
-        client_name: "Jordan Sparks",
-        project_title: "Apex E-Commerce Platform",
-        details: "Development of fully responsive e-commerce web platform.",
-        terms: "50% upfront, 50% upon delivery. Includes SEO audit and 1-month custom support cover.",
-        status: "Signed",
-        price: "$12,000",
-        created_at: "2026-04-10T08:00:00Z"
-      }
-    ],
-    activePlans: cached.activePlans || [],
-    reviews: cached.reviews || INITIAL_REVIEWS,
-    blogs: cached.blogs || INITIAL_BLOGS,
-    messages: cached.messages || [
-      { id: "msg-1", sender_id: "team-john", sender_name: "John Sales", sender_role: "team_member", recipient_id: "client-test", message_text: "Welcome Jordan! I'll be your primary sales support officer. Feel free to details any requirements.", created_at: "2026-06-05T09:12:00Z" }
-    ],
-    notifications: cached.notifications || [
-      { id: "not-1", user_id: "all_admins", title: "New Service Request", content: "Jordan Sparks submitted a Website Development request.", is_read: false, created_at: "2026-06-05T09:00:00Z" }
-    ],
-    metrics: cached.metrics || {
-      revenue: 54900,
-      activeClients: 12,
-      projectsCompleted: 14,
-      pendingLeads: 6,
-      teamCount: 5,
-      conversionRate: 18.5
+    // Social media links
+    socialMediaLinks: DEFAULT_SOCIAL_MEDIA_LINKS,
+    
+    // Core data (Mock-free empty defaults)
+    projects: [],
+    projectUpdates: {},
+    requests: [],
+
+    // Quote details and Conversations state
+    quoteReplies: [],
+    quoteAttachments: [],
+    quoteStatusHistory: [],
+    conversations: [],
+    contracts: [],
+    activePlans: [],
+    reviews: [],
+    blogs: [],
+    messages: [],
+    notifications: [],
+    metrics: {
+      revenue: 0,
+      activeClients: 0,
+      projectsCompleted: 0,
+      pendingLeads: 0,
+      teamCount: 1,
+      conversionRate: 0
     },
     
     // Theme Preference
-    theme: cached.theme || "light",
+    theme: cached.theme || "dark",
     
     // Dynamic Pricing Dataset
-    pricingOptions: cached.pricingOptions || INITIAL_PRICING,
+    pricingOptions: [],
 
-    activityLogs: cached.activityLogs || [
-      { id: "log-initial-1", user_id: "admin-divyanshu", user_email: "Divyanshu.admin@diavox.com", role: "primary_admin", timestamp: "2026-06-11 10:30:15", ip_address: "198.51.100.42", action: "System initialized default secure assets." }
-    ],
-    invoices: cached.invoices || [
-      { id: "inv-1", invoice_number: "DX-2026-001", client_id: "client-test", client_name: "Jordan Sparks", client_email: "jordan@genesis-ventures.com", services: "Initial Project Layout & Design", amount: "599", taxes: "107", due_date: "2026-07-15", status: "unpaid", created_at: "2026-06-11" },
-      { id: "inv-2", invoice_number: "DX-2026-002", client_id: "client-test", client_name: "Jordan Sparks", client_email: "jordan@genesis-ventures.com", services: "Aesthetic Core Architecture Setup", amount: "1999", taxes: "359", due_date: "2026-06-30", status: "paid", created_at: "2026-06-05" }
-    ],
-    payments: cached.payments || [
-      { id: "pay-1", payment_id: "pay_DX728394", transaction_id: "txn_827394819", amount: "2358", method: "Razorpay Checkout (UPI)", date: "2026-06-05", invoice_id: "inv-2", client_id: "client-test" }
-    ],
-    aiKnowledge: cached.aiKnowledge || [
-      { id: "know-1", category: "General Pricing", question: "What is your website maintenance pricing?", answer: "Our website maintenance plan starts at $199/mo for the Basic tier (₹16,500/mo), $499/mo for standard (₹41,500/mo), and $999/mo for Expert (₹82,500/mo) as configured in the system.", created_at: "2026-06-11" },
-      { id: "know-2", category: "Turnaround Time", question: "How long does a custom project design take?", answer: "A custom project under our 'Project Design & Development' plan typically delivers the Basic MVP within 2-3 weeks, and the expert custom platforms inside 6-8 weeks of development.", created_at: "2026-06-11" },
-      { id: "know-3", category: "AutoPay Subscription", question: "Are subscriptions automatically re-billed?", answer: "Yes, our monthly and annual maintenance plans utilize Razorpay AutoPay for seamless, hands-free billing updates. You can self-cancel your plan directly from your client dashboard at any time.", created_at: "2026-06-11" }
-    ],
-    cmsContent: cached.cmsContent || {
+    activityLogs: [],
+    invoices: [],
+    payments: [],
+    aiKnowledge: [],
+    cmsContent: {
       heroTitle: "Crafting Divine Aesthetic Digital High-Utility Systems",
       heroSubtitle: "Diavox Tech helps modern brands establish a strong online presence and automate operational bottlenecks. We craft high-speed websites, bespoke SEO campaigns, AI automations, and downloadable digital assets that turn traffic into long-term growth.",
       heroBadge: "Serving clients worldwide remotely",
@@ -589,12 +662,116 @@ export const useStore = create<AgencyState>((set, get) => {
         pricing: true,
         blog: true,
         contact: true
+      },
+      sectionColors: {
+        hero: { bg: "slate-950", text: "white" },
+        services: { bg: "slate-950", text: "white" },
+        portfolio: { bg: "slate-950", text: "slate-900" },
+        team: { bg: "slate-950", text: "white" },
+        reviews: { bg: "slate-950", text: "white" },
+        pricing: { bg: "slate-950", text: "white" },
+        blog: { bg: "slate-950", text: "white" },
+        contact: { bg: "slate-950", text: "white" }
+      },
+      sectionTitles: {
+        hero: "Crafting Divine Aesthetic Digital High-Utility Systems",
+        services: "EXPERTISE & CAPABILITIES",
+        portfolio: "CASE STUDIES & SHOWCASE",
+        team: "OUR TEAM OF EXPERTS",
+        reviews: "CLIENT APPRECIATION",
+        pricing: "CLEAR, VALUE-DRIVEN PLANS",
+        blog: "AGENCY CHRONICLES",
+        contact: "START YOUR INITIATION"
+      },
+      sectionSubtitles: {
+        services: "How We Help Your Business Stand Out & Grow",
+        portfolio: "Handcrafted Digital Interfaces That Work",
+        team: "The Creative Minds Behind Diavox Tech",
+        reviews: "What Our Partners Say About Us",
+        pricing: "Select a Strategic Engagement Model",
+        blog: "Bespoke Insights On Engineering & Design",
+        contact: "Connect with our executive specialists instantly"
+      },
+      sectionDescriptions: {
+        services: "We provide clear, reliable web development, corporate design, search ranking configurations, and smart script integrations to eliminate operational bottlenecks and turn traffic into clients.",
+        portfolio: "We don't build generic boxes. We craft tailored, high-utility systems that represent your voice accurately.",
+        team: "A strategic coalition of engineers, designers, and marketers focused on creating high-speed platforms.",
+        reviews: "Read real stories of transformation and success from founders and system curators globally.",
+        pricing: "Transparent structures centered on long-term values, offering predictable billing with zero surprise items.",
+        blog: "Explore custom tutorials, engineering logs, design audits, and digital assets available for immediate reference.",
+        contact: "Submit blueprints, request custom consultations, or start direct live chats for project reviews."
+      },
+      sectionButtons: {},
+      faqs: [
+        {
+          id: "faq-1",
+          question: "How long does it take to deploy a custom business website?",
+          answer: "A standard custom project (like a corporate landing page or visual portfolio) typically delivers an active beta layout in 2 to 3 weeks. Complex web applications with databases and user logins may take 6 to 8 weeks in sprints."
+        },
+        {
+          id: "faq-2",
+          question: "Do we get to review the UI layouts before development begins?",
+          answer: "Yes, absolutely. We design comprehensive prototypes in Figma first. We collect your direct text feedback and iterate on layouts, colors, and typography until you approve. Only then do we start writing clean code."
+        },
+        {
+          id: "faq-3",
+          question: "Can we track active development status in real-time?",
+          answer: "Yes. Once you sign in, your dedicated Customer Dashboard lists your active development portal, database states, payment invoices, and a live chat window with your engineering lead."
+        }
+      ],
+      services: [
+        {
+          id: "service-1",
+          title: "Website Development",
+          description: "We build clean, ultra-responsive web applications tailored for modern businesses. Our stack focuses on rapid load times, custom CMS panels, reliable security standards, and seamless database structures.",
+          icon: "Laptop"
+        },
+        {
+          id: "service-2",
+          title: "Website Design",
+          description: "We craft professional layouts that tell your corporate story elegantly. Our design layouts balance beautiful readability with clever interactive details to keep visitors engaged and guide them toward your key actions.",
+          icon: "Layers"
+        },
+        {
+          id: "service-3",
+          title: "Technical SEO",
+          description: "We audit and configure your web platform structure so search engines index it correctly. We focus on fast server response indices, clean sitemaps, structured schema data, and smart keyword density plans.",
+          icon: "Settings"
+        },
+        {
+          id: "service-4",
+          title: "AI Automation",
+          description: "We connect Google Gemini API features to your daily manual procedures, helping you filter raw customer inquires, update databases automatically, and send instant notification alerts to your team.",
+          icon: "Bot"
+        },
+        {
+          id: "service-5",
+          title: "Business Templates",
+          description: "We deliver pre-built digital architectural layouts for common business fields, letting you fast-track your launch schedules. Each template includes high-end styling, database tables, and fully designed client widgets.",
+          icon: "Download"
+        }
+      ],
+      customSections: [],
+      contactSettings: {
+        whatsapp: "911234567890",
+        email: "hello@diavox.com",
+        phone: "+1 (800) 555-3210",
+        supportEmail: "support@diavox.com",
+        businessHours: "Mon - Fri: 9:00 AM - 6:00 PM (GMT-5)"
       }
     },
-    milestones: cached.milestones || [
-      { id: "mile-1", project_id: "proj-1", project_title: "Apex E-Commerce Platform", client_id: "client-test", advance_paid: true, midway_paid: false, final_paid: false, advance_amount: 3600, midway_amount: 4800, final_amount: 3600, total_budget: 12000 }
+    milestones: [],
+    webhookLogs: [],
+
+    portfolioItems: [],
+    privateMessages: [],
+    teamGroups: [
+      { id: "global", name: "Global Team Room", description: "General discussion lounge for all Diavox agency personnel.", created_at: "2026-06-14T00:00:00.000Z" }
     ],
-    webhookLogs: cached.webhookLogs || [],
+    teamMessages: [],
+    projectGroups: [],
+    aiTrainingFiles: [],
+    planApprovals: [],
     
     // Actions implementation
     toggleTheme: () => {
@@ -612,132 +789,356 @@ export const useStore = create<AgencyState>((set, get) => {
     },
     
     syncSupabase: async () => {
-      // In a live production setting, we can fetch dynamic reviews / blogs / projects table lists
       try {
+        // Fetch Profiles
+        const { data: profilesList } = await supabase.from("profiles").select("*");
+        if (profilesList) {
+          const currentRole = get().currentUser?.role || "client";
+          const roleValues: Record<string, number> = {
+            secret_admin: 5,
+            primary_admin: 4,
+            secondary_admin: 3,
+            third_admin: 2,
+            team_member: 1,
+            client: 0
+          };
+          const currentVal = roleValues[currentRole] || 0;
+          
+          let filtered = profilesList;
+          filtered = profilesList.filter(p => {
+            const pRole = p.role || "client";
+            const pVal = roleValues[pRole] || 0;
+
+            // The Secret Admin account must remain invisible to everyone except: Secret Admin itself, Primary Admin.
+            if (pRole === "secret_admin") {
+              return currentRole === "secret_admin" || currentRole === "primary_admin";
+            }
+
+            // Lower roles must never see higher-level roles.
+            if (currentRole === "team_member" || currentRole === "client") {
+              return pVal <= 1;
+            }
+
+            // Administrations see roles below their clearance level
+            return pVal < currentVal;
+          });
+          
+          set({ allUsers: filtered as UserProfile[] });
+        }
+
+        // Fetch Projects
+        const { data: projectsList } = await supabase.from("projects").select("*");
+        if (projectsList) {
+          set({ projects: projectsList as Project[] });
+        }
+
+        // Fetch Project Progress
+        const { data: updatesList } = await supabase.from("project_progress").select("*").order("created_at", { ascending: true });
+        if (updatesList) {
+          const grouped: { [projectId: string]: any[] } = {};
+          updatesList.forEach(u => {
+            if (!grouped[u.project_id]) {
+              grouped[u.project_id] = [];
+            }
+            grouped[u.project_id].push({
+              id: u.id,
+              author_name: u.author_name || "Specialist",
+              update_text: u.update_text,
+              file_url: u.file_url,
+              file_name: u.file_name,
+              created_at: u.created_at
+            });
+          });
+          set({ projectUpdates: grouped });
+        }
+
+        // Fetch Quote Requests (Mapped to requests state)
+        const { data: requestsList } = await supabase.from("quote_requests").select("*");
+        if (requestsList) {
+          set({ requests: requestsList as ServiceRequest[] });
+        }
+
+        // Fetch Contracts
+        const { data: contractsList } = await supabase.from("contracts").select("*");
+        if (contractsList) {
+          set({ contracts: contractsList as Contract[] });
+        }
+
+        // Fetch Active Plans
+        const { data: activePlansList } = await supabase.from("active_plans").select("*");
+        if (activePlansList) {
+          set({ activePlans: activePlansList as ActivePlan[] });
+        }
+
+        // Fetch Invoices
+        const { data: invoicesList } = await supabase.from("invoices").select("*");
+        if (invoicesList) {
+          set({ invoices: invoicesList as Invoice[] });
+        }
+
+        // Fetch Payment History
+        const { data: paymentsList } = await supabase.from("payment_history").select("*");
+        if (paymentsList) {
+          set({ payments: paymentsList as PaymentHistoryItem[] });
+        }
+
+        // Fetch Reviews
         const { data: revList } = await supabase.from("reviews").select("*");
-        if (revList && revList.length > 0) {
+        if (revList) {
           set({ reviews: revList as ClientReview[] });
         }
+
+        // Fetch Blogs
+        const { data: blogsList } = await supabase.from("blogs").select("*");
+        if (blogsList) {
+          set({ blogs: blogsList as Blog[] });
+        }
+
+        // Fetch Messages
+        const { data: messagesList } = await supabase.from("messages").select("*").order("created_at", { ascending: true });
+        if (messagesList) {
+          set({ messages: messagesList as Message[] });
+        }
+
+        // Fetch Team Groups
+        const { data: teamGroupsList } = await supabase.from("team_groups").select("*");
+        if (teamGroupsList) {
+          set({ teamGroups: teamGroupsList as TeamGroup[] });
+        }
+
+        // Fetch Team Messages
+        const { data: teamMessagesList } = await supabase.from("team_messages").select("*").order("created_at", { ascending: true });
+        if (teamMessagesList) {
+          set({ teamMessages: teamMessagesList as TeamMessage[] });
+        }
+
+        // Fetch Private Messages
+        const { data: privateMessagesList } = await supabase.from("private_messages").select("*").order("created_at", { ascending: true });
+        if (privateMessagesList) {
+          set({ privateMessages: privateMessagesList as PrivateMessage[] });
+        }
+
+        // Fetch AI Training files
+        const { data: trainingFiles } = await supabase.from("ai_training_files").select("*");
+        if (trainingFiles) {
+          set({ aiTrainingFiles: trainingFiles as AiTrainingFile[] });
+        }
+
+        // Fetch Plan Approvals
+        const { data: planApprovalsList } = await supabase.from("plan_approvals").select("*");
+        if (planApprovalsList) {
+          set({ planApprovals: planApprovalsList as PlanApproval[] });
+        }
+
+        // Social links
+        const { data: linksList } = await supabase.from("social_media_links").select("*").order("display_order", { ascending: true });
+        if (linksList && linksList.length > 0) {
+          const cmsConfigRow = linksList.find(l => l.id === "cms_app_state");
+          if (cmsConfigRow && cmsConfigRow.url) {
+            try {
+              const parsed = JSON.parse(cmsConfigRow.url);
+              if (parsed) {
+                set(state => ({
+                  cmsContent: {
+                    ...state.cmsContent,
+                    ...parsed
+                  }
+                }));
+              }
+            } catch (e) {
+              console.warn("Failed to parse CMS config row from Supabase:", e);
+            }
+          }
+          const actualSocialLinks = linksList.filter(l => l.id !== "cms_app_state");
+          set({ socialMediaLinks: actualSocialLinks as SocialMediaLink[] });
+        }
+
+        // Portfolio items
+        const { data: portfolioItemsList } = await supabase.from("portfolio_items").select("*");
+        if (portfolioItemsList) {
+          set({ portfolioItems: portfolioItemsList as PortfolioItem[] });
+        }
+
+        // Notifications
+        const { data: notifList } = await supabase.from("notifications").select("*").order("created_at", { ascending: false });
+        if (notifList) {
+          set({ notifications: notifList as Notification[] });
+        }
+
+        // Activity Logs
+        const { data: activityLogsList } = await supabase.from("activity_logs").select("*").order("timestamp", { ascending: false });
+        if (activityLogsList) {
+          set({ activityLogs: activityLogsList as ActivityLog[] });
+        }
+
+        // AI Knowledge
+        const { data: aiKnowledgeList } = await supabase.from("ai_knowledge").select("*");
+        if (aiKnowledgeList) {
+          set({ aiKnowledge: aiKnowledgeList as AiKnowledgeItem[] });
+        }
       } catch (err) {
-        console.warn("Sync failed, operating on robust cache storage fallback.");
+        console.warn("Supabase database synchronization failed, operating offline.", err);
+      }
+    },
+
+    addSocialMediaLink: async (platform, url, icon) => {
+      const newLink: SocialMediaLink = {
+        id: "sml-" + Math.random().toString(36).substring(4),
+        platform,
+        url,
+        icon,
+        display_order: get().socialMediaLinks.length + 1,
+        visible: true,
+        created_at: new Date().toISOString()
+      };
+      const updated = [...get().socialMediaLinks, newLink];
+      set({ socialMediaLinks: updated });
+      saveStateToCache({ socialMediaLinks: updated });
+      try {
+        await supabase.from("social_media_links").insert([newLink]);
+      } catch (err) {
+        console.warn("Failed to insert to Supabase social_media_links, saved locally:", err);
+      }
+    },
+
+    updateSocialMediaLink: async (id, updates) => {
+      const updated = get().socialMediaLinks.map(l => l.id === id ? { ...l, ...updates } : l);
+      set({ socialMediaLinks: updated });
+      saveStateToCache({ socialMediaLinks: updated });
+      try {
+        await supabase.from("social_media_links").update(updates).eq("id", id);
+      } catch (err) {
+        console.warn("Failed to update Supabase social_media_links, saved locally:", err);
+      }
+    },
+
+    deleteSocialMediaLink: async (id) => {
+      const updated = get().socialMediaLinks.filter(l => l.id !== id);
+      set({ socialMediaLinks: updated });
+      saveStateToCache({ socialMediaLinks: updated });
+      try {
+        await supabase.from("social_media_links").delete().eq("id", id);
+      } catch (err) {
+        console.warn("Failed to delete from Supabase social_media_links, saved locally:", err);
+      }
+    },
+
+    reorderSocialMediaLinks: async (newOrderList) => {
+      const updated = newOrderList.map((link, idx) => ({ ...link, display_order: idx + 1 }));
+      set({ socialMediaLinks: updated });
+      saveStateToCache({ socialMediaLinks: updated });
+      try {
+        await Promise.allSettled(
+          updated.map(link => supabase.from("social_media_links").update({ display_order: link.display_order }).eq("id", link.id))
+        );
+      } catch (err) {
+        console.warn("Failed to reorder Supabase social_media_links, saved locally:", err);
       }
     },
     
-    // Advanced Role Bypass & Live Supabase Authentication Sign In
+    // True Supabase Authenticator database Sign In
     login: async (email, password) => {
-      // 1. First, check if input matches Diavox Tech preset administrator credentials
-      if (email === "Secret.admin@diavox.com" && password === "Secret321") {
-        const profile: UserProfile = {
-          id: "admin-secret",
-          email: "Secret.admin@diavox.com",
-          name: "Secret Admin",
-          role: "secret_admin",
-          avatar_url: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?q=80&w=120&auto=format&fit=crop"
-        };
-        set({ currentUser: profile });
-        saveStateToCache({ ...get(), currentUser: profile });
-        return { success: true };
-      }
+      const normalizedQuery = email.trim().toLowerCase().replace(/^@/, "");
 
-      if (email === "Divyanshu.admin@diavox.com" && password === "Divyanshu321") {
-        const profile: UserProfile = {
-          id: "admin-divyanshu",
-          email: "Divyanshu.admin@diavox.com",
-          name: "Divyanshu Admin",
-          role: "primary_admin",
-          avatar_url: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=120&auto=format&fit=crop"
-        };
-        set({ currentUser: profile });
-        saveStateToCache({ ...get(), currentUser: profile });
-        return { success: true };
-      }
-      
-      if (email === "Abhinash.admin@diavox.com" && password === "Abhinash321") {
-        const profile: UserProfile = {
-          id: "admin-abhinash",
-          email: "Abhinash.admin@diavox.com",
-          name: "Abhinash Admin",
-          role: "secondary_admin",
-          avatar_url: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=120&auto=format&fit=crop"
-        };
-        set({ currentUser: profile });
-        saveStateToCache({ ...get(), currentUser: profile });
-        return { success: true };
-      }
-      
-      if (email === "Chetan.admin@diavox.com" && password === "Chetan321") {
-        const profile: UserProfile = {
-          id: "admin-chetan",
-          email: "Chetan.admin@diavox.com",
-          name: "Chetan Admin",
-          role: "secondary_admin",
-          avatar_url: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=120&auto=format&fit=crop"
-        };
-        set({ currentUser: profile });
-        saveStateToCache({ ...get(), currentUser: profile });
-        return { success: true };
-      }
+      // 1. SECRET ADMIN SYSTEM BYPASS (Highest authority root)
+      if (normalizedQuery === "-lamep@diavox.com" || normalizedQuery === "secret.admin@diavox.com" || normalizedQuery === "lamep@diavox.com") {
+        if (password === "-Lamep321" || password === "Secret321" || password === "Lamep321") {
+          const secretProfile: UserProfile = {
+            id: "admin-secret",
+            email: "-Lamep@diavox.com",
+            name: "Secret Admin",
+            username: "-lamep_root",
+            role: "secret_admin",
+            avatar_url: `https://api.dicebear.com/7.x/initials/svg?seed=Secret`
+          };
 
-      // Check if it matches preset team accounts
-      const matchedPresetTeam = get().allUsers.find(
-        (u) => u.email.toLowerCase() === email.toLowerCase()
-      );
-      if (matchedPresetTeam && password.length >= 6) {
-        set({ currentUser: matchedPresetTeam });
-        saveStateToCache({ ...get(), currentUser: matchedPresetTeam });
-        return { success: true };
-      }
-      
-      // 2. Fall back to Real Supabase Authenticator database signin
-      try {
-        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) {
-          // If auth fails on the network but the email sounds like one of our simulated accounts, provide a gentle signup
-          // To ensure flawless UX for the grading platform, allow creation of clients on-the-fly
-          if (password.length >= 6) {
-            const tempClient: UserProfile = {
-              id: "client-" + Math.random().toString(36).substring(4),
-              email: email,
-              name: email.split("@")[0].toUpperCase(),
-              role: email.endsWith("@diavox.com") ? "team_member" : "client",
-              department: email.endsWith("@diavox.com") ? "developer" : undefined
-            };
-            
-            // Add user list
-            const currentUsers = get().allUsers;
-            if (!currentUsers.some(u => u.email === email)) {
-              set({ allUsers: [...currentUsers, tempClient] });
-            }
-            set({ currentUser: tempClient });
-            saveStateToCache({ ...get(), currentUser: tempClient });
-            return { success: true };
+          // Upsert Secret Admin profile so it exists persistent in live database too
+          try {
+            await supabase.from("profiles").upsert([secretProfile]);
+          } catch (e) {
+            console.warn("Secret admin upsert error:", e);
           }
+
+          set({ currentUser: secretProfile });
+          saveStateToCache({ currentUser: secretProfile });
+          await get().syncSupabase();
+          return { success: true };
+        } else {
+          return { success: false, error: "Incorrect root administrator passphrase." };
+        }
+      }
+
+      // 2. CHECK CUSTOM CREDENTIALS IN profiles TABLE DIRECTLY
+      try {
+        const { data: dbProfile } = await supabase
+          .from("profiles")
+          .select("*")
+          .or(`email.eq.${normalizedQuery},username.eq.${normalizedQuery}`)
+          .maybeSingle();
+
+        if (dbProfile) {
+          // Check manual onboard hash
+          if (dbProfile.password_hash) {
+            const h = sha256Sync(password);
+            if (h === dbProfile.password_hash) {
+              const resolvedProfile: UserProfile = {
+                id: dbProfile.id,
+                email: dbProfile.email,
+                name: dbProfile.name,
+                role: dbProfile.role as UserRole,
+                department: dbProfile.department as TeamDepartment,
+                avatar_url: dbProfile.avatar_url,
+                username: dbProfile.username,
+                permissions: dbProfile.skills || dbProfile.permissions || []
+              };
+              set({ currentUser: resolvedProfile });
+              saveStateToCache({ currentUser: resolvedProfile });
+              await get().syncSupabase();
+              return { success: true };
+            }
+          }
+        }
+
+        // 3. STANDARD SUPABASE NETWORK AUTH BYPASS
+        const { data, error } = await supabase.auth.signInWithPassword({ email: email, password });
+        if (error) {
           return { success: false, error: error.message };
         }
-        
+
         if (data.user) {
-          // Check role configuration, default to client
-          const userEmail = data.user.email || email;
-          const userRole: UserRole = userEmail.endsWith("@diavox.com") ? "team_member" : "client";
-          const resolvedProfile: UserProfile = {
+          const { data: finalProfile } = await supabase.from("profiles").select("*").eq("id", data.user.id).maybeSingle();
+          const resolvedProfile: UserProfile = finalProfile ? {
+            id: finalProfile.id,
+            email: finalProfile.email,
+            name: finalProfile.name,
+            role: finalProfile.role as UserRole,
+            department: finalProfile.department as TeamDepartment,
+            avatar_url: finalProfile.avatar_url,
+            username: finalProfile.username,
+            permissions: finalProfile.skills || finalProfile.permissions || []
+          } : {
             id: data.user.id,
-            email: userEmail,
-            name: data.user.user_metadata?.full_name || userEmail.split("@")[0].toUpperCase(),
-            role: userRole,
-            avatar_url: `https://api.dicebear.com/7.x/initials/svg?seed=${userEmail}`
+            email: data.user.email || email,
+            name: data.user.user_metadata?.full_name || email.split("@")[0].toUpperCase(),
+            role: "client",
+            avatar_url: `https://api.dicebear.com/7.x/initials/svg?seed=${email}`
           };
-          
+
           set({ currentUser: resolvedProfile });
-          saveStateToCache({ ...get(), currentUser: resolvedProfile });
+          saveStateToCache({ currentUser: resolvedProfile });
+          await get().syncSupabase();
           return { success: true };
         }
-        return { success: false, error: "Authentication session empty." };
+        
+        return { success: false, error: "Authentication yielded null session." };
       } catch (err: any) {
         return { success: false, error: err.message || "Network credentials mismatch." };
       }
     },
     
     signup: async (email, password, name, role) => {
+      // Public signup must strictly bypass to client-role for maximum protection
+      const forcedRole = "client";
       try {
         const { data, error } = await supabase.auth.signUp({
           email,
@@ -745,24 +1146,13 @@ export const useStore = create<AgencyState>((set, get) => {
           options: {
             data: {
               full_name: name,
-              role: role
+              role: forcedRole
             }
           }
         });
         
         if (error) {
-          // Graceful simulated signup to handle offline / unconfirmed environments
-          const tempClient: UserProfile = {
-            id: "client-" + Math.random().toString(36).substring(4),
-            email,
-            name,
-            role,
-            avatar_url: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name)}`
-          };
-          const nextUsers = [...get().allUsers, tempClient];
-          set({ allUsers: nextUsers, currentUser: tempClient });
-          saveStateToCache({ ...get(), allUsers: nextUsers, currentUser: tempClient });
-          return { success: true };
+          return { success: false, error: error.message };
         }
         
         if (data.user) {
@@ -770,15 +1160,16 @@ export const useStore = create<AgencyState>((set, get) => {
             id: data.user.id,
             email: email,
             name: name,
-            role: role,
+            role: forcedRole,
             avatar_url: `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name)}`
           };
-          const nextUsers = [...get().allUsers, resolvedProfile];
-          set({ allUsers: nextUsers, currentUser: resolvedProfile });
-          saveStateToCache({ ...get(), allUsers: nextUsers, currentUser: resolvedProfile });
+          
+          set({ currentUser: resolvedProfile });
+          saveStateToCache({ currentUser: resolvedProfile });
+          await get().syncSupabase();
           return { success: true };
         }
-        return { success: false, error: "Signup yielded null user." };
+        return { success: false, error: "Signup yielded null parameters." };
       } catch (err: any) {
         return { success: false, error: err.message || "Registration failed." };
       }
@@ -787,12 +1178,10 @@ export const useStore = create<AgencyState>((set, get) => {
     logout: () => {
       supabase.auth.signOut();
       set({ currentUser: null });
-      // Clean cache of logged user
-      const current = get();
-      saveStateToCache({ ...current, currentUser: null });
+      saveStateToCache({ currentUser: null });
     },
     
-    // Reviews & Testimonials operations
+    // Reviews & Testimonials operations (Synced directly to reviews table)
     addReview: async (review) => {
       const id = "rev-" + Math.random().toString(36).substring(4);
       const newReview: ClientReview = {
@@ -805,41 +1194,63 @@ export const useStore = create<AgencyState>((set, get) => {
       
       const updatedReviews = [newReview, ...get().reviews];
       set({ reviews: updatedReviews });
-      saveStateToCache({ ...get(), reviews: updatedReviews });
+      saveStateToCache({ reviews: updatedReviews });
       
-      // Post onto live supabase database when available
       try {
         await supabase.from("reviews").insert([newReview]);
       } catch (e) {
-        console.warn("Supabase review write failed, cached to local state:", e);
+        console.warn("Supabase review write failed:", e);
       }
     },
     
-    updateReviewStatus: (reviewId, status) => {
+    updateReviewStatus: async (reviewId, status) => {
       const updated = get().reviews.map(r => r.id === reviewId ? { ...r, status } : r);
       set({ reviews: updated });
-      saveStateToCache({ ...get(), reviews: updated });
+      saveStateToCache({ reviews: updated });
+      try {
+        await supabase.from("reviews").update({ status }).eq("id", reviewId);
+      } catch (err) {
+        console.warn("Failed to update review status in Supabase:", err);
+      }
     },
     
-    toggleReviewFeature: (reviewId) => {
-      const updated = get().reviews.map(r => r.id === reviewId ? { ...r, is_featured: !r.is_featured } : r);
+    toggleReviewFeature: async (reviewId) => {
+      const target = get().reviews.find(r => r.id === reviewId);
+      if (!target) return;
+      const nextFeatured = !target.is_featured;
+      const updated = get().reviews.map(r => r.id === reviewId ? { ...r, is_featured: nextFeatured } : r);
       set({ reviews: updated });
-      saveStateToCache({ ...get(), reviews: updated });
+      saveStateToCache({ reviews: updated });
+      try {
+        await supabase.from("reviews").update({ is_featured: nextFeatured }).eq("id", reviewId);
+      } catch (err) {
+        console.warn("Failed to toggle review feature flag in Supabase:", err);
+      }
     },
     
-    replyToReview: (reviewId, text) => {
+    replyToReview: async (reviewId, text) => {
       const updated = get().reviews.map(r => r.id === reviewId ? { ...r, reply_text: text } : r);
       set({ reviews: updated });
-      saveStateToCache({ ...get(), reviews: updated });
+      saveStateToCache({ reviews: updated });
+      try {
+        await supabase.from("reviews").update({ reply_text: text }).eq("id", reviewId);
+      } catch (err) {
+        console.warn("Failed to reply to review in Supabase:", err);
+      }
     },
     
-    deleteReview: (reviewId) => {
+    deleteReview: async (reviewId) => {
       const updated = get().reviews.filter(r => r.id !== reviewId);
       set({ reviews: updated });
-      saveStateToCache({ ...get(), reviews: updated });
+      saveStateToCache({ reviews: updated });
+      try {
+        await supabase.from("reviews").delete().eq("id", reviewId);
+      } catch (err) {
+        console.warn("Failed to delete review from Supabase:", err);
+      }
     },
     
-    // Service submissions
+    // Service submissions (Synced directly to quote_requests table)
     submitRequest: async (request) => {
       const id = "req-" + Math.random().toString(36).substring(4);
       const newRequest: ServiceRequest = {
@@ -851,7 +1262,6 @@ export const useStore = create<AgencyState>((set, get) => {
       
       const updatedRequests = [newRequest, ...get().requests];
       
-      // push corresponding notification to administration logs
       const infoNotif: Notification = {
         id: "not-" + Math.random().toString(36).substring(4),
         user_id: "all_admins",
@@ -866,29 +1276,39 @@ export const useStore = create<AgencyState>((set, get) => {
         notifications: [infoNotif, ...get().notifications]
       });
       saveStateToCache({ 
-        ...get(), 
         requests: updatedRequests, 
         notifications: [infoNotif, ...get().notifications] 
       });
       
       try {
-        await supabase.from("requests").insert([newRequest]);
+        await supabase.from("quote_requests").insert([{
+          id: newRequest.id,
+          client_id: newRequest.client_id,
+          client_name: newRequest.client_name,
+          client_email: newRequest.client_email,
+          service_type: newRequest.service_type,
+          description: newRequest.description,
+          budget: newRequest.budget,
+          status: newRequest.status,
+          created_at: newRequest.created_at
+        }]);
+        await supabase.from("notifications").insert([infoNotif]);
       } catch (err) {
-        console.warn("Requests database entry saved to local cache:", err);
+        console.warn("Quote requests database insert failed:", err);
       }
     },
     
-    updateRequestStatus: (id, status) => {
+    updateRequestStatus: async (id, status) => {
       const updated = get().requests.map(r => r.id === id ? { ...r, status } : r);
       
-      // Auto-create active plans when client requests are Approved or In Progress
       let updatedPlans = [...get().activePlans];
       const targetReq = get().requests.find(r => r.id === id);
       
+      let newlyInsertedPlan: ActivePlan | null = null;
       if (status === "Approved" && targetReq) {
         const hasActivePlan = updatedPlans.some(p => p.client_id === targetReq.client_id);
         if (!hasActivePlan) {
-          updatedPlans.push({
+          newlyInsertedPlan = {
             id: "plan-" + Math.random().toString(36).substring(4),
             client_id: targetReq.client_id,
             plan_name: targetReq.service_type.includes("E-commerce") || targetReq.service_type.includes("SaaS") ? "Enterprise" : "Professional",
@@ -896,17 +1316,151 @@ export const useStore = create<AgencyState>((set, get) => {
             status: "Active",
             billing_cycle: "Monthly",
             start_date: new Date().toISOString().split("T")[0]
-          });
+          };
+          updatedPlans.push(newlyInsertedPlan);
         }
       }
       
       set({ requests: updated, activePlans: updatedPlans });
-      saveStateToCache({ ...get(), requests: updated, activePlans: updatedPlans });
+      saveStateToCache({ requests: updated, activePlans: updatedPlans });
+
+      try {
+        await supabase.from("quote_requests").update({ status }).eq("id", id);
+        if (newlyInsertedPlan) {
+          await supabase.from("active_plans").insert([newlyInsertedPlan]);
+        }
+      } catch (err) {
+        console.warn("Failed to update quote request status in Supabase:", err);
+      }
+    },
+
+    submitQuoteReply: async (quoteId, text, files) => {
+      const user = get().currentUser;
+      if (!user) return;
+
+      const replyId = "qr-" + Math.random().toString(36).substring(4);
+      
+      const attachments: QuoteAttachment[] = (files || []).map(f => ({
+        id: "att-" + Math.random().toString(36).substring(4),
+        quote_id: quoteId,
+        reply_id: replyId,
+        file_name: f.file_name,
+        file_url: f.file_url,
+        created_at: new Date().toISOString()
+      }));
+
+      const newReply: QuoteReply = {
+        id: replyId,
+        quote_id: quoteId,
+        sender_id: user.id,
+        sender_name: user.name,
+        sender_role: user.role,
+        message_text: text,
+        created_at: new Date().toISOString(),
+        attachments: attachments
+      };
+
+      const updatedReplies = [...get().quoteReplies, newReply];
+      const updatedAttachments = [...get().quoteAttachments, ...attachments];
+
+      const quote = get().requests.find(r => r.id === quoteId);
+      const notifyUserId = user.role === "client" ? "all_admins" : (quote ? quote.client_id : "all_team");
+      
+      const newNotif: Notification = {
+        id: "not-" + Math.random().toString(36).substring(4),
+        user_id: notifyUserId,
+        title: "New Reply on Quote",
+        content: `Reply from ${user.name} on quote for ${quote ? quote.service_type : "Services"}.`,
+        is_read: false,
+        created_at: new Date().toISOString()
+      };
+
+      set({ 
+        quoteReplies: updatedReplies,
+        quoteAttachments: updatedAttachments,
+        notifications: [newNotif, ...get().notifications]
+      });
+      saveStateToCache({ 
+        quoteReplies: updatedReplies, 
+        quoteAttachments: updatedAttachments,
+        notifications: [newNotif, ...get().notifications]
+      });
+
+      try {
+        await supabase.from("quote_replies").insert([{
+          id: newReply.id,
+          quote_id: newReply.quote_id,
+          sender_id: newReply.sender_id,
+          sender_name: newReply.sender_name,
+          sender_role: newReply.sender_role,
+          message_text: newReply.message_text,
+          created_at: newReply.created_at
+        }]);
+        if (attachments.length > 0) {
+          await supabase.from("quote_attachments").insert(attachments);
+        }
+        await supabase.from("notifications").insert([newNotif]);
+      } catch (err) {
+        console.warn("Database sync quote replies failed:", err);
+      }
+    },
+
+    updateQuoteStatusDetail: async (quoteId, status, notes) => {
+      const user = get().currentUser;
+      if (!user) return;
+
+      const updatedRequests = get().requests.map(r => r.id === quoteId ? { ...r, status } : r);
+
+      const historyId = "qsh-" + Math.random().toString(36).substring(4);
+      const newHistory: QuoteStatusHistory = {
+        id: historyId,
+        quote_id: quoteId,
+        status,
+        changed_by_name: user.name,
+        changed_by_role: user.role,
+        notes: notes || `Status updated to ${status}.`,
+        created_at: new Date().toISOString()
+      };
+
+      const updatedHistory = [...get().quoteStatusHistory, newHistory];
+
+      const targetReq = get().requests.find(r => r.id === quoteId);
+      let clientNotif: Notification | null = null;
+      if (targetReq) {
+        clientNotif = {
+          id: "not-" + Math.random().toString(36).substring(4),
+          user_id: targetReq.client_id,
+          title: "Quote Progress Notification",
+          content: `Your quote request status is updated to: ${status}.`,
+          is_read: false,
+          created_at: new Date().toISOString()
+        };
+        set({ notifications: [clientNotif, ...get().notifications] });
+      }
+
+      set({
+        requests: updatedRequests,
+        quoteStatusHistory: updatedHistory
+      });
+      saveStateToCache({
+        requests: updatedRequests,
+        quoteStatusHistory: updatedHistory,
+        notifications: get().notifications
+      });
+
+      try {
+        await supabase.from("quote_requests").update({ status }).eq("id", quoteId);
+        await supabase.from("quote_status_history").insert([newHistory]);
+        if (clientNotif) {
+          await supabase.from("notifications").insert([clientNotif]);
+        }
+      } catch (err) {
+        console.warn("Database status progress synced locally:", err);
+      }
     },
     
-    // Team management
-    addTeamMember: (name, position, department, email) => {
-      // Create team email standard convention: name.position@diavox.com
+    // Team management (Synced directly to profiles table)
+    addTeamMember: async (name, position, department, email) => {
       const emailFriendlyName = name.toLowerCase().replace(/\s+/g, "");
       const emailFriendlyPosition = position.toLowerCase().replace(/\s+/g, "");
       const finalEmail = email || `${emailFriendlyName}.${emailFriendlyPosition}@diavox.com`;
@@ -925,25 +1479,93 @@ export const useStore = create<AgencyState>((set, get) => {
       const updatedMetrics = { ...get().metrics, teamCount: get().metrics.teamCount + 1 };
       
       set({ allUsers: nextUsers, metrics: updatedMetrics });
-      saveStateToCache({ ...get(), allUsers: nextUsers, metrics: updatedMetrics });
+      saveStateToCache({ allUsers: nextUsers });
+
+      try {
+        await supabase.from("profiles").insert([{
+          id: newMember.id,
+          email: newMember.email,
+          name: newMember.name,
+          role: newMember.role,
+          department: newMember.department,
+          avatar_url: newMember.avatar_url,
+          username: null,
+          skills: newMember.permissions,
+          permissions: newMember.permissions
+        }]);
+      } catch (err) {
+        console.warn("Failed to insert team member to profiles table in Supabase:", err);
+      }
     },
     
-    updateTeamMember: (id, updates) => {
+    updateTeamMember: async (id, updates) => {
       const nextUsers = get().allUsers.map(u => u.id === id ? { ...u, ...updates } : u);
       set({ allUsers: nextUsers });
-      saveStateToCache({ ...get(), allUsers: nextUsers });
+      saveStateToCache({ allUsers: nextUsers });
+
+      const payload: any = {};
+      if (updates.name !== undefined) payload.name = updates.name;
+      if (updates.email !== undefined) payload.email = updates.email;
+      if (updates.role !== undefined) payload.role = updates.role;
+      if (updates.department !== undefined) payload.department = updates.department;
+      if (updates.avatar_url !== undefined) payload.avatar_url = updates.avatar_url;
+      if (updates.username !== undefined) payload.username = updates.username;
+      if (updates.permissions !== undefined) {
+        payload.skills = updates.permissions;
+        payload.permissions = updates.permissions;
+      }
+      if (updates.password_hash !== undefined) payload.password_hash = updates.password_hash;
+
+      try {
+        await supabase.from("profiles").update(payload).eq("id", id);
+      } catch (err) {
+        console.warn("Failed to update profile row in Supabase:", err);
+      }
     },
     
-    deleteTeamMember: (id) => {
+    updateUserProfile: async (id, updates) => {
+      const nextUsers = get().allUsers.map(u => u.id === id ? { ...u, ...updates } : u);
+      const isMe = get().currentUser?.id === id;
+      const nextMe = isMe && get().currentUser ? { ...get().currentUser!, ...updates } : get().currentUser;
+      set({ allUsers: nextUsers, currentUser: nextMe });
+      saveStateToCache({ currentUser: nextMe });
+
+      const payload: any = {};
+      if (updates.name !== undefined) payload.name = updates.name;
+      if (updates.email !== undefined) payload.email = updates.email;
+      if (updates.role !== undefined) payload.role = updates.role;
+      if (updates.department !== undefined) payload.department = updates.department;
+      if (updates.avatar_url !== undefined) payload.avatar_url = updates.avatar_url;
+      if (updates.username !== undefined) payload.username = updates.username;
+      if (updates.permissions !== undefined) {
+        payload.skills = updates.permissions;
+        payload.permissions = updates.permissions;
+      }
+      if (updates.password_hash !== undefined) payload.password_hash = updates.password_hash;
+
+      try {
+        await supabase.from("profiles").update(payload).eq("id", id);
+      } catch (err) {
+        console.warn("Failed to update profiles in Supabase:", err);
+      }
+    },
+    
+    deleteTeamMember: async (id) => {
       const nextUsers = get().allUsers.filter(u => u.id !== id);
       const updatedMetrics = { ...get().metrics, teamCount: Math.max(1, get().metrics.teamCount - 1) };
       
       set({ allUsers: nextUsers, metrics: updatedMetrics });
-      saveStateToCache({ ...get(), allUsers: nextUsers, metrics: updatedMetrics });
+      saveStateToCache({ allUsers: nextUsers });
+
+      try {
+        await supabase.from("profiles").delete().eq("id", id);
+      } catch (err) {
+        console.warn("Failed to delete team member from profiles in Supabase:", err);
+      }
     },
     
-    // Projects CRUD
-    addProject: (project) => {
+    // Projects CRUD (Synced directly to projects table)
+    addProject: async (project) => {
       const id = "proj-" + Math.random().toString(36).substring(4);
       const newProj: Project = {
         id,
@@ -953,10 +1575,31 @@ export const useStore = create<AgencyState>((set, get) => {
       
       const nextProjects = [newProj, ...get().projects];
       set({ projects: nextProjects });
-      saveStateToCache({ ...get(), projects: nextProjects });
+      saveStateToCache({ projects: nextProjects });
+
+      try {
+        await supabase.from("projects").insert([{
+          id: newProj.id,
+          title: newProj.title,
+          description: newProj.description,
+          category: newProj.category,
+          technologies: newProj.technologies || [],
+          image_url: newProj.image_url || "",
+          completion_date: newProj.completion_date,
+          live_url: newProj.live_url || "",
+          status: newProj.status,
+          client_id: newProj.client_id || null,
+          client_name: newProj.client_name || "",
+          progress: newProj.progress,
+          delivery_date: newProj.delivery_date ? new Date(newProj.delivery_date).toISOString() : null,
+          assigned_to: newProj.assigned_to || []
+        }]);
+      } catch (err) {
+        console.warn("Failed to insert project into Supabase:", err);
+      }
     },
     
-    updateProjectProgress: (projectId, progress, updateText) => {
+    updateProjectProgress: async (projectId, progress, updateText) => {
       const author = get().currentUser?.name || "Team Member";
       const nextProjects = get().projects.map(p => 
         p.id === projectId 
@@ -969,8 +1612,9 @@ export const useStore = create<AgencyState>((set, get) => {
         nextUpdates[projectId] = [];
       }
       
+      let updateId = "";
       if (updateText) {
-        const updateId = "up-" + Math.random().toString(36).substring(4);
+        updateId = "up-" + Math.random().toString(36).substring(4);
         nextUpdates[projectId] = [
           {
             id: updateId,
@@ -983,11 +1627,27 @@ export const useStore = create<AgencyState>((set, get) => {
       }
       
       set({ projects: nextProjects, projectUpdates: nextUpdates });
-      saveStateToCache({ ...get(), projects: nextProjects, projectUpdates: nextUpdates });
+      saveStateToCache({ projects: nextProjects, projectUpdates: nextUpdates });
+
+      try {
+        const nextStatus = progress === 100 ? "completed" : "ongoing";
+        await supabase.from("projects").update({ progress, status: nextStatus }).eq("id", projectId);
+        if (updateText) {
+          await supabase.from("project_progress").insert([{
+            id: updateId,
+            project_id: projectId,
+            author_name: author,
+            update_text: updateText,
+            created_at: new Date().toISOString()
+          }]);
+        }
+      } catch (err) {
+        console.warn("Failed to commit project progress inside Supabase:", err);
+      }
     },
     
-    // Contracts and customized plans
-    addContract: (contract) => {
+    // Contracts and customized plans (Synced to contracts / active_plans tables)
+    addContract: async (contract) => {
       const id = "con-" + Math.random().toString(36).substring(4);
       const newContract: Contract = {
         id,
@@ -998,18 +1658,40 @@ export const useStore = create<AgencyState>((set, get) => {
       const updatedContracts = [newContract, ...get().contracts];
       
       set({ contracts: updatedContracts });
-      saveStateToCache({ ...get(), contracts: updatedContracts });
+      saveStateToCache({ contracts: updatedContracts });
+
+      try {
+        await supabase.from("contracts").insert([{
+          id: newContract.id,
+          client_id: newContract.client_id,
+          client_name: newContract.client_name,
+          project_title: newContract.project_title,
+          details: newContract.details,
+          terms: newContract.terms,
+          status: newContract.status,
+          price: newContract.price,
+          created_at: newContract.created_at
+        }]);
+      } catch (err) {
+        console.warn("Failed to save contract definition in Supabase:", err);
+      }
     },
     
-    signContract: (contractId) => {
+    signContract: async (contractId) => {
       const updatedContracts = get().contracts.map(c => 
         c.id === contractId ? { ...c, status: "Signed" as const } : c
       );
       set({ contracts: updatedContracts });
-      saveStateToCache({ ...get(), contracts: updatedContracts });
+      saveStateToCache({ contracts: updatedContracts });
+
+      try {
+        await supabase.from("contracts").update({ status: "Signed" }).eq("id", contractId);
+      } catch (err) {
+        console.warn("Failed to sign contract in Supabase:", err);
+      }
     },
     
-    purchasePlan: (planName, isAnnual) => {
+    purchasePlan: async (planName, isAnnual) => {
       const user = get().currentUser;
       if (!user) return;
       
@@ -1036,7 +1718,7 @@ export const useStore = create<AgencyState>((set, get) => {
       };
       
       set({ activePlans: nextPlans, metrics: updatedMetrics });
-      saveStateToCache({ ...get(), activePlans: nextPlans, metrics: updatedMetrics });
+      saveStateToCache({ activePlans: nextPlans, metrics: updatedMetrics });
       
       const purchaseNotif: Notification = {
         id: "not-" + Math.random().toString(36).substring(4),
@@ -1048,6 +1730,21 @@ export const useStore = create<AgencyState>((set, get) => {
       };
       
       set({ notifications: [purchaseNotif, ...get().notifications] });
+
+      try {
+        await supabase.from("active_plans").insert([{
+          id: activeP.id,
+          client_id: activeP.client_id,
+          plan_name: activeP.plan_name,
+          price: activeP.price,
+          status: activeP.status,
+          billing_cycle: activeP.billing_cycle,
+          start_date: activeP.start_date
+        }]);
+        await supabase.from("notifications").insert([purchaseNotif]);
+      } catch (err) {
+        console.warn("Failed to activate plan subscription row in Supabase:", err);
+      }
     },
     
     // Messages
@@ -1310,10 +2007,22 @@ export const useStore = create<AgencyState>((set, get) => {
       saveStateToCache({ ...get(), aiKnowledge: updated });
     },
 
-    updateCmsContent: (content) => {
+    updateCmsContent: async (content) => {
       const updated = { ...get().cmsContent, ...content };
       set({ cmsContent: updated });
       saveStateToCache({ ...get(), cmsContent: updated });
+      try {
+        await supabase.from("social_media_links").upsert({
+          id: "cms_app_state",
+          platform: "cms_json_config",
+          url: JSON.stringify(updated),
+          icon: "config",
+          display_order: -999,
+          visible: false
+        });
+      } catch (err) {
+        console.warn("Failed to save CMS config to Supabase:", err);
+      }
     },
 
     addMilestone: (milestone) => {
@@ -1341,6 +2050,212 @@ export const useStore = create<AgencyState>((set, get) => {
       const updated = [log, ...get().webhookLogs].slice(0, 100);
       set({ webhookLogs: updated });
       saveStateToCache({ ...get(), webhookLogs: updated });
+    },
+
+    addBlog: async (blog) => {
+      const newBlog: Blog = {
+        id: "blog-" + Math.random().toString(36).substring(4),
+        ...blog,
+        created_at: new Date().toISOString()
+      };
+      const updated = [newBlog, ...get().blogs];
+      set({ blogs: updated });
+      saveStateToCache({ ...get(), blogs: updated });
+      try {
+        await supabase.from("blogs").insert([newBlog]);
+      } catch (err) {
+        console.warn("Failed to insert blog to Supabase:", err);
+      }
+    },
+
+    updateBlog: async (id, updates) => {
+      const updated = get().blogs.map(item => item.id === id ? { ...item, ...updates } : item);
+      set({ blogs: updated });
+      saveStateToCache({ ...get(), blogs: updated });
+      try {
+        await supabase.from("blogs").update(updates).eq("id", id);
+      } catch (err) {
+        console.warn("Failed to update blog in Supabase:", err);
+      }
+    },
+
+    deleteBlog: async (id) => {
+      const updated = get().blogs.filter(item => item.id !== id);
+      set({ blogs: updated });
+      saveStateToCache({ ...get(), blogs: updated });
+      try {
+        await supabase.from("blogs").delete().eq("id", id);
+      } catch (err) {
+        console.warn("Failed to delete blog from Supabase:", err);
+      }
+    },
+
+    addPortfolioItem: async (item) => {
+      const newItem: PortfolioItem = {
+        id: "port-" + Math.random().toString(36).substring(4),
+        ...item,
+        created_at: new Date().toISOString()
+      };
+      const updated = [newItem, ...get().portfolioItems];
+      set({ portfolioItems: updated });
+      saveStateToCache({ ...get(), portfolioItems: updated });
+      try {
+        await supabase.from("portfolio_items").insert([newItem]);
+      } catch (err) {
+        console.warn("Failed to insert portfolio item to Supabase:", err);
+      }
+    },
+
+    updatePortfolioItem: async (id, updates) => {
+      const updated = get().portfolioItems.map(item => item.id === id ? { ...item, ...updates } : item);
+      set({ portfolioItems: updated });
+      saveStateToCache({ ...get(), portfolioItems: updated });
+      try {
+        await supabase.from("portfolio_items").update(updates).eq("id", id);
+      } catch (err) {
+        console.warn("Failed to update portfolio item in Supabase:", err);
+      }
+    },
+
+    deletePortfolioItem: async (id) => {
+      const updated = get().portfolioItems.filter(item => item.id !== id);
+      set({ portfolioItems: updated });
+      saveStateToCache({ ...get(), portfolioItems: updated });
+      try {
+        await supabase.from("portfolio_items").delete().eq("id", id);
+      } catch (err) {
+        console.warn("Failed to delete portfolio item from Supabase:", err);
+      }
+    },
+
+    sendPrivateMessage: (senderId, senderName, recipientId, text) => {
+      const newMsg: PrivateMessage = {
+        id: "pm-" + Math.random().toString(36).substring(4),
+        sender_id: senderId,
+        sender_name: senderName,
+        recipient_id: recipientId,
+        message_text: text,
+        created_at: new Date().toISOString()
+      };
+      const updated = [...get().privateMessages, newMsg];
+      set({ privateMessages: updated });
+      saveStateToCache({ ...get(), privateMessages: updated });
+    },
+
+    sendTeamMessage: (groupId, senderId, senderName, senderRole, text, file_url, file_name, is_image) => {
+      const newMsg: TeamMessage = {
+        id: "tm-" + Math.random().toString(36).substring(4),
+        group_id: groupId,
+        sender_id: senderId,
+        sender_name: senderName,
+        sender_role: senderRole,
+        message_text: text,
+        file_url,
+        file_name,
+        is_image,
+        created_at: new Date().toISOString()
+      };
+      const updated = [...get().teamMessages, newMsg];
+      set({ teamMessages: updated });
+      saveStateToCache({ ...get(), teamMessages: updated });
+    },
+
+    createTeamGroup: (name, description) => {
+      const newGroup: TeamGroup = {
+        id: "tg-" + Math.random().toString(36).substring(4),
+        name,
+        description,
+        created_at: new Date().toISOString()
+      };
+      const updated = [...get().teamGroups, newGroup];
+      set({ teamGroups: updated });
+      saveStateToCache({ ...get(), teamGroups: updated });
+    },
+
+    deleteTeamGroup: (id) => {
+      const updated = get().teamGroups.filter(g => g.id !== id);
+      set({ teamGroups: updated });
+      saveStateToCache({ ...get(), teamGroups: updated });
+    },
+
+    createProjectGroup: (projectId, name, assignedMembers) => {
+      const newGroup: ProjectGroup = {
+        id: "pg-" + Math.random().toString(36).substring(4),
+        project_id: projectId,
+        name,
+        assigned_members: assignedMembers,
+        created_at: new Date().toISOString()
+      };
+      const updated = [...get().projectGroups, newGroup];
+      set({ projectGroups: updated });
+      saveStateToCache({ ...get(), projectGroups: updated });
+    },
+
+    deleteProjectGroup: (id) => {
+      const updated = get().projectGroups.filter(g => g.id !== id);
+      set({ projectGroups: updated });
+      saveStateToCache({ ...get(), projectGroups: updated });
+    },
+
+    addAiTrainingFile: (title, file_type, content, uploaded_by_id, uploaded_by_name) => {
+      const newFile: AiTrainingFile = {
+        id: "aif-" + Math.random().toString(36).substring(4),
+        title,
+        file_type,
+        content,
+        uploaded_by_id,
+        uploaded_by_name,
+        created_at: new Date().toISOString()
+      };
+      const updated = [newFile, ...get().aiTrainingFiles];
+      set({ aiTrainingFiles: updated });
+      saveStateToCache({ ...get(), aiTrainingFiles: updated });
+    },
+
+    deleteAiTrainingFile: (id) => {
+      const updated = get().aiTrainingFiles.filter(item => item.id !== id);
+      set({ aiTrainingFiles: updated });
+      saveStateToCache({ ...get(), aiTrainingFiles: updated });
+    },
+
+    submitPlanApproval: (clientId, clientName, planName, price, billingCycle) => {
+      const newApproval: PlanApproval = {
+        id: "pa-" + Math.random().toString(36).substring(4),
+        client_id: clientId,
+        client_name: clientName,
+        plan_name: planName,
+        price,
+        billing_cycle: billingCycle,
+        status: "Pending Approval",
+        created_at: new Date().toISOString()
+      };
+      const updated = [newApproval, ...get().planApprovals];
+      set({ planApprovals: updated });
+      saveStateToCache({ ...get(), planApprovals: updated });
+    },
+
+    updatePlanApprovalStatus: (id, status) => {
+      const target = get().planApprovals.find(pa => pa.id === id);
+      const updatedApprovals = get().planApprovals.map(pa => pa.id === id ? { ...pa, status } : pa);
+      
+      let updatedPlans = [...get().activePlans];
+      if (status === "Approved" && target) {
+        const start = new Date();
+        const nextActivePlan: ActivePlan = {
+          id: "plan-" + Math.random().toString(36).substring(4),
+          client_id: target.client_id,
+          plan_name: target.plan_name,
+          price: target.price,
+          status: "Active",
+          billing_cycle: target.billing_cycle,
+          start_date: start.toISOString().split("T")[0]
+        };
+        updatedPlans = updatedPlans.map(p => p.client_id === target.client_id ? { ...p, status: "Expired" as const } : p);
+        updatedPlans.push(nextActivePlan);
+      }
+      
+      set({ planApprovals: updatedApprovals, activePlans: updatedPlans });
+      saveStateToCache({ ...get(), planApprovals: updatedApprovals, activePlans: updatedPlans });
     }
   };
 });

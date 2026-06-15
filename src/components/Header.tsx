@@ -61,17 +61,26 @@ export default function Header({ onOpenAuth, onNavigate, activeSection }: Header
         {/* Global Navigation Links */}
         <nav className="hidden md:flex space-x-1 lg:space-x-2" id="header-desktop-nav">
           {navItems.map((item) => {
-            const isActive = activeSection === item.id;
+            const isActive = activeSection === item.id || 
+                             (activeSection === "services-page" && item.id === "services") ||
+                             (activeSection === "portfolio-page" && item.id === "portfolio") ||
+                             (activeSection === "projects-page" && item.id === "portfolio") ||
+                             (activeSection === "pricing-page" && item.id === "pricing") ||
+                             (activeSection === "blog-page" && item.id === "blog") ||
+                             (activeSection === "reviews-page" && item.id === "reviews") ||
+                             (activeSection === "contact-page" && item.id === "contact") ||
+                             (activeSection === "about-page" && item.id === "hero"); // highlight home/about on home
+            const target = item.id === "hero" ? "hero" : `${item.id}-page`;
             return (
               <button
                 key={item.id}
                 id={`nav-btn-${item.id}`}
-                onClick={() => onNavigate(item.id)}
+                onClick={() => onNavigate(target)}
                 className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
                   isActive
                     ? theme === "dark"
-                      ? "text-cyan-400 bg-slate-900"
-                      : "text-slate-950 bg-slate-100 font-semibold"
+                      ? "text-cyan-400 bg-slate-900 border border-slate-800"
+                      : "text-slate-950 bg-slate-100 font-semibold border border-slate-200"
                     : theme === "dark"
                     ? "text-slate-400 hover:text-white hover:bg-slate-900/50"
                     : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
@@ -121,9 +130,10 @@ export default function Header({ onOpenAuth, onNavigate, activeSection }: Header
               >
                 {currentUser.role === "primary_admin" && <Shield size={12} />}
                 {currentUser.role === "secondary_admin" && <Layers size={12} />}
+                {currentUser.role === "third_admin" && <Shield size={12} />}
                 {currentUser.role === "team_member" && <Code size={12} />}
                 {currentUser.role === "client" && <Compass size={12} />}
-                <span className="capitalize">{currentUser.role.replace("_", " ")}</span>
+                <span className="capitalize">{["primary_admin", "secondary_admin", "third_admin"].includes(currentUser.role) ? "Admin" : currentUser.role.replace("_", " ")}</span>
               </button>
 
               <div className="relative z-50">
@@ -171,7 +181,7 @@ export default function Header({ onOpenAuth, onNavigate, activeSection }: Header
                     <button
                       onClick={() => {
                         setProfileDropdownOpen(false);
-                        if (["primary_admin", "secondary_admin"].includes(currentUser.role)) {
+                        if (["primary_admin", "secondary_admin", "third_admin", "secret_admin"].includes(currentUser.role)) {
                           onNavigate("admin-dash");
                         } else if (currentUser.role === "team_member") {
                           onNavigate("team-dash");
@@ -242,19 +252,28 @@ export default function Header({ onOpenAuth, onNavigate, activeSection }: Header
           >
             <div className="px-4 py-4 space-y-2 flex flex-col">
               {navItems.map((item) => {
-                const isActive = activeSection === item.id;
+                const isActive = activeSection === item.id || 
+                                 (activeSection === "services-page" && item.id === "services") ||
+                                 (activeSection === "portfolio-page" && item.id === "portfolio") ||
+                                 (activeSection === "projects-page" && item.id === "portfolio") ||
+                                 (activeSection === "pricing-page" && item.id === "pricing") ||
+                                 (activeSection === "blog-page" && item.id === "blog") ||
+                                 (activeSection === "reviews-page" && item.id === "reviews") ||
+                                 (activeSection === "contact-page" && item.id === "contact") ||
+                                 (activeSection === "about-page" && item.id === "hero");
+                const target = item.id === "hero" ? "hero" : `${item.id}-page`;
                 return (
                   <button
                     key={item.id}
                     onClick={() => {
-                      onNavigate(item.id);
+                      onNavigate(target);
                       setMobileMenuOpen(false);
                     }}
                     className={`px-3 py-2.5 rounded-lg text-sm text-left font-medium transition-all ${
                       isActive
                         ? theme === "dark"
-                          ? "text-cyan-400 bg-slate-900 font-bold"
-                          : "text-slate-950 bg-slate-100 font-bold"
+                          ? "text-cyan-400 bg-slate-900 font-bold border border-slate-800"
+                          : "text-slate-950 bg-slate-100 font-bold border border-slate-200"
                         : theme === "dark"
                         ? "text-slate-400 hover:text-white hover:bg-slate-900/40"
                         : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
@@ -270,7 +289,7 @@ export default function Header({ onOpenAuth, onNavigate, activeSection }: Header
                 <div className="pt-2 border-t dark:border-slate-800 border-slate-100">
                   <button
                     onClick={() => {
-                      if (["primary_admin", "secondary_admin"].includes(currentUser.role)) {
+                      if (["primary_admin", "secondary_admin", "third_admin", "secret_admin"].includes(currentUser.role)) {
                         onNavigate("admin-dash");
                       } else if (currentUser.role === "team_member") {
                         onNavigate("team-dash");
@@ -281,7 +300,7 @@ export default function Header({ onOpenAuth, onNavigate, activeSection }: Header
                     }}
                     className="w-full text-left px-3 py-2.5 rounded-lg text-xs font-mono font-bold bg-cyan-500/10 text-cyan-400 flex items-center space-x-2"
                   >
-                    <span className="capitalize">Go to {currentUser.role.replace("_", " ")} Dashboard</span>
+                    <span className="capitalize">Go to {["primary_admin", "secondary_admin", "third_admin"].includes(currentUser.role) ? "Admin" : currentUser.role.replace("_", " ")} Dashboard</span>
                   </button>
                 </div>
               )}

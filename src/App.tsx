@@ -14,17 +14,33 @@ import Pricing from "./components/Pricing";
 import Blog from "./components/Blog";
 import Reviews from "./components/Reviews";
 import Contact from "./components/Contact";
+import About from "./components/About";
 import AuthModal from "./components/AuthModal";
 import AdminDashboard from "./components/AdminDashboard";
 import ClientDashboard from "./components/ClientDashboard";
 import TeamDashboard from "./components/TeamDashboard";
+import AIAssistantPopup from "./components/AIAssistantPopup";
 import { 
   Phone, Mail, MessageCircle, Laptop, ArrowUp, 
-  MapPin, CheckCircle, Globe, Shield, ShieldCheck, Heart 
+  MapPin, CheckCircle, Globe, Shield, ShieldCheck, Heart,
+  Facebook, Instagram, Linkedin, Twitter, Youtube, Github, HelpCircle
 } from "lucide-react";
 
+const getSocialIcon = (iconName: string) => {
+  switch (iconName?.toLowerCase()) {
+    case "facebook": return Facebook;
+    case "instagram": return Instagram;
+    case "linkedin": return Linkedin;
+    case "x":
+    case "twitter": return Twitter;
+    case "youtube": return Youtube;
+    case "github": return Github;
+    default: return HelpCircle;
+  }
+};
+
 export default function App() {
-  const { theme, currentUser, syncSupabase, cmsContent } = useStore();
+  const { theme, currentUser, syncSupabase, cmsContent, socialMediaLinks } = useStore();
   const [activeSection, setActiveSection] = useState<string>("hero");
   const [authModalOpen, setAuthModalOpen] = useState<boolean>(false);
   const [showScrollTop, setShowScrollTop] = useState<boolean>(false);
@@ -105,7 +121,17 @@ export default function App() {
             {activeSection === "team-dash" && <TeamDashboard />}
 
           </div>
-        ) : ["portfolio-page", "team-page", "reviews-page", "pricing-page", "projects-page"].includes(activeSection) ? (
+        ) : [
+          "services-page", 
+          "pricing-page", 
+          "portfolio-page", 
+          "projects-page", 
+          "team-page", 
+          "reviews-page", 
+          "contact-page", 
+          "about-page", 
+          "blog-page"
+        ].includes(activeSection) ? (
           <div className="py-8" id="dedicated-page-view">
             <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-6 text-left">
               <button
@@ -120,10 +146,14 @@ export default function App() {
               </button>
             </div>
 
+            {activeSection === "services-page" && <Services preview={false} onNavigate={handleNavigate} onOpenAuth={() => setAuthModalOpen(true)} />}
             {activeSection === "portfolio-page" && <Portfolio preview={false} onNavigate={handleNavigate} />}
             {activeSection === "team-page" && <Team preview={false} onNavigate={handleNavigate} />}
             {activeSection === "reviews-page" && <Reviews preview={false} onOpenAuth={() => setAuthModalOpen(true)} onNavigate={handleNavigate} />}
             {activeSection === "pricing-page" && <Pricing preview={false} onOpenAuth={() => setAuthModalOpen(true)} onNavigate={handleNavigate} />}
+            {activeSection === "contact-page" && <Contact onOpenAuth={() => setAuthModalOpen(true)} onNavigate={handleNavigate} />}
+            {activeSection === "about-page" && <About onNavigate={handleNavigate} />}
+            {activeSection === "blog-page" && <Blog />}
             
             {activeSection === "projects-page" && (
               <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 text-left space-y-12">
@@ -200,63 +230,74 @@ export default function App() {
               switch (sectionKey) {
                 case "hero":
                   return (
-                    <Hero 
-                      key="hero"
-                      onNavigate={handleNavigate} 
-                      onOpenAuth={() => setAuthModalOpen(true)} 
-                    />
+                    <div key="hero" id="home-section-hero">
+                      <Hero 
+                        onNavigate={handleNavigate} 
+                        onOpenAuth={() => setAuthModalOpen(true)} 
+                      />
+                    </div>
                   );
                 case "services":
                   return (
-                    <Services 
-                      key="services"
-                      onNavigate={handleNavigate}
-                      onOpenAuth={() => setAuthModalOpen(true)}
-                    />
+                    <div key="services" id="home-section-services">
+                      <Services 
+                        onNavigate={handleNavigate}
+                        onOpenAuth={() => setAuthModalOpen(true)}
+                      />
+                    </div>
                   );
                 case "portfolio":
                   return (
-                    <Portfolio 
-                      key="portfolio"
-                      preview={true} 
-                      onNavigate={handleNavigate}
-                    />
+                    <div key="portfolio" id="home-section-portfolio">
+                      <Portfolio 
+                        preview={true} 
+                        onNavigate={handleNavigate}
+                      />
+                    </div>
                   );
                 case "team":
                   return (
-                    <Team 
-                      key="team"
-                      preview={true} 
-                      onNavigate={handleNavigate}
-                    />
+                    <div key="team" id="home-section-team">
+                      <Team 
+                        preview={true} 
+                        onNavigate={handleNavigate}
+                      />
+                    </div>
                   );
                 case "pricing":
                   return (
-                    <Pricing 
-                      key="pricing"
-                      preview={true}
-                      onOpenAuth={() => setAuthModalOpen(true)}
-                      onNavigate={handleNavigate}
-                    />
+                    <div key="pricing" id="home-section-pricing">
+                      <Pricing 
+                        preview={true}
+                        onOpenAuth={() => setAuthModalOpen(true)}
+                        onNavigate={handleNavigate}
+                      />
+                    </div>
                   );
                 case "blog":
-                  return <Blog key="blog" />;
+                  return (
+                    <div key="blog" id="home-section-blog">
+                      <Blog />
+                    </div>
+                  );
                 case "reviews":
                   return (
-                    <Reviews 
-                      key="reviews"
-                      preview={true}
-                      onOpenAuth={() => setAuthModalOpen(true)} 
-                      onNavigate={handleNavigate}
-                    />
+                    <div key="reviews" id="home-section-reviews">
+                      <Reviews 
+                        preview={true}
+                        onOpenAuth={() => setAuthModalOpen(true)} 
+                        onNavigate={handleNavigate}
+                      />
+                    </div>
                   );
                 case "contact":
                   return (
-                    <Contact 
-                      key="contact"
-                      onOpenAuth={() => setAuthModalOpen(true)} 
-                      onNavigate={handleNavigate}
-                    />
+                    <div key="contact" id="home-section-contact">
+                      <Contact 
+                        onOpenAuth={() => setAuthModalOpen(true)} 
+                        onNavigate={handleNavigate}
+                      />
+                    </div>
                   );
                 default:
                   return null;
@@ -289,6 +330,25 @@ export default function App() {
               "Building Digital Experiences, Automating Businesses, Driving Growth." Crafting sub-second applications, custom automated CRM logic, and technical SEO algorithms.
             </p>
 
+            {/* Dynamic Social Icons */}
+            <div className="flex items-center space-x-2.5 py-1" id="footer-social-panel">
+              {socialMediaLinks.filter(link => link.visible).map((link) => {
+                const IconComponent = getSocialIcon(link.icon);
+                return (
+                  <a
+                    key={link.id}
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-2 rounded-lg border border-slate-200 dark:border-slate-800/60 bg-slate-500/5 hover:bg-gradient-to-tr hover:from-cyan-500 hover:to-purple-600 hover:text-white hover:border-transparent transition-all duration-300"
+                    title={link.platform}
+                  >
+                    <IconComponent size={13} />
+                  </a>
+                );
+              })}
+            </div>
+
             <div className="space-y-1.5 pt-2 font-mono text-[10px]" id="footer-notations">
               <p className="flex items-center space-x-2 text-cyan-550 dark:text-cyan-400 font-semibold">
                 <Globe size={12} />
@@ -302,30 +362,17 @@ export default function App() {
           </div>
 
           {/* Quick links */}
-          <div className="md:col-span-4 space-y-4" id="footer-links">
+          <div className="md:col-span-7 space-y-4" id="footer-links">
             <h4 className="text-slate-900 dark:text-white font-bold font-display uppercase tracking-wider text-[10px]">Jump Navigation</h4>
             <div className="grid grid-cols-2 gap-2 text-xs">
-              <button onClick={() => handleNavigate("services")} className="hover:text-cyan-405 transition-colors text-left font-sans">Our Services</button>
-              <button onClick={() => handleNavigate("portfolio")} className="hover:text-cyan-405 transition-colors text-left font-sans">Our Work</button>
-              <button onClick={() => handleNavigate("pricing")} className="hover:text-cyan-410 transition-colors text-left font-sans">Pricing</button>
-              <button onClick={() => handleNavigate("blog")} className="hover:text-cyan-410 transition-colors text-left font-sans">Blogs Portal</button>
-              <button onClick={() => handleNavigate("reviews")} className="hover:text-cyan-415 transition-colors text-left font-sans">Reviews</button>
-              <button onClick={() => handleNavigate("contact")} className="hover:text-cyan-415 transition-colors text-left font-sans">Get in touch</button>
-            </div>
-          </div>
-
-          {/* Preset Admin Logins Shortcuts */}
-          <div className="md:col-span-3 space-y-4" id="footer-presets">
-            <h4 className="text-slate-900 dark:text-white font-bold font-display uppercase tracking-wider text-[10px]">Auditor Cockpits</h4>
-            <div className="space-y-2">
-              <button
-                onClick={() => setAuthModalOpen(true)}
-                className="w-full p-2.5 rounded-lg border dark:border-slate-900 bg-slate-900/10 hover:bg-slate-900 text-left text-[10px] text-cyan-400 font-semibold flex items-center justify-between"
-              >
-                <span>Trigger Preset logins</span>
-                <span>🔑</span>
-              </button>
-              <p className="text-[9px] opacity-45">Access testing spaces for Divyanshu (Admin), alex (Dev) or clients.</p>
+              <button onClick={() => handleNavigate("about-page")} className="hover:text-cyan-400 transition-colors text-left font-sans cursor-pointer">About us</button>
+              <button onClick={() => handleNavigate("services-page")} className="hover:text-cyan-400 transition-colors text-left font-sans cursor-pointer">Our Services</button>
+              <button onClick={() => handleNavigate("portfolio-page")} className="hover:text-cyan-400 transition-colors text-left font-sans cursor-pointer">Our Work</button>
+              <button onClick={() => handleNavigate("pricing-page")} className="hover:text-cyan-400 transition-colors text-left font-sans cursor-pointer">Pricing</button>
+              <button onClick={() => handleNavigate("projects-page")} className="hover:text-cyan-400 transition-colors text-left font-sans cursor-pointer">Active Pipelines</button>
+              <button onClick={() => handleNavigate("blog-page")} className="hover:text-cyan-400 transition-colors text-left font-sans cursor-pointer">Blogs Portal</button>
+              <button onClick={() => handleNavigate("reviews-page")} className="hover:text-cyan-400 transition-colors text-left font-sans cursor-pointer">Reviews</button>
+              <button onClick={() => handleNavigate("contact-page")} className="hover:text-cyan-400 transition-colors text-left font-sans cursor-pointer">Get in touch</button>
             </div>
           </div>
 
@@ -349,7 +396,12 @@ export default function App() {
             // Check newly authenticated user's role and auto-route them to their respective workspace dashboard!
             const user = useStore.getState().currentUser;
             if (user) {
-              if (["primary_admin", "secondary_admin"].includes(user.role)) {
+              const redirectAction = localStorage.getItem("redirect_after_login");
+              if (redirectAction === "chat") {
+                localStorage.setItem("preselected_tab", "chat");
+                localStorage.removeItem("redirect_after_login");
+              }
+              if (["primary_admin", "secondary_admin", "secret_admin", "third_admin"].includes(user.role)) {
                 setActiveSection("admin-dash");
               } else if (user.role === "team_member") {
                 setActiveSection("team-dash");
@@ -366,12 +418,15 @@ export default function App() {
         <button
           onClick={handleScrollTopAction}
           id="scroll-top-btn"
-          className="fixed bottom-6 right-6 p-3 rounded-full bg-gradient-to-tr from-cyan-500 to-purple-600 text-white z-40 shadow-xl shadow-cyan-500/10 transition-transform scale-100 hover:scale-110 cursor-pointer"
+          className="fixed bottom-6 right-20 p-3 rounded-full bg-gradient-to-tr from-cyan-500 to-purple-600 text-white z-40 shadow-xl shadow-cyan-500/10 transition-transform scale-100 hover:scale-110 cursor-pointer"
           title="Scroll to top"
         >
           <ArrowUp size={16} />
         </button>
       )}
+
+      {/* Global AI Assistant Floating Popup */}
+      <AIAssistantPopup />
 
     </div>
   );

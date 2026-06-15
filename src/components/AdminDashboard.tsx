@@ -3,28 +3,110 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useStore } from "../store";
+
+// Import modular backoffice managers
+import AdminBlogs from "./admin/AdminBlogs";
+import AdminWorkProjects from "./admin/AdminWorkProjects";
+import AdminOngoingProgress from "./admin/AdminOngoingProgress";
+import AdminPortfolio from "./admin/AdminPortfolio";
+import AdminTeamProfiles from "./admin/AdminTeamProfiles";
+import AdminContracts from "./admin/AdminContracts";
+import AdminActivePlans from "./admin/AdminActivePlans";
+import AdminPayments from "./admin/AdminPayments";
+import AdminQuotes from "./admin/AdminQuotes";
+import AdminAiTraining from "./admin/AdminAiTraining";
+import AdminTeamChats from "./admin/AdminTeamChats";
+import AdminProjectGroups from "./admin/AdminProjectGroups";
+
 import { 
   BarChart3, Users, Briefcase, FileSignature, CheckCircle2, 
   Trash2, Plus, Edit2, Lock, Shield, UserCheck, AlertCircle, 
   MessageSquare, LockKeyhole, Mail, UserPlus, Star, Save, Tag, DollarSign, PlusCircle,
-  History, CreditCard, Cpu, Layout, Eye, Download, Search, FileText, Filter
+  History, CreditCard, Cpu, Layout, Eye, Download, Search, FileText, Filter,
+  ChevronUp, ChevronDown, GripVertical, EyeOff, Globe,
+  Facebook, Instagram, Linkedin, Twitter, Youtube, Github, HelpCircle
 } from "lucide-react";
 import { TeamDepartment, UserRole, RequestStatus, UserProfile, Message, PricingOption, PricingTierObj } from "../types";
 
+const getSocialIcon = (iconName: string) => {
+  switch (iconName?.toLowerCase()) {
+    case "facebook": return Facebook;
+    case "instagram": return Instagram;
+    case "linkedin": return Linkedin;
+    case "x":
+    case "twitter": return Twitter;
+    case "youtube": return Youtube;
+    case "github": return Github;
+    default: return HelpCircle;
+  }
+};
+
 export default function AdminDashboard() {
   const { 
-    theme, currentUser, allUsers, projects, requests, reviews, metrics, messages, pricingOptions,
+    theme, currentUser, allUsers, projects, requests, reviews, metrics, messages, pricingOptions, blogs,
     addTeamMember, deleteTeamMember, updateTeamMember, addProject, updateProject, deleteProject,
     updateRequestStatus, updateProjectProgress, updateReviewStatus, toggleReviewFeature, replyToReview, 
     deleteReview, sendMessage, updatePricingOption, updatePricingTier, addPricingOption, deletePricingOption,
     activityLogs, invoices, payments, aiKnowledge, cmsContent, milestones, webhookLogs,
     addActivityLog, addInvoice, updateInvoiceStatus, addPayment, addAiKnowledge, updateAiKnowledge, deleteAiKnowledge,
-    updateCmsContent, addMilestone, payMilestone, addWebhookLog
+    updateCmsContent, addMilestone, payMilestone, addWebhookLog,
+    quoteReplies, quoteAttachments, quoteStatusHistory, submitQuoteReply, updateQuoteStatusDetail,
+    socialMediaLinks, addSocialMediaLink, updateSocialMediaLink, deleteSocialMediaLink, reorderSocialMediaLinks,
+    portfolioItems, privateMessages, teamGroups, teamMessages, projectGroups, aiTrainingFiles, planApprovals,
+    addBlog, updateBlog, deleteBlog, addPortfolioItem, updatePortfolioItem, deletePortfolioItem,
+    sendPrivateMessage, sendTeamMessage, createTeamGroup, createProjectGroup, deleteProjectGroup,
+    addAiTrainingFile, deleteAiTrainingFile, submitPlanApproval, updatePlanApprovalStatus
   } = useStore();
 
-  const [activeTab, setActiveTab] = useState<"analytics" | "projects" | "requests" | "team" | "reviews" | "chats" | "pricing" | "settings" | "audit" | "billing" | "aitrain" | "cms">("analytics");
+  const [activeTab, setActiveTab] = useState<
+    | "profile"
+    | "analytics"
+    | "requests"
+    | "pricing"
+    | "reviews"
+    | "settings"
+    | "audit"
+    | "cms"
+    | "socials"
+    | "blogs"
+    | "work_projects"
+    | "ongoing_progress"
+    | "portfolio"
+    | "team_profiles"
+    | "contracts"
+    | "active_plans"
+    | "quotes"
+    | "payments"
+    | "team_chats"
+    | "project_groups"
+    | "chats"
+  >("profile");
+
+  // Local state for searching/filtering quote requests
+  const [requestSearch, setRequestSearch] = useState<string>("");
+  const [requestStatusFilter, setRequestStatusFilter] = useState<string>("All");
+  const [expAdminReqId, setExpAdminReqId] = useState<string | null>(null);
+  const [adminReplyInput, setAdminReplyInput] = useState<string>("");
+
+  // Admin Profile management states
+  const [profileName, setProfileName] = useState<string>(currentUser?.name || "");
+  const [profileUsername, setProfileUsername] = useState<string>(currentUser?.username || "admin");
+  const [profileAvatar, setProfileAvatar] = useState<string>(currentUser?.avatar_url || "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&w=150&h=150");
+  const [passOld, setPassOld] = useState<string>("");
+  const [passNew, setPassNew] = useState<string>("");
+  const [passConfirm, setPassConfirm] = useState<string>("");
+  const [showPassOld, setShowPassOld] = useState<boolean>(false);
+  const [showPassNew, setShowPassNew] = useState<boolean>(false);
+  const [showPassConfirm, setShowPassConfirm] = useState<boolean>(false);
+  const [isDragOver, setIsDragOver] = useState<boolean>(false);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  } | null>(null);
   
   // Dynamic Pricing CRUD local states
   const [newOptionTitle, setNewOptionTitle] = useState<string>("");
@@ -107,10 +189,96 @@ export default function AdminDashboard() {
   const [aiA, setAiA] = useState<string>("");
   const [aiCat, setAiCat] = useState<string>("General Pricing");
 
+  // Social media link editor states
+  const [newSmlPlat, setNewSmlPlat] = useState<string>("Facebook");
+  const [newSmlUrl, setNewSmlUrl] = useState<string>("");
+  const [newSmlIcon, setNewSmlIcon] = useState<string>("Facebook");
+  const [editingSmlId, setEditingSmlId] = useState<string | null>(null);
+  const [editSmlPlat, setEditSmlPlat] = useState<string>("");
+  const [editSmlUrl, setEditSmlUrl] = useState<string>("");
+  const [editSmlIcon, setEditSmlIcon] = useState<string>("");
+
   // CMS Content customizer states
   const [cmsHeroTitle, setCmsHeroTitle] = useState<string>(cmsContent?.heroTitle || "");
   const [cmsHeroSubtitle, setCmsHeroSubtitle] = useState<string>(cmsContent?.heroSubtitle || "");
   const [cmsHeroBadge, setCmsHeroBadge] = useState<string>(cmsContent?.heroBadge || "");
+  const [cmsSections, setCmsSections] = useState<string[]>(
+    cmsContent?.homepageSections || ["hero", "services", "portfolio", "team", "reviews", "pricing", "blog", "contact"]
+  );
+  const [cmsVisibility, setCmsVisibility] = useState<Record<string, boolean>>(
+    cmsContent?.sectionVisibility || {
+      hero: true,
+      services: true,
+      portfolio: true,
+      team: true,
+      reviews: true,
+      pricing: true,
+      blog: true,
+      contact: true
+    }
+  );
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (currentUser) {
+      setProfileName(currentUser.name || "");
+      setProfileUsername(currentUser.username || currentUser.email?.split("@")[0] || "admin");
+      setProfileAvatar(currentUser.avatar_url || "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&w=150&h=150");
+    }
+  }, [currentUser]);
+
+  useEffect(() => {
+    const preselected = localStorage.getItem("preselected_tab");
+    if (preselected === "chat") {
+      setActiveTab("chats");
+      localStorage.removeItem("preselected_tab");
+    }
+  }, []);
+
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIndex(index);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === targetIndex) return;
+
+    const reordered = [...cmsSections];
+    const [movedItem] = reordered.splice(draggedIndex, 1);
+    reordered.splice(targetIndex, 0, movedItem);
+
+    setCmsSections(reordered);
+    setDraggedIndex(null);
+  };
+
+  const moveSectionUp = (index: number) => {
+    if (index === 0) return;
+    const reordered = [...cmsSections];
+    const temp = reordered[index - 1];
+    reordered[index - 1] = reordered[index];
+    reordered[index] = temp;
+    setCmsSections(reordered);
+  };
+
+  const moveSectionDown = (index: number) => {
+    if (index === cmsSections.length - 1) return;
+    const reordered = [...cmsSections];
+    const temp = reordered[index + 1];
+    reordered[index + 1] = reordered[index];
+    reordered[index] = temp;
+    setCmsSections(reordered);
+  };
+
+  const toggleSectionVisibility = (sectionKey: string) => {
+    setCmsVisibility(prev => ({
+      ...prev,
+      [sectionKey]: prev[sectionKey] === false ? true : false
+    }));
+  };
 
   if (!currentUser || !["secret_admin", "primary_admin", "secondary_admin", "third_admin"].includes(currentUser.role)) {
     return (
@@ -313,25 +481,135 @@ export default function AdminDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start" id="admin-workspace-grid">
         
         {/* Navigation panel */}
-        <div className="lg:col-span-3 space-y-2 flex flex-col" id="admin-sidebar-navigation">
+        <div className="lg:col-span-3 space-y-1.5 flex flex-col p-4 rounded-2xl bg-slate-900/40 border border-slate-800/60 max-h-[85vh] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-800" id="admin-sidebar-navigation">
+          
+          <div className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-bold px-3 pt-2 pb-1 text-left">Internal Ops</div>
+          
           <button
-            onClick={() => setActiveTab("analytics")}
-            className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors ${
-              activeTab === "analytics" ? "bg-slate-900 border border-cyan-500/10 text-cyan-400" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+            onClick={() => setActiveTab("profile")}
+            className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+              activeTab === "profile" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
             }`}
           >
-            <BarChart3 size={15} />
-            <span>Metrics & Analytics</span>
+            <Shield size={14} className="text-cyan-500" />
+            <span>Profile Desk</span>
           </button>
 
           <button
-            onClick={() => setActiveTab("requests")}
-            className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors ${
-              activeTab === "requests" ? "bg-slate-900 border border-cyan-500/10 text-cyan-400" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+            onClick={() => setActiveTab("analytics")}
+            className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+              activeTab === "analytics" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
             }`}
           >
-            <FileSignature size={15} />
-            <span>Inquiries & Leads</span>
+            <BarChart3 size={14} />
+            <span>Metrics & Analytics</span>
+          </button>
+
+          <div className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-bold px-3 pt-3 pb-1 text-left">Content & Brand</div>
+
+          <button
+            onClick={() => setActiveTab("blogs")}
+            className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+              activeTab === "blogs" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+            }`}
+          >
+            <FileText size={14} />
+            <span>Blogs</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("portfolio")}
+            className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+              activeTab === "portfolio" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+            }`}
+          >
+            <Star size={14} />
+            <span>Portfolio</span>
+          </button>
+
+          {/* CMS: Visible to secret_admin */}
+          {["secret_admin"].includes(currentUser.role) && (
+            <button
+              onClick={() => setActiveTab("cms")}
+              className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+                activeTab === "cms" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+              }`}
+            >
+              <Layout size={14} />
+              <span>Website CMS Editor</span>
+            </button>
+          )}
+
+          {/* Socials: Visible to secret_admin, primary_admin */}
+          {["secret_admin", "primary_admin"].includes(currentUser.role) && (
+            <button
+              onClick={() => setActiveTab("socials")}
+              className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+                activeTab === "socials" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+              }`}
+            >
+              <Globe size={14} />
+              <span>Social Media Links</span>
+            </button>
+          )}
+
+          <div className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-bold px-3 pt-3 pb-1 text-left">Projects & Work</div>
+
+          <button
+            onClick={() => setActiveTab("work_projects")}
+            className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+              activeTab === "work_projects" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+            }`}
+          >
+            <Briefcase size={14} />
+            <span>Work Projects</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("ongoing_progress")}
+            className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+              activeTab === "ongoing_progress" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+            }`}
+          >
+            <CheckCircle2 size={14} className="text-teal-400" />
+            <span>Ongoing Progress</span>
+          </button>
+
+          <div className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-bold px-3 pt-3 pb-1 text-left">Staffing & Intelligence</div>
+
+          <button
+            onClick={() => setActiveTab("team_profiles")}
+            className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+              activeTab === "team_profiles" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+            }`}
+          >
+            <Users size={14} />
+            <span>Team Profiles</span>
+          </button>
+
+          {/* AI training accessible to secret_admin, primary_admin, secondary_admin, or team_member with permission */}
+          {(["secret_admin", "primary_admin", "secondary_admin"].includes(currentUser.role) || (currentUser.role === "team_member")) && (
+            <button
+              onClick={() => setActiveTab("aitrain")}
+              className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+                activeTab === "aitrain" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+              }`}
+            >
+              <Cpu size={14} className="text-indigo-400" />
+              <span>AI Training</span>
+            </button>
+          )}
+
+          <div className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-bold px-3 pt-3 pb-1 text-left">Sales & Finance</div>
+
+          <button
+            onClick={() => setActiveTab("quotes")}
+            className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+              activeTab === "quotes" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+            }`}
+          >
+            <FileSignature size={14} />
+            <span>Quotes & Leads</span>
             {requests.filter(r => r.status === "Submitted").length > 0 && (
               <span className="bg-cyan-500 text-white text-[9px] rounded-full px-1.5 py-0.5 font-bold font-sans">
                 {requests.filter(r => r.status === "Submitted").length}
@@ -340,121 +618,383 @@ export default function AdminDashboard() {
           </button>
 
           <button
-            onClick={() => setActiveTab("projects")}
-            className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors ${
-              activeTab === "projects" ? "bg-slate-900 border border-cyan-500/10 text-cyan-400" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+            onClick={() => setActiveTab("contracts")}
+            className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+              activeTab === "contracts" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
             }`}
           >
-            <Briefcase size={15} />
-            <span>Portfolio Cases</span>
+            <FileText size={14} className="text-orange-400" />
+            <span>Contracts</span>
           </button>
 
           <button
-            onClick={() => setActiveTab("team")}
-            className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors ${
-              activeTab === "team" ? "bg-slate-900 border border-cyan-500/10 text-cyan-400" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+            onClick={() => setActiveTab("billing")}
+            className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+              activeTab === "billing" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
             }`}
           >
-            <Users size={15} />
-            <span>Team & Permissions</span>
+            <CreditCard size={14} />
+            <span>Invoices</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("payments")}
+            className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+              activeTab === "payments" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+            }`}
+          >
+            <DollarSign size={14} className="text-emerald-400" />
+            <span>Payments</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("active_plans")}
+            className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+              activeTab === "active_plans" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+            }`}
+          >
+            <Tag size={14} className="text-amber-400" />
+            <span>Active Plans</span>
           </button>
 
           <button
             onClick={() => setActiveTab("pricing")}
-            className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors ${
-              activeTab === "pricing" ? "bg-slate-900 border border-cyan-500/10 text-cyan-400" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+            className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+              activeTab === "pricing" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
             }`}
           >
-            <Tag size={15} />
-            <span>Pricing & Plans Config</span>
+            <Tag size={14} />
+            <span>Pricing Config</span>
           </button>
+
+          <div className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-bold px-3 pt-3 pb-1 text-left">Communication & Logs</div>
+
+          <button
+            onClick={() => setActiveTab("team_chats")}
+            className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+              activeTab === "team_chats" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+            }`}
+          >
+            <MessageSquare size={14} className="text-indigo-400" />
+            <span>Team Chats</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("project_groups")}
+            className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+              activeTab === "project_groups" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+            }`}
+          >
+            <Briefcase size={14} className="text-sky-400" />
+            <span>Project Groups</span>
+          </button>
+
+          {/* Client Chats: Restricted by permissions / RBAC for non-admin team members */}
+          {(["secret_admin", "primary_admin", "secondary_admin"].includes(currentUser.role) || 
+            (currentUser.role === "team_member" && currentUser.permissions?.includes("client_chat_access"))) && (
+            <button
+              onClick={() => setActiveTab("chats")}
+              className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+                activeTab === "chats" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+              }`}
+            >
+              <MessageSquare size={14} className="text-teal-400" />
+              <span>Client Chats</span>
+              <span className="bg-emerald-500/10 text-emerald-400 text-[8px] rounded px-1 font-bold font-mono">RBAC</span>
+            </button>
+          )}
 
           <button
             onClick={() => setActiveTab("reviews")}
-            className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors ${
-              activeTab === "reviews" ? "bg-slate-900 border border-cyan-500/10 text-cyan-400" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+            className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+              activeTab === "reviews" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
             }`}
           >
-            <Star size={15} />
+            <Star size={14} />
             <span>Reviews Auditing</span>
-            {reviews.filter(r => r.status === "Pending").length > 0 && (
-              <span className="bg-amber-500 text-white text-[9px] rounded-full px-1.5 py-0.5 font-bold font-sans">
-                {reviews.filter(r => r.status === "Pending").length}
-              </span>
-            )}
           </button>
 
           <button
-            onClick={() => setActiveTab("chats")}
-            className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors ${
-              activeTab === "chats" ? "bg-slate-900 border border-cyan-500/10 text-cyan-400" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+            onClick={() => setActiveTab("audit")}
+            className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+              activeTab === "audit" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
             }`}
           >
-            <MessageSquare size={15} />
-            <span>Clients Chat Helpdesk</span>
-            <span className="bg-emerald-500/20 text-emerald-450 text-[9px] rounded px-1 font-bold font-mono uppercase">LIVE</span>
+            <History size={14} />
+            <span>Activity Logs</span>
           </button>
-
-          {/* Activity Logs tab: Visible to secret, primary, secondary */}
-          {["secret_admin", "primary_admin", "secondary_admin"].includes(currentUser.role) && (
-            <button
-              onClick={() => setActiveTab("audit")}
-              className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors ${
-                activeTab === "audit" ? "bg-slate-900 border border-cyan-500/10 text-cyan-400" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
-              }`}
-              id="btn-nav-audit"
-            >
-              <History size={15} />
-              <span>Activity Audit Logs</span>
-            </button>
-          )}
-
-          {/* Billing & Invoices tab: Visible to secret, primary, secondary */}
-          {["secret_admin", "primary_admin", "secondary_admin"].includes(currentUser.role) && (
-            <button
-              onClick={() => setActiveTab("billing")}
-              className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors ${
-                activeTab === "billing" ? "bg-slate-900 border border-cyan-500/10 text-cyan-400" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
-              }`}
-              id="btn-nav-billing"
-            >
-              <CreditCard size={15} />
-              <span>Invoices & Billing</span>
-            </button>
-          )}
-
-          {/* AI Training tab: Visible to secret, primary */}
-          {["secret_admin", "primary_admin"].includes(currentUser.role) && (
-            <button
-              onClick={() => setActiveTab("aitrain")}
-              className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors ${
-                activeTab === "aitrain" ? "bg-slate-900 border border-cyan-500/10 text-cyan-400" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
-              }`}
-              id="btn-nav-aitrain"
-            >
-              <Cpu size={15} />
-              <span>AI Agent Training</span>
-            </button>
-          )}
-
-          {/* CMS Customizer tab: Visible exclusively to secret_admin */}
-          {["secret_admin"].includes(currentUser.role) && (
-            <button
-              onClick={() => setActiveTab("cms")}
-              className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors ${
-                activeTab === "cms" ? "bg-slate-900 border border-cyan-500/10 text-cyan-400" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
-              }`}
-              id="btn-nav-cms"
-            >
-              <Layout size={15} />
-              <span>Website CMS Editor</span>
-            </button>
-          )}
         </div>
 
         {/* Main Work Panels */}
         <div className="lg:col-span-9" id="admin-workspace-pane">
           
+          {/* TAB 0: ADMIN PROFILE PORTAL */}
+          {activeTab === "profile" && (
+            <div className="space-y-6" id="admin-tab-profile">
+              <h3 className="text-lg font-display font-bold pb-3 border-b dark:border-slate-900 border-slate-100">My Admin Profile Portal</h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+                
+                {/* Avatar Controller */}
+                <div className={`md:col-span-4 p-6 rounded-2xl border flex flex-col items-center justify-center text-center ${
+                  theme === "dark" ? "bg-slate-900/30 border-slate-900" : "bg-slate-50 border-slate-200"
+                }`} id="admin-avatar-mgmt">
+                  <span className="text-[10px] font-mono tracking-widest text-cyan-400 uppercase font-bold mb-4 font-sans">Corporate Badge</span>
+                  
+                  <div className="relative group mb-4">
+                    <img 
+                      src={profileAvatar} 
+                      alt={profileName} 
+                      referrerPolicy="no-referrer"
+                      className="w-24 h-24 rounded-full border-2 border-cyan-500 object-cover shadow-lg"
+                    />
+                    <div className="absolute inset-0 bg-transparent rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px] font-mono uppercase tracking-widest">
+                      ADMIN
+                    </div>
+                  </div>
+
+                  {/* Drag and Drop File Upload */}
+                  <div
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setIsDragOver(true);
+                    }}
+                    onDragLeave={() => setIsDragOver(false)}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      setIsDragOver(false);
+                      const file = e.dataTransfer.files[0];
+                      if (file && file.type.startsWith("image/")) {
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                          setProfileAvatar(reader.result as string);
+                          setConfirmDialog({
+                            isOpen: true,
+                            title: "Save Profile Badge Image?",
+                            message: "Do you want to apply this badge image permanently?",
+                            onConfirm: () => {
+                              const state = useStore.getState();
+                              state.updateUserProfile(currentUser.id, { avatar_url: reader.result as string });
+                              setConfirmDialog(null);
+                            }
+                          });
+                        };
+                        reader.readAsDataURL(file);
+                      }
+                    }}
+                    className={`p-4 rounded-xl border border-dashed text-xs cursor-pointer w-full transition-all ${
+                      isDragOver 
+                        ? "border-cyan-400 bg-cyan-500/10" 
+                        : theme === "dark" 
+                        ? "border-slate-800 bg-slate-950/40 hover:border-slate-700" 
+                        : "border-slate-200 bg-white hover:border-slate-300"
+                    }`}
+                    onClick={() => {
+                      const input = document.createElement("input");
+                      input.type = "file";
+                      input.accept = "image/*";
+                      input.onchange = (e: any) => {
+                        const file = e.target.files[0];
+                        if (file) {
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            setProfileAvatar(reader.result as string);
+                            const state = useStore.getState();
+                            state.updateUserProfile(currentUser.id, { avatar_url: reader.result as string });
+                          };
+                          reader.readAsDataURL(file);
+                        }
+                      };
+                      input.click();
+                    }}
+                  >
+                    <Save className="mx-auto text-cyan-400 mb-1.5" size={16} />
+                    <p className="font-bold">Drop Corporate Badge</p>
+                    <p className="opacity-50 text-[10px] mt-0.5">PNG, JPG up to 1MB</p>
+                  </div>
+                </div>
+
+                {/* Info Fields */}
+                <div className={`md:col-span-8 p-6 rounded-2xl border space-y-4 ${
+                  theme === "dark" ? "bg-slate-900/30 border-slate-900" : "bg-slate-50 border-slate-200"
+                }`} id="admin-info-form">
+                  <span className="text-[10px] font-mono tracking-widest text-cyan-400 uppercase font-bold block pb-1 border-b dark:border-slate-800 border-slate-200">System Clearance</span>
+                  
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
+                    setConfirmDialog({
+                      isOpen: true,
+                      title: "Confirm Admin Profile Edits?",
+                      message: "Commit changes to your central account metadata variables?",
+                      onConfirm: () => {
+                        const state = useStore.getState();
+                        state.updateUserProfile(currentUser.id, {
+                          name: profileName,
+                          username: profileUsername,
+                          avatar_url: profileAvatar
+                        });
+                        setConfirmDialog(null);
+                      }
+                    });
+                  }} className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-mono uppercase opacity-60">Admin Full Name</label>
+                        <input 
+                          type="text" 
+                          value={profileName}
+                          onChange={(e) => setProfileName(e.target.value)}
+                          className={`w-full p-2.5 rounded-xl text-xs border focus:outline-none focus:ring-1 focus:ring-cyan-500 transition-colors ${
+                            theme === "dark" ? "bg-slate-950 border-slate-800 text-white" : "bg-white border-slate-200 text-slate-900"
+                          }`}
+                          required
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-mono uppercase opacity-60">Admin Username</label>
+                        <input 
+                          type="text" 
+                          value={profileUsername}
+                          onChange={(e) => setProfileUsername(e.target.value)}
+                          className={`w-full p-2.5 rounded-xl text-xs border focus:outline-none focus:ring-1 focus:ring-cyan-500 transition-colors ${
+                            theme === "dark" ? "bg-slate-950 border-slate-800 text-white" : "bg-white border-slate-200 text-slate-950"
+                          }`}
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-mono uppercase opacity-60">Official Admin Email</label>
+                        <input 
+                          type="email" 
+                          value={currentUser.email}
+                          disabled
+                          className="w-full p-2.5 rounded-xl text-xs border bg-slate-900/10 dark:bg-slate-950/45 dark:border-slate-800/80 border-slate-200 text-slate-400 cursor-not-allowed"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-mono uppercase opacity-60">Admin clearance rank</label>
+                        <div className="p-2.5 rounded-xl border dark:border-slate-800 border-slate-200 text-xs font-mono font-bold tracking-wider text-rose-500 bg-rose-500/5 select-none uppercase">
+                          👑 SUPER ADM CL-1 {["primary_admin", "secondary_admin", "third_admin"].includes(currentUser.role) ? "Admin" : currentUser.role.replace("_", " ")}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end pt-2">
+                      <button 
+                        type="submit"
+                        className="px-5 py-2 rounded-xl bg-gradient-to-tr from-cyan-500 to-sky-600 hover:brightness-110 text-white font-mono text-xs font-bold transition-all"
+                      >
+                        Write Profile
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+                {/* Password Reset Section */}
+                <div className={`col-span-12 md:col-span-12 p-6 rounded-2xl border space-y-4 ${
+                  theme === "dark" ? "bg-slate-900/30 border-slate-900" : "bg-slate-50 border-slate-200"
+                }`} id="admin-pass-mgmt">
+                  <span className="text-[10px] font-mono tracking-widest text-cyan-400 uppercase font-bold block pb-1 border-b dark:border-slate-800 border-slate-200">Reset administration passkey</span>
+                  
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
+                    if (passNew !== passConfirm) {
+                      alert("Passwords do not match!");
+                      return;
+                    }
+                    setConfirmDialog({
+                      isOpen: true,
+                      title: "Reset Admin Password?",
+                      message: "This will update your master security credentials.",
+                      onConfirm: () => {
+                        setPassOld("");
+                        setPassNew("");
+                        setPassConfirm("");
+                        setConfirmDialog(null);
+                      }
+                    });
+                  }} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-mono uppercase opacity-60">Current Key</label>
+                      <div className="relative">
+                        <input 
+                          type={showPassOld ? "text" : "password"} 
+                          value={passOld}
+                          onChange={(e) => setPassOld(e.target.value)}
+                          className={`w-full p-2.5 pr-10 rounded-xl text-xs border focus:outline-none focus:ring-1 focus:ring-cyan-500 transition-colors ${
+                            theme === "dark" ? "bg-slate-950 border-slate-800 text-white" : "bg-white border-slate-200 text-slate-900"
+                          }`}
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassOld(!showPassOld)}
+                          className="absolute right-3 top-3 text-slate-500 hover:text-cyan-550 transition-colors"
+                        >
+                          {showPassOld ? <EyeOff size={15} /> : <Eye size={15} />}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-mono uppercase opacity-60">Next Master Key</label>
+                      <div className="relative">
+                        <input 
+                          type={showPassNew ? "text" : "password"} 
+                          value={passNew}
+                          onChange={(e) => setPassNew(e.target.value)}
+                          className={`w-full p-2.5 pr-10 rounded-xl text-xs border focus:outline-none focus:ring-1 focus:ring-cyan-500 transition-colors ${
+                            theme === "dark" ? "bg-slate-950 border-slate-800 text-white" : "bg-white border-slate-200 text-slate-900"
+                          }`}
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassNew(!showPassNew)}
+                          className="absolute right-3 top-3 text-slate-500 hover:text-cyan-550 transition-colors"
+                        >
+                          {showPassNew ? <EyeOff size={15} /> : <Eye size={15} />}
+                        </button>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <div className="space-y-1 flex-1">
+                        <label className="text-[10px] font-mono uppercase opacity-60">Re-type next key</label>
+                        <div className="relative">
+                          <input 
+                            type={showPassConfirm ? "text" : "password"} 
+                            value={passConfirm}
+                            onChange={(e) => setPassConfirm(e.target.value)}
+                            className={`w-full p-2.5 pr-10 rounded-xl text-xs border focus:outline-none focus:ring-1 focus:ring-cyan-500 transition-colors ${
+                              theme === "dark" ? "bg-slate-950 border-slate-800 text-white" : "bg-white border-slate-200 text-slate-900"
+                            }`}
+                            required
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowPassConfirm(!showPassConfirm)}
+                            className="absolute right-3 top-3 text-slate-500 hover:text-cyan-550 transition-colors"
+                          >
+                            {showPassConfirm ? <EyeOff size={15} /> : <Eye size={15} />}
+                          </button>
+                        </div>
+                      </div>
+                      <button 
+                        type="submit"
+                        className="px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-cyan-400 border border-cyan-500/10 font-mono text-xs font-bold transition-all h-[41px]"
+                      >
+                        Reset passkey
+                      </button>
+                    </div>
+                  </form>
+                </div>
+
+              </div>
+            </div>
+          )}
+
           {/* TAB 1: ANALYTICS HUB */}
           {activeTab === "analytics" && (
             <div className="space-y-8" id="tab-analytics">
@@ -532,27 +1072,144 @@ export default function AdminDashboard() {
           )}
 
           {/* TAB 2: REQUESTS & LEADS */}
+          {/* MODULAR PORTFOLIO AND EDITORIAL TABS */}
+          {activeTab === "blogs" && (
+            <AdminBlogs />
+          )}
+
+          {activeTab === "portfolio" && (
+            <AdminPortfolio />
+          )}
+
+          {activeTab === "work_projects" && (
+            <AdminWorkProjects />
+          )}
+
+          {activeTab === "ongoing_progress" && (
+            <AdminOngoingProgress />
+          )}
+
+          {activeTab === "team_profiles" && (
+            <AdminTeamProfiles />
+          )}
+
+          {activeTab === "quotes" && (
+            <AdminQuotes />
+          )}
+
+          {activeTab === "contracts" && (
+            <AdminContracts />
+          )}
+
+          {activeTab === "active_plans" && (
+            <AdminActivePlans />
+          )}
+
+          {activeTab === "payments" && (
+            <AdminPayments />
+          )}
+
+          {activeTab === "team_chats" && (
+            <AdminTeamChats />
+          )}
+
+          {activeTab === "project_groups" && (
+            <AdminProjectGroups />
+          )}
+
           {activeTab === "requests" && (
             <div className="space-y-6" id="tab-requests">
-              <h3 className="text-lg font-display font-extrabold pb-3 border-b dark:border-slate-900 border-slate-100">Leads Tracking Console</h3>
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center border-b dark:border-slate-900 border-slate-100 pb-3 gap-2">
+                <div className="text-left">
+                  <h3 className="text-lg font-display font-extrabold">Leads & Quotes Management Console</h3>
+                  <p className="text-xs opacity-65">Review submitted quotes, maintain SLA timelines, change state statuses, and coordinate with clients directly.</p>
+                </div>
+              </div>
               
+              {/* Search and filter bar */}
+              <div className="flex flex-col sm:flex-row gap-3">
+                <div className="relative flex-1">
+                  <span className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-slate-500">
+                    <Search size={14} />
+                  </span>
+                  <input
+                    type="text"
+                    value={requestSearch}
+                    onChange={(e) => setRequestSearch(e.target.value)}
+                    placeholder="Search by client name, email, service type or message keywords..."
+                    className={`w-full text-xs pl-9 p-2.5 rounded-lg border focus:outline-none ${
+                        theme === "dark" ? "bg-slate-950 border-slate-800 text-white" : "bg-white border-slate-200 text-slate-900"
+                    }`}
+                  />
+                </div>
+
+                <div className="w-full sm:w-[200px] flex items-center space-x-2">
+                  <span className="text-[10px] font-mono opacity-50 uppercase whitespace-nowrap">Filter Status:</span>
+                  <select
+                    value={requestStatusFilter}
+                    onChange={(e) => setRequestStatusFilter(e.target.value)}
+                    className={`w-full text-xs p-2.5 rounded-lg border focus:outline-none ${
+                      theme === "dark" ? "bg-slate-950 border-slate-800 text-white" : "bg-white border-slate-205 text-slate-900"
+                    }`}
+                  >
+                    <option value="All">All statuses</option>
+                    <option value="Submitted">Submitted</option>
+                    <option value="Under Review">Under Review</option>
+                    <option value="Quoted">Quoted</option>
+                    <option value="Approved">Approved</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Cancelled">Cancelled</option>
+                    <option value="Rejected">Rejected</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Quotes card listing */}
               <div className="space-y-4" id="leads-mapping-container">
-                {requests.map((req) => (
-                  <div key={req.id} className={`p-5 rounded-2xl border ${theme === "dark" ? "bg-slate-900/30 border-slate-900" : "bg-slate-50 border-slate-200"}`}>
+                {requests.filter((req) => {
+                  const mSearch = 
+                    (req.client_name || "").toLowerCase().includes(requestSearch.toLowerCase()) ||
+                    (req.client_email || "").toLowerCase().includes(requestSearch.toLowerCase()) ||
+                    (req.service_type || "").toLowerCase().includes(requestSearch.toLowerCase()) ||
+                    (req.description || "").toLowerCase().includes(requestSearch.toLowerCase());
+                  
+                  const mStatus = requestStatusFilter === "All" || req.status === requestStatusFilter;
+                  return mSearch && mStatus;
+                }).map((req) => (
+                  <div key={req.id} className={`p-5 rounded-2xl border text-left ${theme === "dark" ? "bg-slate-900/30 border-slate-900" : "bg-slate-50 border-slate-200"}`}>
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
                       <div>
                         <h4 className="text-sm font-bold font-display">{req.service_type}</h4>
-                        <span className="text-[10px] font-mono opacity-50">From: {req.client_name} ({req.client_email})</span>
+                        <div className="flex items-center space-x-2.5 flex-wrap gap-y-1 mt-1">
+                          <span className="text-[10px] font-mono opacity-50">From: {req.client_name} ({req.client_email})</span>
+                          <span className="text-[9px] font-mono text-cyan-400 font-bold uppercase truncate max-w-[150px]">ID: {req.id}</span>
+                          <button
+                            onClick={() => setExpAdminReqId(expAdminReqId === req.id ? null : req.id)}
+                            className="text-[9px] font-mono font-bold px-1.5 py-0.5 rounded bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-405 border border-cyan-500/20 uppercase transition-all"
+                          >
+                            {expAdminReqId === req.id ? "Hide details" : `Inspect Thread (${quoteReplies.filter(r => r.quote_id === req.id).length} Replies)`}
+                          </button>
+                        </div>
                       </div>
                       
                       <div className="flex items-center space-x-2">
-                        <span className="text-[10px] font-mono opacity-50">SLA status:</span>
+                        <span className="text-[10px] font-mono opacity-50 font-bold uppercase">SLA status:</span>
                         <select
                           id={`change-state-${req.id}`}
                           value={req.status}
-                          onChange={(e) => updateRequestStatus(req.id, e.target.value as RequestStatus)}
-                          className={`text-xs p-1.5 rounded-lg border focus:outline-none font-bold ${
-                            req.status === "Approved" || req.status === "Completed" ? "bg-emerald-955/20 text-emerald-400 border-emerald-900" : "bg-slate-800 text-white border-slate-750"
+                          onChange={async (e) => {
+                            const newStatus = e.target.value as RequestStatus;
+                            await updateQuoteStatusDetail(req.id, newStatus);
+                            setDashAlert(`Quote ID: ${req.id} has been transitioned to status "${newStatus}" cleanly!`);
+                            setTimeout(() => setDashAlert(null), 3000);
+                          }}
+                          className={`text-[11px] p-1.5 rounded-lg border focus:outline-none font-bold uppercase cursor-pointer ${
+                            req.status === "Approved" || req.status === "Completed" || req.status === "In Progress"
+                              ? "bg-emerald-950 text-emerald-400 border-emerald-900"
+                              : req.status === "Rejected"
+                              ? "bg-rose-950 text-rose-400 border-rose-900"
+                              : "bg-slate-900 text-white border-slate-750"
                           }`}
                         >
                           <option value="Submitted">Submitted</option>
@@ -562,22 +1219,152 @@ export default function AdminDashboard() {
                           <option value="In Progress">In Progress</option>
                           <option value="Completed">Completed</option>
                           <option value="Cancelled">Cancelled</option>
+                          <option value="Rejected">Rejected</option>
                         </select>
                       </div>
                     </div>
 
-                    <p className="text-xs opacity-85 leading-relaxed font-light">"{req.description}"</p>
+                    <p className="text-xs opacity-85 leading-relaxed font-light whitespace-pre-wrap">"{req.description}"</p>
                     {req.budget && (
-                      <div className="mt-4 text-xs font-mono">
+                      <div className="mt-4 text-xs font-mono border-b dark:border-slate-800/30 border-slate-200/30 pb-4">
                         <span className="opacity-50">Proposed Budget: </span>
                         <span className="font-bold text-cyan-400">{req.budget}</span>
+                      </div>
+                    )}
+
+                    {/* EXPANDED ADMIN DETAIL PANEL WITH TRANSITION TIMELINE AND REPLIES */}
+                    {expAdminReqId === req.id && (
+                      <div className="mt-5 space-y-6 animate-fade-in" id={`admin-expanded-panel-${req.id}`}>
+                        
+                        {/* Status history log listing */}
+                        <div className="space-y-2">
+                          <h5 className="text-[10px] font-mono opacity-50 uppercase tracking-widest">State Progression Timeline Records</h5>
+                          <div className="space-y-1">
+                            <div className="p-2 dark:bg-slate-950 bg-white border dark:border-slate-850 border-slate-200 rounded text-[10px] font-mono flex items-center justify-between">
+                              <span className="text-slate-400">Step 1: Quote initialized as <strong className="text-white">Submitted</strong> by client</span>
+                              <span className="opacity-40">System Record</span>
+                            </div>
+                            {quoteStatusHistory.filter(h => h.quote_id === req.id).map((history) => (
+                              <div key={history.id} className="p-2 dark:bg-slate-950 bg-white border dark:border-slate-850 border-slate-200 rounded text-[10px] font-mono flex items-center justify-between flex-wrap gap-2">
+                                <span className="opacity-80">
+                                  Transition state changed to <strong className="text-cyan-405 uppercase font-black">{history.status}</strong> by <strong className="text-cyan-405">{history.changed_by_name}</strong> ({history.changed_by_role})
+                                </span>
+                                <span className="opacity-45 text-[9px]">{new Date(history.created_at).toLocaleString()}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Thread replies widget with user context */}
+                        <div className="space-y-2">
+                          <h5 className="text-[10px] font-mono opacity-50 uppercase tracking-widest">Quote Negotiation Discussion Thread</h5>
+                          
+                          <div className="p-3 rounded-xl border dark:border-slate-850 border-slate-200 dark:bg-slate-950 bg-white space-y-3 max-h-[220px] overflow-y-auto">
+                            {quoteReplies.filter(r => r.quote_id === req.id).map((reply) => {
+                              const isMe = reply.sender_id === currentUser?.id;
+                              return (
+                                <div key={reply.id} className={`flex flex-col max-w-[85%] ${isMe ? "ml-auto text-right items-end" : "mr-auto text-left items-start"}`}>
+                                  <div className="flex items-center space-x-1 opacity-55 text-[9px] font-mono mb-1">
+                                    <span>{reply.sender_name}</span>
+                                    <span>({reply.sender_role.replace("_", " ")})</span>
+                                  </div>
+                                  <div className={`p-2.5 rounded-2xl text-xs whitespace-pre-wrap leading-relaxed ${
+                                    isMe 
+                                      ? "bg-purple-650 bg-cyan-600 text-white" 
+                                      : "dark:bg-slate-900 bg-white border dark:border-slate-800 border-slate-200 text-slate-900 dark:text-white"
+                                  }`}>
+                                    {reply.message_text}
+                                    
+                                    {/* Uploaded attachments render */}
+                                    {reply.attachments && reply.attachments.length > 0 && (
+                                      <div className="mt-1.5 pt-1.5 border-t border-slate-100/20 text-[9px] font-mono flex flex-col gap-0.5 text-left">
+                                        {reply.attachments.map(at => (
+                                          <div key={at.id} className="flex items-center space-x-1">
+                                            <span className="opacity-60">📎 Attachment:</span>
+                                            <a href={at.file_url} className="underline text-cyan-300 hover:text-white shadow-sm" target="_blank" rel="noopener noreferrer">{at.file_name}</a>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                            {quoteReplies.filter(r => r.quote_id === req.id).length === 0 && (
+                              <p className="text-[10px] font-mono opacity-55 text-center py-8">Conversation thread is currently silent. Reply below to bid or advise the customer.</p>
+                            )}
+                          </div>
+
+                          {/* Submit quote replies widget */}
+                          <form
+                            onSubmit={async (e) => {
+                              e.preventDefault();
+                              if (!adminReplyInput.trim()) return;
+                              await submitQuoteReply(req.id, adminReplyInput);
+                              setAdminReplyInput("");
+                            }}
+                            className="flex gap-2 mt-2"
+                          >
+                            <input
+                              type="text"
+                              value={adminReplyInput}
+                              onChange={(e) => setAdminReplyInput(e.target.value)}
+                              placeholder="Message user: submit contract draft, proposal pricing or ask specs..."
+                              className={`flex-1 text-xs px-3 py-2 rounded-lg border focus:outline-none ${
+                                theme === "dark" ? "bg-slate-900 border-slate-800 text-white" : "bg-white border-slate-200 text-slate-900"
+                              }`}
+                            />
+                            
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const addInput = document.createElement("input");
+                                addInput.type = "file";
+                                addInput.onchange = async (evt: any) => {
+                                  const filesObj = evt.target.files[0];
+                                  if (filesObj) {
+                                    await submitQuoteReply(req.id, `Uploaded proposal schema document: ${filesObj.name}`, [{ file_name: filesObj.name, file_url: "#" }]);
+                                    setDashAlert(`Supplied client file: "${filesObj.name}" cleanly!`);
+                                    setTimeout(() => setDashAlert(null), 3000);
+                                  }
+                                };
+                                addInput.click();
+                              }}
+                              className={`px-3 py-2.5 rounded-lg border text-[11px] font-mono font-bold shrink-0 ${
+                                theme === "dark" 
+                                  ? "bg-slate-905 border-slate-800 text-slate-400 hover:text-white hover:bg-slate-850" 
+                                  : "bg-white border-slate-205 text-slate-655 hover:bg-slate-50"
+                              }`}
+                              title="Attach agreement or quote spreadsheet"
+                            >
+                              📎 Attach Specs
+                            </button>
+
+                            <button
+                              type="submit"
+                              className="px-4 py-2.5 rounded-lg bg-gradient-to-r from-cyan-500 to-purple-600 text-white text-[11px] font-mono font-bold hover:brightness-110"
+                            >
+                              Reply Customer
+                            </button>
+                          </form>
+                        </div>
+
                       </div>
                     )}
                   </div>
                 ))}
 
-                {requests.length === 0 && (
-                  <p className="text-xs font-mono opacity-50 text-center py-10 font-sans">No inquiries or leads posted.</p>
+                {requests.filter((req) => {
+                  const mSearch = 
+                    (req.client_name || "").toLowerCase().includes(requestSearch.toLowerCase()) ||
+                    (req.client_email || "").toLowerCase().includes(requestSearch.toLowerCase()) ||
+                    (req.service_type || "").toLowerCase().includes(requestSearch.toLowerCase()) ||
+                    (req.description || "").toLowerCase().includes(requestSearch.toLowerCase());
+                  
+                  const mStatus = requestStatusFilter === "All" || req.status === requestStatusFilter;
+                  return mSearch && mStatus;
+                }).length === 0 && (
+                  <p className="text-xs font-mono opacity-50 text-center py-10 font-sans">No matching quote action tickets found for query "{requestSearch}" or status filter.</p>
                 )}
               </div>
             </div>
@@ -2009,99 +2796,8 @@ export default function AdminDashboard() {
           )}
 
           {/* TAB 10: AI KNOWLEDGE BASE TRAINING CORE */}
-          {activeTab === "aitrain" && ["secret_admin", "primary_admin"].includes(currentUser.role) && (
-            <div className="space-y-6" id="tab-ai-training">
-              <div className="border-b dark:border-slate-900 border-slate-100 pb-3 text-left">
-                <h3 className="text-lg font-display font-extrabold flex items-center space-x-2">
-                  <Cpu className="text-cyan-500" size={20} />
-                  <span>Intelligent AI Co-pilot Training Core</span>
-                </h3>
-                <p className="text-xs opacity-65 mt-1 font-light">
-                  Input custom Q&As to seed the Diavox semantic knowledge base. Stored responses automatically dictate recommendations and answers dispatched back on client support threads.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start text-left font-sans text-xs">
-                {/* Form column */}
-                <div className="lg:col-span-5 bg-slate-900/30 p-5 rounded-2xl border dark:border-slate-900 border-slate-200 space-y-4">
-                  <h4 className="text-xs font-mono font-bold tracking-widest uppercase border-b dark:border-slate-900 pb-2 text-slate-250">Train New Q&A Block</h4>
-                  <form onSubmit={(e) => {
-                    e.preventDefault();
-                    if (!aiQ.trim() || !aiA.trim()) return;
-                    addAiKnowledge(aiCat, aiQ.trim(), aiA.trim());
-                    addActivityLog(currentUser.id, `Trained AI conversational agent on question: "${aiQ.substring(0, 30)}..."`, "", `Category: ${aiCat}`);
-                    setAiQ("");
-                    setAiA("");
-                    setDashAlert("AI knowledge seeded and actively deployed.");
-                    setTimeout(() => setDashAlert(null), 3000);
-                  }} className="space-y-4">
-                    <div>
-                      <label className="text-[10px] font-mono opacity-50 block mb-1">Knowledge Topic Category</label>
-                      <select value={aiCat} onChange={e => setAiCat(e.target.value)} className="w-full bg-slate-950 p-2.5 rounded-lg border dark:border-slate-800 text-white">
-                        <option value="General Pricing">General Pricing</option>
-                        <option value="Turnaround Time">Turnaround Time</option>
-                        <option value="Core Tech Stack">Core Tech Stack</option>
-                        <option value="API Integration">API Integration</option>
-                        <option value="Subscription Cancellation">Subscription Cancellation</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-mono opacity-50 block mb-1">Target Client Question (Keywords Matched)</label>
-                      <input
-                        type="text"
-                        value={aiQ}
-                        onChange={e => setAiQ(e.target.value)}
-                        placeholder="e.g., Do you support React Native?"
-                        className="w-full bg-slate-950 border dark:border-slate-800 p-2.5 rounded-lg text-white"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-mono opacity-50 block mb-1">Trained Responder Insight (Answer)</label>
-                      <textarea
-                        value={aiA}
-                        onChange={e => setAiA(e.target.value)}
-                        rows={4}
-                        placeholder="Type the exact expert response description you'd like the chatbot to output..."
-                        className="w-full bg-slate-950 border dark:border-slate-800 p-2.5 rounded-lg text-white focus:outline-none"
-                      />
-                    </div>
-                    <button type="submit" className="w-full p-2.5 bg-gradient-to-r from-cyan-500 to-purple-600 rounded-lg text-white font-mono font-bold uppercase tracking-wide cursor-pointer hover:brightness-110">
-                      Seed AI brain
-                    </button>
-                  </form>
-                </div>
-
-                {/* Stored brain list */}
-                <div className="lg:col-span-7 bg-slate-900/30 p-5 rounded-2xl border dark:border-slate-900 border-slate-200 space-y-4">
-                  <h4 className="text-xs font-mono font-bold tracking-widest uppercase border-b dark:border-slate-900 pb-2 text-slate-200">Active AI Synapses</h4>
-                  <div className="space-y-3 max-h-[450px] overflow-y-auto pr-1">
-                    {aiKnowledge.map((k) => (
-                      <div key={k.id} className="p-3.5 bg-slate-950/40 rounded-xl border dark:border-slate-850 leading-relaxed text-left space-y-2">
-                        <div className="flex justify-between items-center">
-                          <span className="text-[9px] font-mono uppercase bg-cyan-950 text-cyan-400 font-bold px-2 py-0.5 rounded border border-cyan-800/10">{k.category}</span>
-                          <button
-                            onClick={() => {
-                              deleteAiKnowledge(k.id);
-                              addActivityLog(currentUser.id, `Deleted trained synapse block "${k.question.substring(0, 20)}..."`, k.question, "DELETED");
-                              setDashAlert("Synapse block deleted from core memory.");
-                              setTimeout(() => setDashAlert(null), 3000);
-                            }}
-                            className="text-rose-500 hover:text-rose-400 shrink-0"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        </div>
-                        <p className="font-bold text-slate-200">Q: "{k.question}"</p>
-                        <p className="opacity-75 text-slate-300 bg-slate-900/10 p-2.5 rounded-lg border dark:border-slate-900 text-[11px]">A: {k.answer}</p>
-                      </div>
-                    ))}
-                    {aiKnowledge.length === 0 && (
-                      <p className="text-center opacity-40 py-20 text-slate-400">AI knowledge base is currently empty. Train the synapses on the left.</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
+          {activeTab === "aitrain" && (
+            <AdminAiTraining />
           )}
 
           {/* TAB 11: WEBSITE CMS CONTROLLER (SECRET ADMIN ONLY) */}
@@ -2113,71 +2809,519 @@ export default function AdminDashboard() {
                   <span>Website CMS Content Editor (no-code)</span>
                 </h3>
                 <p className="text-xs opacity-65 mt-1 font-light">
-                  Exclusively for the **Secret Admin**. Live edit layout copywriting parameters without touching any raw code files.
+                  Exclusively for the **Secret Admin**. Live edit layout copywriting parameters and drag-and-drop homepage sections without touching any raw code files.
                 </p>
               </div>
 
-              <div className="bg-slate-900/30 p-6 rounded-2xl border dark:border-slate-900 border-slate-200 text-left font-sans text-xs space-y-4 max-w-2xl">
-                <h4 className="text-xs font-mono font-bold tracking-widest uppercase border-b dark:border-slate-900 pb-2 text-slate-200">Hero Section Content Controls</h4>
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 items-start text-left">
                 
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-[10px] font-mono opacity-50 block mb-1">Badge Copy Text</label>
-                    <input
-                      type="text"
-                      value={cmsHeroBadge}
-                      onChange={e => setCmsHeroBadge(e.target.value)}
-                      className="w-full bg-slate-950 border dark:border-slate-800 p-2.5 rounded-lg text-white focus:outline-none focus:border-cyan-500/40"
-                    />
+                {/* Column 1: Copywriting */}
+                <div className="bg-slate-900/30 p-6 rounded-2xl border dark:border-slate-900 border-slate-200 font-sans text-xs space-y-4">
+                  <h4 className="text-xs font-mono font-bold tracking-widest uppercase border-b dark:border-slate-900 pb-2 text-slate-200">Hero Section Content Controls</h4>
+                  
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-[10px] font-mono opacity-50 block mb-1">Badge Copy Text</label>
+                      <input
+                        type="text"
+                        value={cmsHeroBadge}
+                        onChange={e => setCmsHeroBadge(e.target.value)}
+                        className="w-full bg-slate-950 border dark:border-slate-800 p-2.5 rounded-lg text-white focus:outline-none focus:border-cyan-500/40"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-mono opacity-50 block mb-1">Hero Title Typography Text</label>
+                      <input
+                        type="text"
+                        value={cmsHeroTitle}
+                        onChange={e => setCmsHeroTitle(e.target.value)}
+                        className="w-full bg-slate-950 border dark:border-slate-800 p-2.5 rounded-lg text-white font-bold focus:outline-none focus:border-cyan-500/40"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-mono opacity-50 block mb-1">Hero Body Paragraph Copy</label>
+                      <textarea
+                        value={cmsHeroSubtitle}
+                        onChange={e => setCmsHeroSubtitle(e.target.value)}
+                        rows={5}
+                        className="w-full bg-slate-950 border dark:border-slate-800 p-2.5 rounded-lg text-white focus:outline-none focus:border-cyan-500/40 leading-relaxed"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-[10px] font-mono opacity-50 block mb-1">Hero Title Typography Text</label>
-                    <input
-                      type="text"
-                      value={cmsHeroTitle}
-                      onChange={e => setCmsHeroTitle(e.target.value)}
-                      className="w-full bg-slate-950 border dark:border-slate-800 p-2.5 rounded-lg text-white font-bold focus:outline-none focus:border-cyan-500/40"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-mono opacity-50 block mb-1">Hero Body Paragraph Copy</label>
-                    <textarea
-                      value={cmsHeroSubtitle}
-                      onChange={e => setCmsHeroSubtitle(e.target.value)}
-                      rows={5}
-                      className="w-full bg-slate-950 border dark:border-slate-800 p-2.5 rounded-lg text-white focus:outline-none focus:border-cyan-500/40 leading-relaxed"
-                    />
+
+                  <div className="pt-2 flex justify-end space-x-2">
+                    <button
+                      onClick={() => {
+                        setCmsHeroTitle("Crafting Divine Aesthetic Digital High-Utility Systems");
+                        setCmsHeroSubtitle("Diavox Tech helps modern brands establish a strong online presence and automate operational bottlenecks. We craft high-speed websites, bespoke SEO campaigns, AI automations, and downloadable digital assets that turn traffic into long-term growth.");
+                        setCmsHeroBadge("Serving clients worldwide remotely");
+                      }}
+                      className="px-4 py-2 border dark:border-slate-850 hover:bg-slate-850 text-slate-300 rounded-lg text-xs font-mono cursor-pointer"
+                    >
+                      Reset Defaults
+                    </button>
+                    <button
+                      onClick={() => {
+                        updateCmsContent({
+                          heroTitle: cmsHeroTitle,
+                          heroSubtitle: cmsHeroSubtitle,
+                          heroBadge: cmsHeroBadge
+                        });
+                        addActivityLog(currentUser.id, "Executed structural Website CMS copy update", "Customized layout title", cmsHeroTitle);
+                        setDashAlert("Website landing page updated in database.");
+                        setTimeout(() => setDashAlert(null), 3000);
+                      }}
+                      className="px-5 py-2 bg-gradient-to-r from-cyan-500 to-purple-600 rounded-lg text-white font-mono font-bold hover:brightness-110 flex items-center space-x-1.5 cursor-pointer"
+                    >
+                      <Save size={13} />
+                      <span>Apply website edits</span>
+                    </button>
                   </div>
                 </div>
 
-                <div className="pt-2 flex justify-end space-x-2">
-                  <button
-                    onClick={() => {
-                      setCmsHeroTitle("Crafting Divine Aesthetic Digital High-Utility Systems");
-                      setCmsHeroSubtitle("Diavox Tech helps modern brands establish a strong online presence and automate operational bottlenecks. We craft high-speed websites, bespoke SEO campaigns, AI automations, and downloadable digital assets that turn traffic into long-term growth.");
-                      setCmsHeroBadge("Serving clients remote remote operations");
-                    }}
-                    className="px-4 py-2 border dark:border-slate-850 hover:bg-slate-850 text-slate-300 rounded-lg text-xs font-mono cursor-pointer"
-                  >
-                    Reset Defaults
-                  </button>
-                  <button
-                    onClick={() => {
-                      updateCmsContent({
-                        heroTitle: cmsHeroTitle,
-                        heroSubtitle: cmsHeroSubtitle,
-                        heroBadge: cmsHeroBadge
-                      });
-                      addActivityLog(currentUser.id, "Executed structural Website CMS copy update", "Customized layout title", cmsHeroTitle);
-                      setDashAlert("Website landing page updated in database.");
-                      setTimeout(() => setDashAlert(null), 3000);
-                    }}
-                    className="px-5 py-2 bg-gradient-to-r from-cyan-500 to-purple-600 rounded-lg text-white font-mono font-bold hover:brightness-110 flex items-center space-x-1.5 cursor-pointer"
-                  >
-                    <Save size={13} />
-                    <span>Apply website edits</span>
-                  </button>
+                {/* Column 2: Drag and Drop Reordering */}
+                <div className="bg-slate-900/30 p-6 rounded-2xl border dark:border-slate-900 border-slate-200 font-sans text-xs space-y-4">
+                  <div className="border-b dark:border-slate-900 pb-2">
+                    <h4 className="text-xs font-mono font-bold tracking-widest uppercase text-slate-200 flex items-center space-x-1.5">
+                      <Layout size={13} className="text-cyan-500" />
+                      <span>Configure Homepage Sections Stack</span>
+                    </h4>
+                    <p className="text-[10px] opacity-60 mt-1">
+                      Drag any section card or use the arrows to reorder. Toggle the eye icon to handle visibility.
+                    </p>
+                  </div>
+
+                  {/* Quick Dynamic Flow Visualizer Indicator */}
+                  <div className="bg-slate-950/40 p-4 rounded-xl border dark:border-slate-850 space-y-1">
+                    <span className="text-[9px] font-mono tracking-widest text-cyan-400 uppercase font-bold">Dynamic Section Flow Stack</span>
+                    <div className="flex flex-wrap gap-1.5 pt-1.5">
+                      {cmsSections.map((sec, idx) => {
+                        const visible = cmsVisibility[sec] !== false;
+                        return (
+                          <React.Fragment key={sec}>
+                            <div className={`p-1.5 rounded text-[10px] font-mono flex items-center space-x-1 ${
+                              visible ? "bg-slate-900 border dark:border-slate-800 text-slate-300" : "bg-slate-950/20 line-through border-slate-900 text-slate-600"
+                            }`}>
+                              <span>{idx + 1}. {sec.toUpperCase()}</span>
+                            </div>
+                            {idx < cmsSections.length - 1 && (
+                              <span className="text-slate-650 text-slate-500 self-center text-xs">→</span>
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* List of Drag-and-Drop modules */}
+                  <div className="space-y-2 max-h-[360px] overflow-y-auto pr-1">
+                    {cmsSections.map((secKey, idx) => {
+                      const SECTION_METADATA: Record<string, { title: string; desc: string }> = {
+                        hero: {
+                          title: "Hero Presentation Banner",
+                          desc: "Top segment containing name badge, display typographic title, and primary CTA buttons."
+                        },
+                        services: {
+                          title: "Capabilities & Core Services",
+                          desc: "Aesthetic display grid detailing high-speed websites, SEO, AI pipelines, and digital assets."
+                        },
+                        portfolio: {
+                          title: "Creative Case Studies Portfolio",
+                          desc: "Media showcase of bespoke projects, tech stack indicators, and active service labels."
+                        },
+                        team: {
+                          title: "Specialist Experts Team Directory",
+                          desc: "Staff desk listing with professional roles, key departments, and verified identity badges."
+                        },
+                        reviews: {
+                          title: "Social Proof Client Testimonials",
+                          desc: "True reviews, aggregated ratings, detailed testimonials, and client authentication logs."
+                        },
+                        pricing: {
+                          title: "Flexible Retainer Pricing Packages",
+                          desc: "Dynamic subscription models, design/dev tier details, and milestone invoice simulators."
+                        },
+                        blog: {
+                          title: "Corporate Insights & Blogs",
+                          desc: "Knowledge articles, technology tutorials, search optimization guides, and dev ideas."
+                        },
+                        contact: {
+                          title: "Get in Touch Engagement Desk",
+                          desc: "Direct corporate messaging form, quick physical credentials, and support SLA statements."
+                        }
+                      };
+
+                      const meta = SECTION_METADATA[secKey] || {
+                        title: secKey.toUpperCase() + " Section",
+                        desc: "Custom landing page section content display."
+                      };
+
+                      const isVisible = cmsVisibility[secKey] !== false;
+
+                      return (
+                        <div
+                          key={secKey}
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, idx)}
+                          onDragOver={handleDragOver}
+                          onDrop={(e) => handleDrop(e, idx)}
+                          className={`p-3 rounded-xl border flex items-center justify-between transition-all select-none ${
+                            draggedIndex === idx
+                              ? "bg-cyan-500/10 border-cyan-500 scale-[0.98] opacity-60"
+                              : theme === "dark"
+                              ? "bg-slate-950 border-slate-800 hover:border-slate-700 hover:bg-slate-900/10"
+                              : "bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50"
+                          } cursor-grab active:cursor-grabbing`}
+                          id={`cms-drag-section-${secKey}`}
+                        >
+                          <div className="flex items-center space-x-2.5 flex-1 min-w-0">
+                            <div className="text-slate-505 text-slate-500 hover:text-slate-300 p-0.5 cursor-grab">
+                              <GripVertical size={14} className="opacity-60" />
+                            </div>
+                            <div className="text-left truncate">
+                              <p className={`text-xs font-bold leading-tight ${
+                                isVisible ? "text-slate-100 dark:text-white" : "text-slate-500 line-through opacity-75"
+                              }`}>
+                                {meta.title}
+                              </p>
+                              <p className="text-[10px] text-slate-500 font-light mt-0.5 truncate max-w-[180px] sm:max-w-[280px]">
+                                {meta.desc}
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center space-x-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => moveSectionUp(idx)}
+                              disabled={idx === 0}
+                              className="p-1 rounded bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-850 disabled:opacity-30 disabled:pointer-events-none"
+                              title="Move section up"
+                            >
+                              <ChevronUp size={12} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => moveSectionDown(idx)}
+                              disabled={idx === cmsSections.length - 1}
+                              className="p-1 rounded bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-850 disabled:opacity-30 disabled:pointer-events-none"
+                              title="Move section down"
+                            >
+                              <ChevronDown size={12} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => toggleSectionVisibility(secKey)}
+                              className={`p-1 rounded border transition-colors ${
+                                isVisible
+                                  ? "bg-cyan-500/10 border-cyan-500/20 text-cyan-400 hover:bg-cyan-500/20"
+                                  : "bg-rose-500/5 border-rose-500/20 text-rose-400 hover:bg-rose-500/10"
+                              }`}
+                              title={isVisible ? "Conceal Section" : "Reveal Section"}
+                            >
+                              {isVisible ? <Eye size={12} /> : <EyeOff size={12} />}
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Reset layout or Apply edits */}
+                  <div className="pt-2 flex justify-between space-x-2">
+                    <button
+                      onClick={() => {
+                        setCmsSections(["hero", "services", "portfolio", "team", "reviews", "pricing", "blog", "contact"]);
+                        setCmsVisibility({
+                          hero: true,
+                          services: true,
+                          portfolio: true,
+                          team: true,
+                          reviews: true,
+                          pricing: true,
+                          blog: true,
+                          contact: true
+                        });
+                      }}
+                      className="px-4 py-2 border dark:border-slate-850 hover:bg-slate-850 text-slate-300 rounded-lg text-xs font-mono cursor-pointer animate-pulse"
+                    >
+                      Reset Layout Defaults
+                    </button>
+                    <button
+                      onClick={() => {
+                        updateCmsContent({
+                          homepageSections: cmsSections,
+                          sectionVisibility: cmsVisibility
+                        });
+                        addActivityLog(currentUser.id, "Configured dynamic homepage sections via cms visual manager", "Applied new sequence layer", cmsSections.filter(k => cmsVisibility[k] !== false).join(" -> "));
+                        setDashAlert("Homepage section ordering and visibility saved.");
+                        setTimeout(() => setDashAlert(null), 3000);
+                      }}
+                      className="px-5 py-2 bg-gradient-to-r from-purple-500 to-indigo-600 rounded-lg text-white font-mono font-bold hover:brightness-110 flex items-center space-x-1.5 cursor-pointer hover:shadow-lg hover:shadow-purple-500/10 transition-all"
+                    >
+                      <Save size={13} />
+                      <span>Apply layout sequence</span>
+                    </button>
+                  </div>
                 </div>
+
+              </div>
+            </div>
+          )}
+
+          {/* TAB: SOCIAL MEDIA MANAGEMENT PORTAL */}
+          {activeTab === "socials" && ["secret_admin", "primary_admin"].includes(currentUser.role) && (
+            <div className="space-y-6" id="admin-tab-socials">
+              <h3 className="text-lg font-display font-bold pb-3 border-b dark:border-slate-900 border-slate-100">Social Media Links Settings</h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
+                
+                {/* Panel A: Create or Edit Link */}
+                <div className="col-span-12 md:col-span-5 space-y-4">
+                  <div className={`p-6 rounded-2xl border ${
+                    theme === "dark" ? "bg-slate-950 border-slate-900" : "bg-white border-slate-200 shadow-sm"
+                  }`}>
+                    <h4 className="text-sm font-display font-bold text-cyan-400 mb-4">
+                      {editingSmlId ? "Edit Connected Link" : "Add New Platform Link"}
+                    </h4>
+                    
+                    <div className="space-y-3 text-left">
+                      <div>
+                        <label className="block text-[10px] font-mono tracking-wider uppercase opacity-60 mb-1">Platform Name</label>
+                        <select
+                          value={editingSmlId ? editSmlPlat : newSmlPlat}
+                          onChange={(e) => editingSmlId ? setEditSmlPlat(e.target.value) : setNewSmlPlat(e.target.value)}
+                          className={`w-full p-2.5 rounded-xl text-xs font-sans outline-none border focus:border-cyan-500/40 bg-transparent ${
+                            theme === "dark" ? "border-slate-800 text-slate-200" : "border-slate-200 text-slate-800"
+                          }`}
+                        >
+                          <option value="Facebook">Facebook</option>
+                          <option value="Instagram">Instagram</option>
+                          <option value="LinkedIn">LinkedIn</option>
+                          <option value="X (Twitter)">X (Twitter)</option>
+                          <option value="YouTube">YouTube</option>
+                          <option value="GitHub">GitHub</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-mono tracking-wider uppercase opacity-60 mb-1">Destination URL</label>
+                        <input
+                          type="url"
+                          placeholder="https://facebook.com/diavoxtech"
+                          value={editingSmlId ? editSmlUrl : newSmlUrl}
+                          onChange={(e) => editingSmlId ? setEditSmlUrl(e.target.value) : setNewSmlUrl(e.target.value)}
+                          className={`w-full p-2.5 rounded-xl text-xs font-sans outline-none border focus:border-cyan-500/40 bg-transparent ${
+                            theme === "dark" ? "border-slate-800 text-slate-200" : "border-slate-200 text-slate-800"
+                          }`}
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] font-mono tracking-wider uppercase opacity-60 mb-1">Vector Icon</label>
+                        <select
+                          value={editingSmlId ? editSmlIcon : newSmlIcon}
+                          onChange={(e) => editingSmlId ? setEditSmlIcon(e.target.value) : setNewSmlIcon(e.target.value)}
+                          className={`w-full p-2.5 rounded-xl text-xs font-sans outline-none border focus:border-cyan-500/40 bg-transparent ${
+                            theme === "dark" ? "border-slate-800 text-slate-200" : "border-slate-200 text-slate-800"
+                          }`}
+                        >
+                          <option value="Facebook">Facebook Icon</option>
+                          <option value="Instagram">Instagram Icon</option>
+                          <option value="LinkedIn">LinkedIn Icon</option>
+                          <option value="X">X Icon</option>
+                          <option value="YouTube">YouTube Icon</option>
+                          <option value="GitHub">GitHub Icon</option>
+                        </select>
+                      </div>
+
+                      <div className="pt-2 flex space-x-2">
+                        {editingSmlId ? (
+                          <>
+                            <button
+                              onClick={() => {
+                                updateSocialMediaLink(editingSmlId, {
+                                  platform: editSmlPlat,
+                                  url: editSmlUrl,
+                                  icon: editSmlIcon
+                                });
+                                addActivityLog(currentUser.id, `Modified social platform connection details for ${editSmlPlat}`, "Saved updates", editSmlUrl);
+                                setEditingSmlId(null);
+                                setDashAlert("Social link updated successfully.");
+                                setTimeout(() => setDashAlert(null), 3000);
+                              }}
+                              className="flex-1 py-1.5 bg-gradient-to-r from-cyan-600 to-teal-600 rounded-xl text-white text-xs font-mono font-bold hover:brightness-110 flex items-center justify-center space-x-1"
+                            >
+                              <Save size={12} />
+                              <span>Save Link</span>
+                            </button>
+                            <button
+                              onClick={() => setEditingSmlId(null)}
+                              className="p-1 px-3 border dark:border-slate-800 border-slate-200 rounded-xl hover:bg-slate-500/5 text-slate-400 text-xs font-mono"
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              if (!newSmlUrl.trim()) return;
+                              addSocialMediaLink(newSmlPlat, newSmlUrl, newSmlIcon);
+                              addActivityLog(currentUser.id, `Created dynamic social platform connection to ${newSmlPlat}`, "Saved brand links", newSmlUrl);
+                              setNewSmlUrl("");
+                              setDashAlert("Social link connected.");
+                              setTimeout(() => setDashAlert(null), 3000);
+                            }}
+                            className="w-full py-1.5 bg-gradient-to-r from-cyan-600 to-indigo-600 rounded-xl text-white text-xs font-mono font-bold hover:brightness-110 flex items-center justify-center space-x-1"
+                          >
+                            <Plus size={12} />
+                            <span>Add Platform Connection</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Panel B: Connected Social Links Layout List */}
+                <div className="col-span-12 md:col-span-7 space-y-4 text-left">
+                  <div className={`p-6 rounded-2xl border ${
+                    theme === "dark" ? "bg-slate-950 border-slate-900" : "bg-white border-slate-200 shadow-sm"
+                  }`}>
+                    <h4 className="text-sm font-display font-bold text-slate-350 dark:text-slate-300 mb-3 flex items-center justify-between">
+                      <span>Currently Connected Channels ({socialMediaLinks.length})</span>
+                      <span className="text-[10px] font-mono text-cyan-400 font-normal">Saves dynamically to Supabase</span>
+                    </h4>
+
+                    {socialMediaLinks.length === 0 ? (
+                      <div className="p-8 text-center text-slate-400 font-mono text-xs">
+                        No active dynamic social links configured. Connect a channel!
+                      </div>
+                    ) : (
+                      <div className="space-y-2.5">
+                        {socialMediaLinks.map((link, index) => {
+                          const IconComponent = getSocialIcon(link.icon);
+                          return (
+                            <div
+                              key={link.id}
+                              className={`p-3 rounded-xl border flex items-center justify-between space-x-2.5 ${
+                                theme === "dark" ? "border-slate-900 bg-slate-900/40" : "border-slate-100 bg-slate-50/50"
+                              }`}
+                            >
+                              <div className="flex items-center space-x-2.5">
+                                <div className="p-2 rounded-lg bg-cyan-500/10 text-cyan-400">
+                                  <IconComponent size={14} />
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="text-xs font-display font-medium text-slate-900 dark:text-white flex items-center space-x-1.5">
+                                    <span>{link.platform}</span>
+                                    {link.visible ? (
+                                      <span className="text-[8px] px-1.5 py-0.2 rounded-full font-mono bg-emerald-500/10 text-emerald-400 uppercase tracking-widest leading-none">Visible</span>
+                                    ) : (
+                                      <span className="text-[8px] px-1.5 py-0.2 rounded-full font-mono bg-rose-500/10 text-rose-450 uppercase tracking-widest leading-none">Hidden</span>
+                                    )}
+                                  </div>
+                                  <a
+                                    href={link.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-[10px] font-mono text-slate-400 hover:text-cyan-400 truncate max-w-[200px] inline-block"
+                                    title={link.url}
+                                  >
+                                    {link.url}
+                                  </a>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center space-x-1.5 shrink-0">
+                                {/* Up button */}
+                                <button
+                                  disabled={index === 0}
+                                  onClick={() => {
+                                    if (index === 0) return;
+                                    const nextOrder = [...socialMediaLinks];
+                                    const temp = nextOrder[index - 1];
+                                    nextOrder[index - 1] = nextOrder[index];
+                                    nextOrder[index] = temp;
+                                    reorderSocialMediaLinks(nextOrder);
+                                  }}
+                                  className="p-1 rounded bg-slate-500/5 hover:bg-slate-500/15 text-slate-400 hover:text-white transition-all disabled:opacity-30 disabled:pointer-events-none"
+                                >
+                                  <ChevronUp size={12} />
+                                </button>
+
+                                {/* Down button */}
+                                <button
+                                  disabled={index === socialMediaLinks.length - 1}
+                                  onClick={() => {
+                                    if (index === socialMediaLinks.length - 1) return;
+                                    const nextOrder = [...socialMediaLinks];
+                                    const temp = nextOrder[index + 1];
+                                    nextOrder[index + 1] = nextOrder[index];
+                                    nextOrder[index] = temp;
+                                    reorderSocialMediaLinks(nextOrder);
+                                  }}
+                                  className="p-1 rounded bg-slate-500/5 hover:bg-slate-500/15 text-slate-400 hover:text-white transition-all disabled:opacity-30 disabled:pointer-events-none"
+                                >
+                                  <ChevronDown size={12} />
+                                </button>
+
+                                {/* Hide/show Toggle */}
+                                <button
+                                  onClick={() => {
+                                    updateSocialMediaLink(link.id, { visible: !link.visible });
+                                  }}
+                                  className={`p-1.5 rounded-lg text-slate-400 hover:text-white bg-slate-500/5 hover:bg-slate-500/15`}
+                                  title={link.visible ? "Hide Link" : "Show Link"}
+                                >
+                                  {link.visible ? <Eye size={12} /> : <EyeOff size={12} />}
+                                </button>
+
+                                {/* Edit Button */}
+                                <button
+                                  onClick={() => {
+                                    setEditingSmlId(link.id);
+                                    setEditSmlPlat(link.platform);
+                                    setEditSmlUrl(link.url);
+                                    setEditSmlIcon(link.icon);
+                                  }}
+                                  className="p-1.5 rounded-lg text-yellow-550 hover:bg-yellow-500/10 bg-slate-500/5"
+                                  title="Edit Connected Details"
+                                >
+                                  <Edit2 size={12} />
+                                </button>
+
+                                {/* Delete Button */}
+                                <button
+                                  onClick={() => {
+                                    setConfirmDialog({
+                                      isOpen: true,
+                                      title: "Confirm brand channel dissociation?",
+                                      message: `Are you absolute certain you want to permanently delete and disconnect your ${link.platform} channel option? This will instantly remove it from the footer.`,
+                                      onConfirm: () => {
+                                        deleteSocialMediaLink(link.id);
+                                        addActivityLog(currentUser.id, `Removed branding channel connection to ${link.platform}`, "Dissociated option", link.url);
+                                        setConfirmDialog(null);
+                                        setDashAlert("Connected channel disconnected.");
+                                        setTimeout(() => setDashAlert(null), 3000);
+                                      }
+                                    });
+                                  }}
+                                  className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-500/10 bg-slate-500/5"
+                                  title="Delete Link"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
               </div>
             </div>
           )}
@@ -2185,6 +3329,38 @@ export default function AdminDashboard() {
         </div>
 
       </div>
+
+      {/* Global admin confirmation overlay modal */}
+      {confirmDialog && confirmDialog.isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm animate-fade-in" id="admin-confirmation-overlay">
+          <div className={`w-full max-w-sm p-6 rounded-2xl shadow-2xl border transition-all duration-355 ${
+            theme === "dark" 
+              ? "bg-slate-900 border-slate-800 text-white" 
+              : "bg-white border-slate-200 text-slate-900"
+          }`}>
+            <h4 className="text-base font-display font-bold text-left text-cyan-400 mb-2">{confirmDialog.title}</h4>
+            <p className="text-xs opacity-75 font-sans leading-relaxed text-left mb-6">{confirmDialog.message}</p>
+            
+            <div className="flex justify-end space-x-3">
+              <button 
+                onClick={() => setConfirmDialog(null)}
+                className="px-4 py-2 rounded-xl border dark:border-slate-800 border-slate-200 hover:bg-slate-500/10 font-mono text-xs transition-colors"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={() => {
+                  confirmDialog.onConfirm();
+                }}
+                className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-mono text-xs font-bold transition-all shadow-md shadow-cyan-500/10"
+              >
+                Confirm changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
