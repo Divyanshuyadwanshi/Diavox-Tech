@@ -3,7 +3,8 @@ import { useStore } from "../../store";
 import { 
   Layout, Save, GripVertical, ChevronUp, ChevronDown, Eye, EyeOff,
   HelpCircle, Plus, Trash2, Edit2, Check, RefreshCw, Layers, Laptop,
-  Settings, Bot, Download, Phone, Mail, Clock, Palette, Type, AlertCircle, Heart 
+  Settings, Bot, Download, Phone, Mail, Clock, Palette, Type, AlertCircle, Heart,
+  Zap, X, Inbox 
 } from "lucide-react";
 import { CmsContent } from "../../types";
 
@@ -20,10 +21,28 @@ import Contact from "../Contact";
 export default function AdminCms() {
   const { theme, currentUser, cmsContent, updateCmsContent, addActivityLog } = useStore();
   
-  // Local active sub-tab: "hero_layout" | "branding" | "services" | "faqs" | "contact" | "custom_sections"
-  const [subTab, setSubTab] = useState<"hero_layout" | "branding" | "services" | "faqs" | "contact" | "custom_sections">("hero_layout");
+  // Local active sub-tab: "hero_layout" | "branding" | "services" | "faqs" | "contact" | "custom_sections" | "interactive_3d" | "hero_slider"
+  const [subTab, setSubTab] = useState<"hero_layout" | "branding" | "services" | "faqs" | "contact" | "custom_sections" | "interactive_3d" | "hero_slider">("hero_layout");
   const [successAlert, setSuccessAlert] = useState<string | null>(null);
   const [previewMode, setPreviewMode] = useState<boolean>(false);
+
+  // Hero Slider Config
+  const [sliderConfig, setSliderConfig] = useState({
+    autoplay: true,
+    duration: 3000,
+    globalEffect: "fade"
+  });
+  const [heroSlides, setHeroSlides] = useState<any[]>([]);
+
+  // 0. Interactive 3D Sphere Config
+  const [sphereColor, setSphereColor] = useState<string>("");
+  const [sphereSize, setSphereSize] = useState<number>(0.42);
+  const [sphereLabels, setSphereLabels] = useState<string[]>([]);
+  const [sparkEnabled, setSparkEnabled] = useState<boolean>(true);
+  const [sparkFreq, setSparkFreq] = useState<number>(0.05);
+  const [sphereRotation, setSphereRotation] = useState<number>(0.25);
+  const [sphereRings, setSphereRings] = useState<number>(5);
+  const [sphereSegments, setSphereSegments] = useState<number>(12);
 
   const showToast = (msg: string) => {
     setSuccessAlert(msg);
@@ -32,6 +51,7 @@ export default function AdminCms() {
 
   // 1. HERO & SEQUENCE STATES
   const [heroBadge, setHeroBadge] = useState<string>(cmsContent?.heroBadge || "");
+  const [heroBadgeEffect, setHeroBadgeEffect] = useState<"spin" | "pulse" | "ping" | "none" | "hide">(cmsContent?.heroBadgeEffect || "spin");
   const [heroTitle, setHeroTitle] = useState<string>(cmsContent?.heroTitle || "");
   const [heroSubtitle, setHeroSubtitle] = useState<string>(cmsContent?.heroSubtitle || "");
   const [sectionsOrder, setSectionsOrder] = useState<string[]>([]);
@@ -62,6 +82,7 @@ export default function AdminCms() {
   useEffect(() => {
     if (cmsContent) {
       setHeroBadge(cmsContent.heroBadge || "");
+      setHeroBadgeEffect(cmsContent.heroBadgeEffect || "spin");
       setHeroTitle(cmsContent.heroTitle || "");
       setHeroSubtitle(cmsContent.heroSubtitle || "");
       setSectionsOrder(cmsContent.homepageSections || ["hero", "services", "portfolio", "team", "reviews", "pricing", "blog", "contact"]);
@@ -90,6 +111,22 @@ export default function AdminCms() {
       setFooterCredit(cmsContent.footerCredit || "Made with precision by Diavox Desk");
       setFooterNotation1(cmsContent.footerNotation1 || "Serving clients worldwide remotely.");
       setFooterNotation2(cmsContent.footerNotation2 || "Customer support available with responses within 24 hours.");
+      if (cmsContent.sphereConfig) {
+        setSphereColor(cmsContent.sphereConfig.color);
+        setSphereSize(cmsContent.sphereConfig.size);
+        setSphereLabels(cmsContent.sphereConfig.labels || []);
+        setSparkEnabled(cmsContent.sphereConfig.sparkEnabled !== false);
+        setSparkFreq(cmsContent.sphereConfig.sparkFrequency || 0.05);
+        setSphereRotation(cmsContent.sphereConfig.rotationSpeed || 0.25);
+        setSphereRings(cmsContent.sphereConfig.rings || 5);
+        setSphereSegments(cmsContent.sphereConfig.segments || 12);
+      }
+      if (cmsContent.heroSliderConfig) {
+        setSliderConfig(cmsContent.heroSliderConfig as any);
+      }
+      if (cmsContent.heroSlides) {
+        setHeroSlides(cmsContent.heroSlides);
+      }
     }
   }, [cmsContent]);
 
@@ -232,6 +269,7 @@ export default function AdminCms() {
       heroTitle,
       heroSubtitle,
       heroBadge,
+      heroBadgeEffect,
       heroCtaPrimaryText,
       heroCtaSecondaryText,
       homepageSections: sectionsOrder,
@@ -247,6 +285,7 @@ export default function AdminCms() {
     setHeroTitle("Crafting Divine Aesthetic Digital High-Utility Systems");
     setHeroSubtitle("Diavox Tech helps modern brands establish a strong online presence and automate operational bottlenecks. We craft high-speed websites, bespoke SEO campaigns, AI automations, and downloadable digital assets that turn traffic into long-term growth.");
     setHeroBadge("Serving clients worldwide remotely");
+    setHeroBadgeEffect("spin");
     setSectionsOrder(["hero", "services", "portfolio", "team", "reviews", "pricing", "blog", "contact"]);
     setSectionVisibility({
       hero: true,
@@ -504,6 +543,36 @@ export default function AdminCms() {
     showToast("Corporate contact credentials synced successfully!");
   };
 
+  const saveSphereConfig = async () => {
+    await updateCmsContent({
+      sphereConfig: {
+        color: sphereColor,
+        size: sphereSize,
+        labels: sphereLabels,
+        sparkEnabled,
+        sparkFrequency: sparkFreq,
+        rotationSpeed: sphereRotation,
+        rings: sphereRings,
+        segments: sphereSegments
+      }
+    });
+    if (currentUser) {
+      addActivityLog(currentUser.id, "Updated 3D Interactive Sphere configuration", "Sphere Customization", `${sphereLabels.length} labels active`);
+    }
+    showToast("3D Orbit Map configuration applied successfully!");
+  };
+
+  const saveHeroSlider = async () => {
+    await updateCmsContent({
+      heroSliderConfig: sliderConfig as any,
+      heroSlides: heroSlides
+    });
+    if (currentUser) {
+      addActivityLog(currentUser.id, "Updated Hero Slider configuration & slides", "Hero Customization", `${heroSlides.length} slides configured`);
+    }
+    showToast("Hero Slider settings published successfully!");
+  };
+
   const sectionMetadata: Record<string, { title: string; desc: string }> = {
     hero: { title: "Hero Presentation Banner", desc: "Top header badge, grand typographic display heading, and call-to-action triggers." },
     services: { title: "Capabilities & Core Services", desc: "Aesthetic display grid detailing deep tech capabilities, templates, and solutions." },
@@ -562,7 +631,7 @@ export default function AdminCms() {
           }`}
         >
           <Layout size={13} />
-          <span>Hero & Sequence</span>
+          <span>Hero Settings</span>
         </button>
 
         <button
@@ -574,7 +643,7 @@ export default function AdminCms() {
           }`}
         >
           <Palette size={13} />
-          <span>Headings & Branding</span>
+          <span>Branding</span>
         </button>
 
         <button
@@ -586,7 +655,7 @@ export default function AdminCms() {
           }`}
         >
           <Layers size={13} />
-          <span>Capabilities Core</span>
+          <span>Features</span>
         </button>
 
         <button
@@ -598,7 +667,7 @@ export default function AdminCms() {
           }`}
         >
           <HelpCircle size={13} />
-          <span>Services FAQs</span>
+          <span>FAQs</span>
         </button>
 
         <button
@@ -610,7 +679,7 @@ export default function AdminCms() {
           }`}
         >
           <Phone size={13} />
-          <span>Contact Channels</span>
+          <span>Contact Info</span>
         </button>
 
         <button
@@ -622,7 +691,31 @@ export default function AdminCms() {
           }`}
         >
           <Layers size={13} />
-          <span>Custom Page Sections</span>
+          <span>Custom Sections</span>
+        </button>
+
+        <button
+          onClick={() => setSubTab("interactive_3d")}
+          className={`flex items-center space-x-2 px-4 py-2.5 rounded-lg text-xs font-mono font-medium transition-all ${
+            subTab === "interactive_3d" 
+              ? "bg-purple-950/60 text-purple-400 border border-purple-500/20 shadow" 
+              : "text-slate-400 hover:text-white hover:bg-slate-900/40"
+          }`}
+        >
+          <Bot size={13} />
+          <span>3D Map Settings</span>
+        </button>
+
+        <button
+          onClick={() => setSubTab("hero_slider")}
+          className={`flex items-center space-x-2 px-4 py-2.5 rounded-lg text-xs font-mono font-medium transition-all ${
+            subTab === "hero_slider" 
+              ? "bg-cyan-950/60 text-cyan-400 border border-cyan-500/20 shadow" 
+              : "text-slate-400 hover:text-white hover:bg-slate-900/40"
+          }`}
+        >
+          <Zap size={13} />
+          <span>Hero Banner</span>
         </button>
       </div>
 
@@ -640,15 +733,31 @@ export default function AdminCms() {
               </h4>
 
               <div className="space-y-4">
-                <div>
-                  <label className="text-[10px] font-mono opacity-50 block mb-1 uppercase tracking-wider">Badge Lead Accent</label>
-                  <input
-                    type="text"
-                    value={heroBadge}
-                    onChange={e => setHeroBadge(e.target.value)}
-                    placeholder="e.g. Worldwide remote team"
-                    className="w-full bg-slate-950 border dark:border-slate-800 p-3 rounded-xl text-white font-mono focus:outline-none focus:border-cyan-500/40"
-                  />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[10px] font-mono opacity-50 block mb-1 uppercase tracking-wider">Badge Lead Accent Text</label>
+                    <input
+                      type="text"
+                      value={heroBadge}
+                      onChange={e => setHeroBadge(e.target.value)}
+                      placeholder="e.g. Worldwide remote team"
+                      className="w-full bg-slate-950 border dark:border-slate-800 p-3 rounded-xl text-white font-mono focus:outline-none focus:border-cyan-500/40"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-mono opacity-50 block mb-1 uppercase tracking-wider">Badge Visual Animation Effect</label>
+                    <select
+                      value={heroBadgeEffect}
+                      onChange={e => setHeroBadgeEffect(e.target.value as any)}
+                      className="w-full bg-slate-950 border dark:border-slate-800 p-3 rounded-xl text-white font-mono focus:outline-none focus:border-cyan-500/40 text-xs"
+                    >
+                      <option value="spin">Spinning Earth Globe</option>
+                      <option value="pulse">Pulsing Globe Silhouette</option>
+                      <option value="ping">Active Ping Oracle Dot</option>
+                      <option value="none">Standard Static Globe Icon</option>
+                      <option value="hide">Hide Badge Entirely</option>
+                    </select>
+                  </div>
                 </div>
 
                 <div>
@@ -1773,6 +1882,419 @@ export default function AdminCms() {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* SUBTAB 7: INTERACTIVE 3D ORBIT CONFIG */}
+        {subTab === "interactive_3d" && (
+          <div className="bg-slate-900/30 p-6 rounded-2xl border dark:border-slate-900 border-slate-200 text-left animate-fadeIn space-y-6">
+            <h4 className="text-xs font-mono font-bold tracking-widest uppercase border-b dark:border-slate-850 pb-2 text-slate-200 flex items-center space-x-2">
+              <Bot size={14} className="text-purple-400" />
+              <span>3D Interactive Sphere & Sparks Analytics</span>
+            </h4>
+            
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="space-y-6">
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-[10px] font-mono opacity-50 block mb-1 uppercase tracking-wider">Sphere Aesthetic Color (RGBA)</label>
+                    <input
+                      type="text"
+                      value={sphereColor}
+                      onChange={e => setSphereColor(e.target.value)}
+                      placeholder="rgba(188, 156, 110, 1)"
+                      className="w-full bg-slate-950 border dark:border-slate-800 p-3 rounded-xl text-white font-mono focus:outline-none focus:border-cyan-500/40"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-mono opacity-50 block mb-1 uppercase tracking-wider">Sphere Dimension Scale ({sphereSize})</label>
+                    <input
+                      type="range"
+                      min="0.1"
+                      max="0.8"
+                      step="0.01"
+                      value={sphereSize}
+                      onChange={e => setSphereSize(parseFloat(e.target.value))}
+                      className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-slate-950/40 border border-slate-850">
+                    <div>
+                      <p className="text-xs font-bold text-white">Enable Spark Animations</p>
+                      <p className="text-[10px] text-slate-500 font-mono italic">Professional luxurious connector sparks</p>
+                    </div>
+                    <button
+                      onClick={() => setSparkEnabled(!sparkEnabled)}
+                      className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        sparkEnabled ? "bg-cyan-500" : "bg-slate-700"
+                      }`}
+                    >
+                      <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                        sparkEnabled ? "translate-x-5" : "translate-x-0"
+                      }`} />
+                    </button>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-mono opacity-50 block mb-1 uppercase tracking-wider">Spark Frequency Alpha ({sparkFreq})</label>
+                    <input
+                      type="range"
+                      min="0.001"
+                      max="0.2"
+                      step="0.001"
+                      value={sparkFreq}
+                      onChange={e => setSparkFreq(parseFloat(e.target.value))}
+                      className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-mono opacity-50 block mb-1 uppercase tracking-wider">Auto-Rotation Velocity ({sphereRotation})</label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1.5"
+                      step="0.01"
+                      value={sphereRotation}
+                      onChange={e => setSphereRotation(parseFloat(e.target.value))}
+                      className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[10px] font-mono opacity-50 block mb-1 uppercase tracking-wider">Lattice Rings ({sphereRings})</label>
+                      <input
+                        type="number"
+                        min="2"
+                        max="12"
+                        value={sphereRings}
+                        onChange={e => setSphereRings(parseInt(e.target.value))}
+                        className="w-full bg-slate-950 border border-slate-800 p-2.5 rounded-lg text-white font-mono text-xs outline-none focus:border-cyan-500/40"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-mono opacity-50 block mb-1 uppercase tracking-wider">Lattice Segments ({sphereSegments})</label>
+                      <input
+                        type="number"
+                        min="3"
+                        max="24"
+                        value={sphereSegments}
+                        onChange={e => setSphereSegments(parseInt(e.target.value))}
+                        className="w-full bg-slate-950 border border-slate-800 p-2.5 rounded-lg text-white font-mono text-xs outline-none focus:border-cyan-500/40"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-4 flex justify-end">
+                  <button
+                    onClick={saveSphereConfig}
+                    className="px-6 py-3 bg-gradient-to-r from-purple-600 to-indigo-700 rounded-xl text-white font-mono font-bold hover:brightness-110 flex items-center space-x-2 shadow-lg shadow-purple-500/10 cursor-pointer"
+                  >
+                    <Save size={14} />
+                    <span>Compile Sphere Config</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <label className="text-[10px] font-mono opacity-50 block mb-1 uppercase tracking-wider">Dynamic Sphere Labels (Internal Content)</label>
+                <div className="space-y-2">
+                  {sphereLabels.map((label, idx) => (
+                    <div key={idx} className="flex items-center space-x-2">
+                      <input
+                        type="text"
+                        value={label}
+                        onChange={e => {
+                          const newList = [...sphereLabels];
+                          newList[idx] = e.target.value;
+                          setSphereLabels(newList);
+                        }}
+                        className="flex-1 bg-slate-950 border border-slate-800 p-2.5 rounded-lg text-white font-mono text-[11px] focus:outline-none focus:border-cyan-500/30"
+                      />
+                      <button
+                        onClick={() => {
+                          const newList = sphereLabels.filter((_, i) => i !== idx);
+                          setSphereLabels(newList);
+                        }}
+                        className="p-2.5 rounded-lg bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/20"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    onClick={() => setSphereLabels([...sphereLabels, "NEW.METRIC: VALUE"])}
+                    className="w-full py-2.5 rounded-xl border border-dashed border-slate-700 text-slate-500 hover:bg-slate-900/30 flex items-center justify-center space-x-2 text-[11px] font-mono"
+                  >
+                    <Plus size={13} />
+                    <span>Append New Meta Label</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* SUBTAB 8: HERO SLIDER MANAGER */}
+        {subTab === "hero_slider" && (
+          <div className="space-y-6">
+            {/* Global Slider Config */}
+            <div className="bg-slate-900/30 p-6 rounded-2xl border dark:border-slate-900 border-slate-200 text-left animate-fadeIn space-y-6">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-mono font-bold tracking-widest uppercase text-slate-200 flex items-center space-x-2">
+                  <Zap size={14} className="text-cyan-400" />
+                  <span>Global Slider Orchestration</span>
+                </h4>
+                <button
+                  onClick={saveHeroSlider}
+                  className="px-4 py-2 bg-cyan-600 rounded-lg text-white font-mono text-[11px] font-bold hover:brightness-110 flex items-center space-x-2 shadow-lg shadow-cyan-500/10"
+                >
+                  <Save size={13} />
+                  <span>Publish Settings</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div>
+                  <label className="text-[10px] font-mono opacity-50 block mb-1 uppercase tracking-wider">Autoplay Loop</label>
+                  <div 
+                    onClick={() => setSliderConfig({ ...sliderConfig, autoplay: !sliderConfig.autoplay })}
+                    className={`p-2 rounded-xl border cursor-pointer transition-all flex items-center justify-center space-x-2 ${
+                      sliderConfig.autoplay ? "bg-cyan-500/10 border-cyan-500/40 text-cyan-400" : "bg-slate-900/40 border-slate-800 text-slate-500"
+                    }`}
+                  >
+                    <div className={`w-2 h-2 rounded-full ${sliderConfig.autoplay ? "bg-cyan-400 animate-pulse" : "bg-slate-700"}`} />
+                    <span className="text-xs font-bold uppercase">{sliderConfig.autoplay ? "Active" : "Disabled"}</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-mono opacity-50 block mb-1 uppercase tracking-wider">Transition Delay (Seconds)</label>
+                  <select
+                    value={sliderConfig.duration}
+                    onChange={e => setSliderConfig({ ...sliderConfig, duration: parseInt(e.target.value) })}
+                    className="w-full bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-white font-mono text-xs focus:outline-none"
+                  >
+                    <option value="2000">2.0s (Fast)</option>
+                    <option value="3000">3.0s (Standard)</option>
+                    <option value="4000">4.0s (Slow)</option>
+                    <option value="5000">5.0s (Stately)</option>
+                    <option value="8000">8.0s (Reading focus)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-[10px] font-mono opacity-50 block mb-1 uppercase tracking-wider">Default Core Effect</label>
+                  <select
+                    value={sliderConfig.globalEffect}
+                    onChange={e => setSliderConfig({ ...sliderConfig, globalEffect: e.target.value as any })}
+                    className="w-full bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-white font-mono text-xs focus:outline-none"
+                  >
+                    <option value="fade">Fade (Standard)</option>
+                    <option value="slide-left">Slide Left</option>
+                    <option value="slide-right">Slide Right</option>
+                    <option value="zoom-in">Zoom In</option>
+                    <option value="blur-fade">Blur + Fade</option>
+                    <option value="typewriter">Typewriter (Premium)</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            {/* Slides CRUD */}
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-mono font-bold tracking-widest uppercase text-slate-400">Content Slide Library</h4>
+                <button
+                  onClick={() => {
+                    const newSlide = {
+                      id: `slide-${Date.now()}`,
+                      title: "New Premium Solution",
+                      subtitle: "Enter impactful description here.",
+                      buttonText: "Learn More",
+                      buttonLink: "#services",
+                      status: true
+                    };
+                    setHeroSlides([...heroSlides, newSlide]);
+                  }}
+                  className="flex items-center space-x-1.5 text-[10px] text-cyan-400 font-mono hover:text-cyan-300 transition-colors uppercase tracking-widest"
+                >
+                  <Plus size={14} />
+                  <span>Append Slide</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4">
+                {heroSlides.map((slide, idx) => (
+                  <div key={slide.id} className="bg-slate-900/40 p-5 rounded-2xl border border-slate-800/60 text-left space-y-4 shadow-sm">
+                    <div className="flex items-center justify-between mb-2">
+                       <div className="flex items-center space-x-2">
+                         <span className="text-[10px] font-mono text-slate-500 uppercase">Slide #{idx + 1}</span>
+                         {slide.status ? (
+                           <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[9px] font-bold uppercase tracking-tighter">Live</span>
+                         ) : (
+                           <span className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-500 text-[9px] font-bold uppercase tracking-tighter">Draft</span>
+                         )}
+                       </div>
+                       <div className="flex items-center space-x-2">
+                         <button 
+                           onClick={() => {
+                             const newList = [...heroSlides];
+                             newList[idx].status = !newList[idx].status;
+                             setHeroSlides(newList);
+                           }}
+                           className="p-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-400 hover:text-white"
+                         >
+                           {slide.status ? <EyeOff size={13} /> : <Eye size={13} />}
+                         </button>
+                         <button
+                           disabled={idx === 0}
+                           onClick={() => {
+                             const newList = [...heroSlides];
+                             const temp = newList[idx];
+                             newList[idx] = newList[idx - 1];
+                             newList[idx - 1] = temp;
+                             setHeroSlides(newList);
+                           }}
+                           className="p-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-400 hover:text-white disabled:opacity-30"
+                         >
+                           <ChevronUp size={13} />
+                         </button>
+                         <button
+                           disabled={idx === heroSlides.length - 1}
+                           onClick={() => {
+                             const newList = [...heroSlides];
+                             const temp = newList[idx];
+                             newList[idx] = newList[idx + 1];
+                             newList[idx + 1] = temp;
+                             setHeroSlides(newList);
+                           }}
+                           className="p-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-400 hover:text-white disabled:opacity-30"
+                         >
+                           <ChevronDown size={13} />
+                         </button>
+                         <button
+                           onClick={() => setHeroSlides(heroSlides.filter((_, i) => i !== idx))}
+                           className="p-1.5 rounded-lg bg-rose-500/10 border border-rose-500/20 text-rose-400 hover:bg-rose-500/20"
+                         >
+                           <X size={13} />
+                         </button>
+                       </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <div className="space-y-3">
+                        <div>
+                          <label className="text-[9px] font-mono opacity-40 uppercase tracking-widest pl-1 mb-1 block">Hero Heading</label>
+                          <input
+                            type="text"
+                            value={slide.title}
+                            onChange={e => {
+                              const newList = [...heroSlides];
+                              newList[idx].title = e.target.value;
+                              setHeroSlides(newList);
+                            }}
+                            className="w-full bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-white font-display font-bold text-sm focus:border-cyan-500/30 outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[9px] font-mono opacity-40 uppercase tracking-widest pl-1 mb-1 block">Hero Subtitle</label>
+                          <textarea
+                            value={slide.subtitle}
+                            onChange={e => {
+                              const newList = [...heroSlides];
+                              newList[idx].subtitle = e.target.value;
+                              setHeroSlides(newList);
+                            }}
+                            rows={2}
+                            className="w-full bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-white font-sans text-xs focus:border-cyan-500/30 outline-none resize-none"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-[9px] font-mono opacity-40 uppercase tracking-widest pl-1 mb-1 block">Button Label</label>
+                            <input
+                              type="text"
+                              value={slide.buttonText}
+                              onChange={e => {
+                                const newList = [...heroSlides];
+                                newList[idx].buttonText = e.target.value;
+                                setHeroSlides(newList);
+                              }}
+                              className="w-full bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-white font-mono text-xs outline-none"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-mono opacity-40 uppercase tracking-widest pl-1 mb-1 block">Button Target</label>
+                            <input
+                              type="text"
+                              value={slide.buttonLink}
+                              onChange={e => {
+                                const newList = [...heroSlides];
+                                newList[idx].buttonLink = e.target.value;
+                                setHeroSlides(newList);
+                              }}
+                              className="w-full bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-cyan-400 font-mono text-[10px] outline-none"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="text-[9px] font-mono opacity-40 uppercase tracking-widest pl-1 mb-1 block">Specific Override Effect</label>
+                            <select
+                              value={slide.effect || ""}
+                              onChange={e => {
+                                const newList = [...heroSlides];
+                                newList[idx].effect = e.target.value || undefined;
+                                setHeroSlides(newList);
+                              }}
+                              className="w-full bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-white font-mono text-[10px] outline-none"
+                            >
+                              <option value="">(Inherit Global)</option>
+                              <option value="fade">Fade</option>
+                              <option value="slide-left">Slide Left</option>
+                              <option value="slide-right">Slide Right</option>
+                              <option value="zoom-in">Zoom In</option>
+                              <option value="blur-fade">Blur + Fade</option>
+                              <option value="typewriter">Typewriter</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-mono opacity-40 uppercase tracking-widest pl-1 mb-1 block">Background Image (URL)</label>
+                            <input
+                              type="text"
+                              value={slide.backgroundImage || ""}
+                              onChange={e => {
+                                const newList = [...heroSlides];
+                                newList[idx].backgroundImage = e.target.value;
+                                setHeroSlides(newList);
+                              }}
+                              placeholder="https://images.unsplash..."
+                              className="w-full bg-slate-950 border border-slate-800 p-2.5 rounded-xl text-white font-mono text-[10px] outline-none"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {heroSlides.length === 0 && (
+                <div className="py-12 border-2 border-dashed border-slate-800 rounded-3xl flex flex-col items-center justify-center space-y-3 opacity-40">
+                   <Inbox size={32} />
+                   <p className="text-sm font-mono tracking-widest uppercase">No Active Slides Found</p>
                 </div>
               )}
             </div>

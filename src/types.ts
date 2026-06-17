@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-export type UserRole = "secret_admin" | "primary_admin" | "secondary_admin" | "third_admin" | "team_member" | "client";
+export type UserRole = "secret_admin" | "primary_admin" | "secondary_admin" | "third_admin" | "team_member" | "client" | "developer";
 
 export type TeamDepartment = "sales" | "developer" | "designer" | "seo" | "general";
 
@@ -18,7 +18,6 @@ export interface UserProfile {
   permissions?: string[]; // e.g. ["view_leads", "manage_projects", "upload_designs", "manage_seo", "view_reports"]
   portfolio?: string;
   description?: string;
-  password_hash?: string;
 }
 
 export interface PricingTierObj {
@@ -261,6 +260,7 @@ export interface CmsContent {
   heroTitle: string;
   heroSubtitle: string;
   heroBadge: string;
+  heroBadgeEffect?: "spin" | "pulse" | "ping" | "none" | "hide";
   homepageSections?: string[];
   sectionVisibility?: { [key: string]: boolean };
   sectionColors?: { [key: string]: { bg: string; text: string } };
@@ -310,6 +310,33 @@ export interface CmsContent {
   footerCredit?: string;
   footerNotation1?: string;
   footerNotation2?: string;
+  sphereConfig?: {
+    color: string;
+    size: number;
+    labels: string[];
+    sparkEnabled: boolean;
+    sparkFrequency: number;
+    rotationSpeed: number;
+    rings: number;
+    segments: number;
+  };
+  heroSliderConfig?: {
+    autoplay: boolean;
+    duration: number;
+    globalEffect: "fade" | "slide-left" | "slide-right" | "zoom-in" | "blur-fade" | "typewriter";
+  };
+  heroSlides?: HeroSlide[];
+}
+
+export interface HeroSlide {
+  id: string;
+  title: string;
+  subtitle: string;
+  buttonText: string;
+  buttonLink: string;
+  backgroundImage?: string;
+  effect?: "fade" | "slide-left" | "slide-right" | "zoom-in" | "blur-fade" | "typewriter";
+  status: boolean;
 }
 
 export interface MilestonePayment {

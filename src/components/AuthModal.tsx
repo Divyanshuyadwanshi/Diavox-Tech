@@ -110,9 +110,13 @@ export default function AuthModal({ onClose, onLoginSuccess }: AuthModalProps) {
 
             {/* Error notifications */}
             {errorMsg && (
-              <div className="p-3 rounded-xl bg-rose-500/10 text-rose-500 border border-rose-500/20 text-xs font-mono flex items-start space-x-2" id="auth-error-alert">
-                <ShieldAlert size={14} className="shrink-0 mt-0.5" />
-                <span>{errorMsg}</span>
+              <div className="p-3 sm:p-4 rounded-xl bg-rose-950/25 text-rose-300 border border-rose-500/30 text-xs font-sans flex flex-col space-y-2 animate-in fade-in slide-in-from-top-1 shadow-md" id="auth-error-alert">
+                <div className="flex items-start space-x-2">
+                  <ShieldAlert size={14} className="shrink-0 mt-0.5 text-rose-400" />
+                  <div className="space-y-1">
+                    <p className="font-semibold text-rose-200">Supabase Auth: {errorMsg}</p>
+                  </div>
+                </div>
               </div>
             )}
 

@@ -30,8 +30,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   status VARCHAR(50) DEFAULT 'active', -- active, suspended
   skills TEXT[],
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
-  password_hash TEXT -- Metadata only
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- User Roles Table (Detailed RBAC)
@@ -568,24 +567,64 @@ CREATE INDEX IF NOT EXISTS idx_notifications_unread ON public.notifications(user
 -- Trigger to automatic insert public profile logs when new account signs up to Supabase Auth
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
+DECLARE
+  v_username VARCHAR(100);
 BEGIN
-  INSERT INTO public.profiles (id, email, name, role, avatar_url, status)
+  -- First, safety-clean/delete any pre-existing profile that has this same email but a different ID
+  -- (e.g. from initial team seeds, metadata stubs, or transient login-bypass accounts)
+  -- to avoid violating the unique constraint on email.
+  DELETE FROM public.profiles WHERE email = new.email AND id <> new.id::text;
+
+  v_username := COALESCE(new.raw_user_meta_data->>'username', split_part(new.email, '@', 1));
+  
+  -- ensure username uniqueness in public.profiles
+  IF EXISTS (SELECT 1 FROM public.profiles WHERE username = v_username AND id <> new.id::text) THEN
+    v_username := v_username || '_' || substring(md5(random()::text) from 1 for 6);
+  END IF;
+
+  INSERT INTO public.profiles (
+    id, 
+    email, 
+    name, 
+    role, 
+    avatar_url, 
+    status, 
+    username, 
+    skills
+  )
   VALUES (
     new.id::text,
     new.email,
     COALESCE(new.raw_user_meta_data->>'name', 'New Account'),
     COALESCE(new.raw_user_meta_data->>'role', 'client'),
-    COALESCE(new.raw_user_meta_data->>'avatar_url', 'https://api.dicebear.com/7.x/initials/svg?seed=' || encode(new.id::bytea, 'hex')),
-    'active'
+    COALESCE(new.raw_user_meta_data->>'avatar_url', 'https://api.dicebear.com/7.x/initials/svg?seed=' || new.email),
+    'active',
+    v_username,
+    ARRAY['create_requests', 'view_own_projects']
   )
   ON CONFLICT (id) DO UPDATE
   SET email = EXCLUDED.email,
-      name = COALESCE(EXCLUDED.name, public.profiles.name);
+      name = COALESCE(EXCLUDED.name, public.profiles.name),
+      username = COALESCE(public.profiles.username, EXCLUDED.username),
+      skills = COALESCE(public.profiles.skills, EXCLUDED.skills);
 
   -- Insert default rbac user roles
   INSERT INTO public.user_roles (user_id, role)
   VALUES (new.id::text, COALESCE(new.raw_user_meta_data->>'role', 'client'))
   ON CONFLICT (user_id, role) DO NOTHING;
+
+  -- Insert/upsert into team_members table for team profiles
+  IF COALESCE(new.raw_user_meta_data->>'role', 'client') != 'client' THEN
+    INSERT INTO public.team_members (profile_id, position, department)
+    VALUES (
+      new.id::text,
+      COALESCE(new.raw_user_meta_data->>'position', 'Specialist'),
+      COALESCE(new.raw_user_meta_data->>'department', 'Operations')
+    )
+    ON CONFLICT (profile_id) DO UPDATE
+    SET position = COALESCE(EXCLUDED.position, public.team_members.position),
+        department = COALESCE(EXCLUDED.department, public.team_members.department);
+  END IF;
 
   RETURN new;
 END;
@@ -750,6 +789,13 @@ CREATE POLICY "Audit Logs restricted select" ON public.audit_logs FOR SELECT USI
 -- Storage selector roles
 DROP POLICY IF EXISTS "Select Public Buckets" ON storage.objects;
 CREATE POLICY "Select Public Buckets" ON storage.objects FOR SELECT USING (
+  bucket_id IN ('profile-images', 'project-images', 'blog-images', 'portfolio-images', 'chat-files')
+);
+
+DROP POLICY IF EXISTS "Public Buckets Full Access" ON storage.objects;
+CREATE POLICY "Public Buckets Full Access" ON storage.objects FOR ALL USING (
+  bucket_id IN ('profile-images', 'project-images', 'blog-images', 'portfolio-images', 'chat-files')
+) WITH CHECK (
   bucket_id IN ('profile-images', 'project-images', 'blog-images', 'portfolio-images', 'chat-files')
 );
 

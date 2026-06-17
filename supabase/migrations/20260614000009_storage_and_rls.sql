@@ -31,6 +31,13 @@ CREATE POLICY "Select Public Buckets" ON storage.objects FOR SELECT USInG (
   bucket_id IN ('profile-images', 'project-images', 'blog-images', 'portfolio-images', 'chat-files')
 );
 
+DROP POLICY IF EXISTS "Public Buckets Full Access" ON storage.objects;
+CREATE POLICY "Public Buckets Full Access" ON storage.objects FOR ALL USING (
+  bucket_id IN ('profile-images', 'project-images', 'blog-images', 'portfolio-images', 'chat-files')
+) WITH CHECK (
+  bucket_id IN ('profile-images', 'project-images', 'blog-images', 'portfolio-images', 'chat-files')
+);
+
 DROP POLICY IF EXISTS "Admins Full Storage access" ON storage.objects;
 CREATE POLICY "Admins Full Storage access" ON storage.objects FOR ALL USING (
   EXISTS (

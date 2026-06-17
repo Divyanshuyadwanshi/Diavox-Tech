@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useStore } from "../store";
+import { uploadFileToBucket } from "../supabase";
 import { 
   Code, Compass, Layers, Bot, FolderUp, CheckCircle, 
   MessageSquare, Sliders, Play, TrendingUp, AlertCircle, FileText, Send, Shield, Lock,
@@ -42,6 +43,7 @@ export default function TeamDashboard() {
   const [passOld, setPassOld] = useState<string>("");
   const [passNew, setPassNew] = useState<string>("");
   const [passConfirm, setPassConfirm] = useState<string>("");
+  const [showTeamDeleteConfirm, setShowTeamDeleteConfirm] = useState(false);
   const [showPassOld, setShowPassOld] = useState<boolean>(false);
   const [showPassNew, setShowPassNew] = useState<boolean>(false);
   const [showPassConfirm, setShowPassConfirm] = useState<boolean>(false);
@@ -174,7 +176,7 @@ export default function TeamDashboard() {
                 }`}
               >
                 <Shield size={13} className="text-purple-400" />
-                <span>My Profile Portal</span>
+                <span>My Profile</span>
               </button>
 
               <button
@@ -186,7 +188,7 @@ export default function TeamDashboard() {
                 }`}
               >
                 <Sliders size={13} />
-                <span>Department Actions</span>
+                <span>My Tasks</span>
               </button>
 
               <button
@@ -198,8 +200,8 @@ export default function TeamDashboard() {
                 }`}
               >
                 <FileText size={13} className="text-cyan-400" />
-                <span>Quotes Management</span>
-                <span className="bg-cyan-500/10 text-cyan-400 text-[8px] rounded px-1 ml-auto shrink-0 uppercase font-bold">REPLY</span>
+                <span>Requests</span>
+                <span className="bg-cyan-500/10 text-cyan-400 text-[8px] rounded px-1 ml-auto shrink-0 uppercase font-bold text-[8px]">REPLY</span>
               </button>
 
               <button
@@ -211,8 +213,8 @@ export default function TeamDashboard() {
                 }`}
               >
                 <MessageSquare size={13} />
-                <span>Clients Chat Helpdesk</span>
-                <span className="bg-emerald-500/10 text-emerald-400 text-[8px] rounded px-1 ml-auto shrink-0 uppercase font-bold">CRM</span>
+                <span>Messages</span>
+                <span className="bg-emerald-500/10 text-emerald-400 text-[8px] rounded px-1 ml-auto shrink-0 uppercase font-bold text-[8px]">CRM</span>
               </button>
             </div>
           </div>
@@ -256,7 +258,7 @@ export default function TeamDashboard() {
                       setIsDragOver(true);
                     }}
                     onDragLeave={() => setIsDragOver(false)}
-                    onDrop={(e) => {
+                    onDrop={async (e) => {
                       e.preventDefault();
                       setIsDragOver(false);
                       const file = e.dataTransfer.files[0];
@@ -264,10 +266,19 @@ export default function TeamDashboard() {
                         const reader = new FileReader();
                         reader.onloadend = () => {
                           setProfileAvatar(reader.result as string);
-                          const state = useStore.getState();
-                          state.updateUserProfile(currentUser.id, { avatar_url: reader.result as string });
                         };
                         reader.readAsDataURL(file);
+
+                        try {
+                          const ext = file.name.split('.').pop() || 'png';
+                          const filePath = `${currentUser.id}_${Date.now()}.${ext}`;
+                          const publicUrl = await uploadFileToBucket("profile-images", filePath, file);
+                          const state = useStore.getState();
+                          await state.updateUserProfile(currentUser.id, { avatar_url: publicUrl });
+                          setProfileAvatar(publicUrl);
+                        } catch (err) {
+                          console.error("Storage uploaded profile-images failed:", err);
+                        }
                       }
                     }}
                     className={`p-4 rounded-xl border border-dashed text-xs cursor-pointer w-full transition-all ${
@@ -281,16 +292,25 @@ export default function TeamDashboard() {
                       const input = document.createElement("input");
                       input.type = "file";
                       input.accept = "image/*";
-                      input.onchange = (e: any) => {
+                      input.onchange = async (e: any) => {
                         const file = e.target.files[0];
                         if (file) {
                           const reader = new FileReader();
                           reader.onloadend = () => {
                             setProfileAvatar(reader.result as string);
-                            const state = useStore.getState();
-                            state.updateUserProfile(currentUser.id, { avatar_url: reader.result as string });
                           };
                           reader.readAsDataURL(file);
+
+                          try {
+                            const ext = file.name.split('.').pop() || 'png';
+                            const filePath = `${currentUser.id}_${Date.now()}.${ext}`;
+                            const publicUrl = await uploadFileToBucket("profile-images", filePath, file);
+                            const state = useStore.getState();
+                            await state.updateUserProfile(currentUser.id, { avatar_url: publicUrl });
+                            setProfileAvatar(publicUrl);
+                          } catch (err) {
+                            console.error("Storage uploaded profile-images failed:", err);
+                          }
                         }
                       };
                       input.click();
@@ -463,6 +483,57 @@ export default function TeamDashboard() {
                       </button>
                     </div>
                   </form>
+                </div>
+
+                {/* Danger Zone: Permanently Delete Account option */}
+                <div className={`col-span-12 p-6 rounded-2xl border border-rose-500/15 space-y-4 ${
+                  theme === "dark" ? "bg-rose-950/5" : "bg-rose-50/20"
+                }`} id="team-profile-danger-zone">
+                  <span className="text-[10px] font-mono tracking-widest text-rose-500 uppercase font-bold block pb-1 border-b border-rose-500/15">Danger Zone (Irreversible actions)</span>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="space-y-1 text-left">
+                      <h4 className="text-xs font-mono font-bold text-rose-500">Permanently Delete Account</h4>
+                      <p className="text-[11px] opacity-75 font-sans font-light leading-relaxed text-slate-400 font-light">
+                        This will permanently erase your secure team credentials, active contributions desk logs, and active credentials sessions immediately.
+                      </p>
+                    </div>
+                    <div className="shrink-0 flex flex-col items-end">
+                      {!showTeamDeleteConfirm ? (
+                        <button
+                          type="button"
+                          onClick={() => setShowTeamDeleteConfirm(true)}
+                          className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-mono text-xs font-bold transition-all cursor-pointer shadow-md shadow-rose-950/10"
+                        >
+                          Delete My Account
+                        </button>
+                      ) : (
+                        <div className="flex items-center space-x-2 bg-rose-500/10 p-2 rounded-xl border border-rose-500/20">
+                          <span className="text-[10px] font-mono font-bold text-rose-400 mr-2">Are you sure?</span>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                const { deleteUserAccount } = useStore.getState();
+                                await deleteUserAccount(currentUser.id);
+                              } catch (err: any) {
+                                console.warn("Failed to delete user:", err);
+                              }
+                            }}
+                            className="px-2.5 py-1 rounded bg-rose-600 hover:bg-rose-505 text-white font-mono text-[10px] font-bold"
+                          >
+                            YES, DELETE
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setShowTeamDeleteConfirm(false)}
+                            className="px-2.5 py-1 rounded bg-slate-700 hover:bg-slate-600 text-white font-mono text-[10px]"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
               </div>

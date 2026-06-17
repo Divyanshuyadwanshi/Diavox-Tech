@@ -34,10 +34,38 @@ interface Particle3D {
   alpha: number;
 }
 
+interface Spark {
+  edgeIndex: number;
+  progress: number;
+  speed: number;
+  color: string;
+}
+
 export default function Interactive3DScene() {
-  const { theme } = useStore();
+  const { theme, cmsContent } = useStore();
+  const sphereConfig = cmsContent?.sphereConfig || {
+    color: "rgba(188, 156, 110, 1)",
+    size: 0.42,
+    labels: [
+      "DISPATCH.STATE: REMOTE",
+      "SYS.LATENCY: 0.45s",
+      "NODES.ACTIVE: 120+",
+      "DB.SECURITY: COMPLAINT",
+      "AI.MODULATOR: G.GEMINI",
+      "CORE.INDEX: TECHNICAL SEO",
+    ],
+    sparkEnabled: true,
+    sparkFrequency: 0.05,
+    rotationSpeed: 1,
+    rings: 5,
+    segments: 12
+  };
+
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // sparks state
+  const sparks = useRef<Spark[]>([]);
 
   // Interaction State
   const [isRotating, setIsRotating] = useState(false);
@@ -94,25 +122,18 @@ export default function Interactive3DScene() {
     ctx.scale(dpr, dpr);
 
     // Geometry parameters
-    const size = Math.min(dimensions.width, dimensions.height) * 0.42;
+    const size = Math.min(dimensions.width, dimensions.height) * sphereConfig.size;
     const vertices: Vertex3D[] = [];
     const edges: Edge[] = [];
     const particles: Particle3D[] = [];
 
-    // 1. Generate vertices of a highly aesthetic dual-frequency geodesic globe
-    const rings = 5;
-    const segments = 12;
-    const labels = [
-      "DISPATCH.STATE: REMOTE",
-      "SYS.LATENCY: 0.45s",
-      "NODES.ACTIVE: 120+",
-      "DB.SECURITY: COMPLAINT",
-      "AI.MODULATOR: G.GEMINI",
-      "CORE.INDEX: TECHNICAL SEO",
-    ];
+    // 1. Generate vertices
+    const rings = sphereConfig.rings || 5;
+    const segments = sphereConfig.segments || 12;
+    const labels = sphereConfig.labels;
 
     // Top vertex
-    vertices.push({ x: 0, y: -size, z: 0, baseX: 0, baseY: -size, baseZ: 0, color: "emerald", size: 4 });
+    vertices.push({ x: 0, y: -size, z: 0, baseX: 0, baseY: -size, baseZ: 0, color: "accent", size: 4 });
     
     for (let r = 1; r < rings; r++) {
       const phi = (r / rings) * Math.PI;
@@ -132,7 +153,7 @@ export default function Interactive3DScene() {
         if (hasLabels && s % 4 === 0) {
           label = labels[s % labels.length];
           pSize = 4.5;
-          color = "purple";
+          color = "accent";
         } else if (s % 3 === 0) {
           color = "emerald";
         }
@@ -146,7 +167,7 @@ export default function Interactive3DScene() {
     }
 
     // Bottom vertex
-    vertices.push({ x: 0, y: size, z: 0, baseX: 0, baseY: size, baseZ: 0, color: "purple", size: 4 });
+    vertices.push({ x: 0, y: size, z: 0, baseX: 0, baseY: size, baseZ: 0, color: "accent", size: 4 });
 
     // Generate edges to form a wireframe lattice
     const lastIdx = vertices.length - 1;
@@ -198,7 +219,7 @@ export default function Interactive3DScene() {
     }
 
     let animationFrameId: number;
-    let autoRotationSpeed = 0.003;
+    let autoRotationSpeed = 0.003 * (sphereConfig.rotationSpeed ?? 1);
     let hoverScale = 0;
 
     // Main animation loop
@@ -411,16 +432,81 @@ export default function Interactive3DScene() {
         ctx.stroke();
       });
 
-      // 7. Draw vertices nodes + glow accents
+      // 4. Update and Draw Sparks if enabled
+      if (sphereConfig.sparkEnabled) {
+        // Spawn new sparks based on frequency
+        if (Math.random() < sphereConfig.sparkFrequency && edges.length > 0) {
+          const edgeIdx = Math.floor(Math.random() * edges.length);
+          sparks.current.push({
+            edgeIndex: edgeIdx,
+            progress: 0,
+            speed: 0.01 + Math.random() * 0.02,
+            color: sphereConfig.color
+          });
+        }
+
+        // Update and draw sparks
+        ctx.save();
+        for (let i = sparks.current.length - 1; i >= 0; i--) {
+          const spark = sparks.current[i];
+          spark.progress += spark.speed;
+
+          if (spark.progress >= 1) {
+            sparks.current.splice(i, 1);
+            continue;
+          }
+
+          const edge = edges[spark.edgeIndex];
+          const p1 = projected[edge.a];
+          const p2 = projected[edge.b];
+
+          if (p1 && p2) {
+            const sx = p1.px + (p2.px - p1.px) * spark.progress;
+            const sy = p1.py + (p2.py - p1.py) * spark.progress;
+
+            // Spark glow
+            const gradient = ctx.createRadialGradient(sx, sy, 0, sx, sy, 4);
+            gradient.addColorStop(0, "white");
+            gradient.addColorStop(0.3, spark.color);
+            gradient.addColorStop(1, "transparent");
+
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.arc(sx, sy, 4, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Spark trail tail
+            ctx.strokeStyle = spark.color;
+            ctx.lineWidth = 2 * (1 - spark.progress);
+            ctx.globalAlpha = 0.6 * (1 - spark.progress);
+            ctx.beginPath();
+            ctx.moveTo(sx, sy);
+            ctx.lineTo(sx - (p2.px - p1.px) * 0.1, sy - (p2.py - p1.py) * 0.1);
+            ctx.stroke();
+          }
+        }
+        ctx.restore();
+      }
+
+      // 5. Draw vertices nodes + glow accents
       projected.forEach((p) => {
         const maxDepth = size * 1.5;
         const zValue = Math.max(0.1, Math.min(1, (maxDepth - p.pz) / (maxDepth * 2)));
         const itemSize = p.orig.size * zValue * 1.15;
 
         // Neon coloring values
-        let baseColor = "rgba(188, 156, 110, ";  // Premium Gold
-        if (p.orig.color === "purple") {
-          baseColor = "rgba(168, 108, 72, ";  // Terracotta Copper
+        let baseColor = sphereConfig.color;
+        if (baseColor.endsWith(", 1)")) {
+           baseColor = baseColor.slice(0, -3);
+        } else if (baseColor.startsWith("rgba")) {
+           // already rgba
+        } else {
+           // simple color
+           baseColor = `rgba(188, 156, 110, `;
+        }
+        
+        if (p.orig.color === "accent") {
+          // use base color
         } else if (p.orig.color === "emerald") {
           baseColor = "rgba(122, 130, 96, ";  // Moss/Sage Green
         }
@@ -480,7 +566,7 @@ export default function Interactive3DScene() {
     return () => {
       cancelAnimationFrame(animationFrameId);
     };
-  }, [dimensions, theme]);
+  }, [dimensions, theme, sphereConfig]);
 
   // Drag interaction math handlers
   const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {

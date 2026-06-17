@@ -81,24 +81,67 @@ CREATE INDEX IF NOT EXISTS idx_profiles_role ON public.profiles(role);
 -- Automatic trigger to sync new Auth users from auth.users (Supabase native Auth)
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS trigger AS $$
+DECLARE
+  v_username VARCHAR(100);
 BEGIN
-  INSERT INTO public.profiles (id, email, name, role, avatar_url, status)
+  -- First, safety-clean/delete any pre-existing profile that has this same email but a different ID
+  -- (e.g. from initial team seeds, metadata stubs, or transient login-bypass accounts)
+  -- to avoid violating the unique constraint on email.
+  DELETE FROM public.profiles WHERE email = new.email AND id <> new.id::text;
+
+  v_username := COALESCE(new.raw_user_meta_data->>'username', split_part(new.email, '@', 1));
+  
+  -- ensure username uniqueness in public.profiles
+  IF EXISTS (SELECT 1 FROM public.profiles WHERE username = v_username AND id <> new.id::text) THEN
+    v_username := v_username || '_' || substring(md5(random()::text) from 1 for 6);
+  END IF;
+
+  INSERT INTO public.profiles (
+    id, 
+    email, 
+    name, 
+    role, 
+    avatar_url, 
+    status, 
+    username, 
+    password_hash, 
+    skills
+  )
   VALUES (
     new.id::text,
     new.email,
     COALESCE(new.raw_user_meta_data->>'name', 'New Account'),
     COALESCE(new.raw_user_meta_data->>'role', 'client'),
-    COALESCE(new.raw_user_meta_data->>'avatar_url', 'https://api.dicebear.com/7.x/initials/svg?seed=' || encode(new.id::bytea, 'hex')),
-    'active'
+    COALESCE(new.raw_user_meta_data->>'avatar_url', 'https://api.dicebear.com/7.x/initials/svg?seed=' || new.email),
+    'active',
+    v_username,
+    new.raw_user_meta_data->>'password_hash',
+    ARRAY['create_requests', 'view_own_projects']
   )
   ON CONFLICT (id) DO UPDATE
   SET email = EXCLUDED.email,
-      name = COALESCE(EXCLUDED.name, public.profiles.name);
+      name = COALESCE(EXCLUDED.name, public.profiles.name),
+      username = COALESCE(public.profiles.username, EXCLUDED.username),
+      password_hash = COALESCE(public.profiles.password_hash, EXCLUDED.password_hash),
+      skills = COALESCE(public.profiles.skills, EXCLUDED.skills);
 
   -- Insert default user role
   INSERT INTO public.user_roles (user_id, role)
   VALUES (new.id::text, COALESCE(new.raw_user_meta_data->>'role', 'client'))
   ON CONFLICT (user_id, role) DO NOTHING;
+
+  -- Insert/upsert into team_members table for team profiles
+  IF COALESCE(new.raw_user_meta_data->>'role', 'client') != 'client' THEN
+    INSERT INTO public.team_members (profile_id, position, department)
+    VALUES (
+      new.id::text,
+      COALESCE(new.raw_user_meta_data->>'position', 'Specialist'),
+      COALESCE(new.raw_user_meta_data->>'department', 'Operations')
+    )
+    ON CONFLICT (profile_id) DO UPDATE
+    SET position = COALESCE(EXCLUDED.position, public.team_members.position),
+        department = COALESCE(EXCLUDED.department, public.team_members.department);
+  END IF;
 
   RETURN new;
 END;

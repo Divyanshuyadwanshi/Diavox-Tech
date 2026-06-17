@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useStore } from "../store";
+import { uploadFileToBucket } from "../supabase";
 import { 
   Compass, Briefcase, FileSignature, Receipt, Bell, MessageSquare, 
   Send, AlertTriangle, Star, CheckCircle, Clock, Check, ChevronRight, X,
@@ -185,7 +186,7 @@ export default function ClientDashboard() {
             }`}
           >
             <User size={15} className="text-cyan-500" />
-            <span>My Profile Portal</span>
+            <span>My Profile</span>
           </button>
 
           <button
@@ -195,7 +196,7 @@ export default function ClientDashboard() {
             }`}
           >
             <Briefcase size={15} />
-            <span>Active Deliveries ({clientProjects.length})</span>
+            <span>Ongoing Orders ({clientProjects.length})</span>
           </button>
 
           <button
@@ -205,7 +206,7 @@ export default function ClientDashboard() {
             }`}
           >
             <Compass size={15} />
-            <span>Quote Requests ({clientRequests.length})</span>
+            <span>Requests ({clientRequests.length})</span>
           </button>
 
           <button
@@ -215,7 +216,7 @@ export default function ClientDashboard() {
             }`}
           >
             <FileSignature size={15} />
-            <span>Digital Contracts ({clientContracts.length})</span>
+            <span>Contracts ({clientContracts.length})</span>
           </button>
 
           <button
@@ -225,7 +226,7 @@ export default function ClientDashboard() {
             }`}
           >
             <Receipt size={15} />
-            <span>Active Plans ({clientPlans.length})</span>
+            <span>Plans ({clientPlans.length})</span>
           </button>
 
           <button
@@ -239,7 +240,7 @@ export default function ClientDashboard() {
           >
             <span className="flex items-center space-x-2.5">
               <MessageSquare size={15} />
-              <span>Project Chat Messenger</span>
+              <span>Messages</span>
             </span>
             {clientNotifications.filter(n => !n.is_read).length > 0 && (
               <span className="px-1.5 py-0.5 rounded-full bg-cyan-500 text-white text-[9px] font-sans">
@@ -255,7 +256,7 @@ export default function ClientDashboard() {
             }`}
           >
             <Star size={15} />
-            <span>Write reviews (CRUD)</span>
+            <span>Reviews</span>
           </button>
         </div>
 
@@ -294,7 +295,7 @@ export default function ClientDashboard() {
                       setIsDragOver(true);
                     }}
                     onDragLeave={() => setIsDragOver(false)}
-                    onDrop={(e) => {
+                    onDrop={async (e) => {
                       e.preventDefault();
                       setIsDragOver(false);
                       const file = e.dataTransfer.files[0];
@@ -302,10 +303,21 @@ export default function ClientDashboard() {
                         const reader = new FileReader();
                         reader.onloadend = () => {
                           setProfileAvatar(reader.result as string);
-                          setAlertText("Image successfully uploaded! Click Save to write changes permanently.");
-                          setTimeout(() => setAlertText(null), 3500);
                         };
                         reader.readAsDataURL(file);
+
+                        try {
+                          const ext = file.name.split('.').pop() || 'png';
+                          const filePath = `${currentUser.id}_${Date.now()}.${ext}`;
+                          const publicUrl = await uploadFileToBucket("profile-images", filePath, file);
+                          setProfileAvatar(publicUrl);
+                          setAlertText("Image uploaded successfully! Submit form below to save.");
+                          setTimeout(() => setAlertText(null), 3500);
+                        } catch (err) {
+                          console.error("Storage uploads failed:", err);
+                          setAlertText("Image upload failed, using local preview.");
+                          setTimeout(() => setAlertText(null), 3500);
+                        }
                       }
                     }}
                     className={`p-4 rounded-xl border border-dashed text-xs cursor-pointer w-full transition-all ${
@@ -319,16 +331,27 @@ export default function ClientDashboard() {
                       const input = document.createElement("input");
                       input.type = "file";
                       input.accept = "image/*";
-                      input.onchange = (e: any) => {
+                      input.onchange = async (e: any) => {
                         const file = e.target.files[0];
                         if (file) {
                           const reader = new FileReader();
                           reader.onloadend = () => {
                             setProfileAvatar(reader.result as string);
-                            setAlertText("Image successfully selected! Save profile to store changes.");
-                            setTimeout(() => setAlertText(null), 3500);
                           };
                           reader.readAsDataURL(file);
+
+                          try {
+                            const ext = file.name.split('.').pop() || 'png';
+                            const filePath = `${currentUser.id}_${Date.now()}.${ext}`;
+                            const publicUrl = await uploadFileToBucket("profile-images", filePath, file);
+                            setProfileAvatar(publicUrl);
+                            setAlertText("Image uploaded successfully! Submit form below to save.");
+                            setTimeout(() => setAlertText(null), 3500);
+                          } catch (err) {
+                            console.error("Storage uploads failed:", err);
+                            setAlertText("Image upload failed, using local preview.");
+                            setTimeout(() => setAlertText(null), 3500);
+                          }
                         }
                       };
                       input.click();
@@ -525,6 +548,43 @@ export default function ClientDashboard() {
                       </button>
                     </div>
                   </form>
+                </div>
+
+                {/* Danger Zone: Permanently Delete Account option */}
+                <div className={`col-span-12 p-6 rounded-2xl border border-rose-500/15 space-y-4 ${
+                  theme === "dark" ? "bg-rose-950/5" : "bg-rose-50/20"
+                }`} id="profile-danger-zone">
+                  <span className="text-[10px] font-mono tracking-widest text-rose-500 uppercase font-bold block pb-1 border-b border-rose-500/15">Danger Zone (Irreversible actions)</span>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="space-y-1 text-left">
+                      <h4 className="text-xs font-mono font-bold text-rose-500">Permanently Delete Account</h4>
+                      <p className="text-[11px] opacity-75 font-sans font-light leading-relaxed text-slate-400">
+                        This will permanently erase your secure profile credentials, records, and active credentials sessions immediately.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setConfirmDialog({
+                          isOpen: true,
+                          title: "Permanently Delete Your Account?",
+                          message: "WARNING: This action is non-reversible. This will immediately erase your records and disconnect your active session from the server.",
+                          onConfirm: async () => {
+                            try {
+                              const { deleteUserAccount } = useStore.getState();
+                              await deleteUserAccount(currentUser.id);
+                            } catch (err: any) {
+                              alert("Failed to delete account: " + err.message);
+                            }
+                            setConfirmDialog(null);
+                          }
+                        });
+                      }}
+                      className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-mono text-xs font-bold transition-all shrink-0 cursor-pointer shadow-md shadow-rose-950/10"
+                    >
+                      Delete My Account
+                    </button>
+                  </div>
                 </div>
 
               </div>

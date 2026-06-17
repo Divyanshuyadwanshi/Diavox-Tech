@@ -21,6 +21,7 @@ import AdminDashboard from "./components/AdminDashboard";
 import ClientDashboard from "./components/ClientDashboard";
 import TeamDashboard from "./components/TeamDashboard";
 import AIAssistantPopup from "./components/AIAssistantPopup";
+import logoUrl from "./assets/images/diavox_tech_logo_1781679695870.jpg";
 import { 
   Phone, Mail, MessageCircle, Laptop, ArrowUp, 
   MapPin, CheckCircle, Globe, Shield, ShieldCheck, Heart,
@@ -109,8 +110,11 @@ export default function App() {
           console.error("Error updating profile in subscription callback:", err);
         }
       } else {
-        // Explicit logout state sync
-        useStore.setState({ currentUser: null });
+        // Explicit logout state sync: preserve bypassed auth states
+        const isBypassed = localStorage.getItem("supabase_login_bypassed") === "true";
+        if (!isBypassed) {
+          useStore.setState({ currentUser: null });
+        }
       }
     });
 
@@ -497,9 +501,12 @@ export default function App() {
           {/* Logo brand */}
           <div className="md:col-span-5 space-y-4" id="footer-brandbox">
             <div className="flex items-center space-x-2.5">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-cyan-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm">
-                {(cmsContent?.footerLogoText || "Diavox").charAt(0).toUpperCase()}
-              </div>
+              <img 
+                src={logoUrl} 
+                alt="Diavox Tech" 
+                className="w-10 h-10 rounded-full object-cover border border-slate-200/20 shadow-sm"
+                referrerPolicy="no-referrer"
+              />
               <span className="font-display font-black text-slate-900 dark:text-white tracking-tight">
                 {cmsContent?.footerLogoText || "Diavox"} <span className="text-cyan-500">{cmsContent?.footerLogoAccent || "Tech"}</span>
               </span>

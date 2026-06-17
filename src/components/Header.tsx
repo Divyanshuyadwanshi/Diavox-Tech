@@ -10,6 +10,7 @@ import {
   MessageSquare, LogOut, Code, Menu, X 
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
+import logoUrl from "../assets/images/diavox_tech_logo_1781679695870.jpg";
 
 interface HeaderProps {
   onOpenAuth: () => void;
@@ -42,12 +43,15 @@ export default function Header({ onOpenAuth, onNavigate, activeSection }: Header
         {/* Logo */}
         <div 
           onClick={() => onNavigate("hero")} 
-          className="flex items-center space-x-2 cursor-pointer group"
+          className="flex items-center space-x-3 cursor-pointer group"
           id="header-logo-container"
         >
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 via-sky-500 to-purple-600 flex items-center justify-center text-white font-display font-bold shadow-lg shadow-cyan-500/10 group-hover:scale-105 transition-transform">
-            {(cmsContent?.headerLogoTitle || "Diavox").charAt(0).toUpperCase()}
-          </div>
+          <img 
+            src={logoUrl} 
+            alt="Diavox Tech" 
+            className="w-12 h-12 rounded-full object-cover border border-slate-200/20 shadow-md group-hover:scale-105 transition-transform"
+            referrerPolicy="no-referrer"
+          />
           <div className="flex flex-col">
             <span className="font-display font-bold text-lg tracking-tight leading-none text-slate-900 dark:text-white">
               {cmsContent?.headerLogoTitle || "Diavox"} <span className="text-cyan-500">{cmsContent?.headerLogoAccent || "Tech"}</span>

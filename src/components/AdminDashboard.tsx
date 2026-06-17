@@ -4,7 +4,8 @@
  */
 
 import React, { useState, useEffect } from "react";
-import { useStore, sha256Sync } from "../store";
+import { useStore } from "../store";
+import { uploadFileToBucket } from "../supabase";
 
 // Import modular backoffice managers
 import AdminBlogs from "./admin/AdminBlogs";
@@ -52,7 +53,7 @@ export default function AdminDashboard() {
     deleteReview, sendMessage, updatePricingOption, updatePricingTier, addPricingOption, deletePricingOption,
     activityLogs, invoices, payments, aiKnowledge, cmsContent, milestones, webhookLogs,
     addActivityLog, addInvoice, updateInvoiceStatus, addPayment, addAiKnowledge, updateAiKnowledge, deleteAiKnowledge,
-    updateCmsContent, addMilestone, payMilestone, addWebhookLog,
+    updateCmsContent, addMilestone, payMilestone, addWebhookLog, updateUserProfile,
     quoteReplies, quoteAttachments, quoteStatusHistory, submitQuoteReply, updateQuoteStatusDetail,
     socialMediaLinks, addSocialMediaLink, updateSocialMediaLink, deleteSocialMediaLink, reorderSocialMediaLinks,
     portfolioItems, privateMessages, teamGroups, teamMessages, projectGroups, aiTrainingFiles, planApprovals,
@@ -344,7 +345,7 @@ export default function AdminDashboard() {
         formattedName + "_" + Math.random().toString(36).substring(4),
         teamRole,
         initialPerms,
-        sha256Sync("DiavoxPass2026!"),
+        "DiavoxPass2026!",
         `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(teamName)}`
       );
 
@@ -489,7 +490,7 @@ export default function AdminDashboard() {
       {/* Grid wrapper - Left sidebar nav, Right full workspace */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start" id="admin-workspace-grid">
         
-        {/* Navigation panel */}
+         {/* Navigation panel */}
         <div className="lg:col-span-3 space-y-1.5 flex flex-col p-4 rounded-2xl bg-slate-900/40 border border-slate-800/60 max-h-[85vh] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-800" id="admin-sidebar-navigation">
           
           <div className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-bold px-3 pt-2 pb-1 text-left">Internal Ops</div>
@@ -501,7 +502,7 @@ export default function AdminDashboard() {
             }`}
           >
             <Shield size={14} className="text-cyan-500" />
-            <span>Profile Desk</span>
+            <span>My Profile</span>
           </button>
 
           <button
@@ -511,7 +512,7 @@ export default function AdminDashboard() {
             }`}
           >
             <BarChart3 size={14} />
-            <span>Metrics & Analytics</span>
+            <span>Reports</span>
           </button>
 
           <div className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-bold px-3 pt-3 pb-1 text-left">Content & Brand</div>
@@ -533,11 +534,11 @@ export default function AdminDashboard() {
             }`}
           >
             <Star size={14} />
-            <span>Portfolio</span>
+            <span>Our Work</span>
           </button>
 
-          {/* CMS: Visible to secret_admin, primary_admin */}
-          {["secret_admin", "primary_admin"].includes(currentUser.role) && (
+          {/* CMS: Visible to secret_admin, primary_admin, secondary_admin, third_admin */}
+          {["secret_admin", "primary_admin", "secondary_admin", "third_admin"].includes(currentUser.role) && (
             <button
               onClick={() => setActiveTab("cms")}
               className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
@@ -545,12 +546,12 @@ export default function AdminDashboard() {
               }`}
             >
               <Layout size={14} />
-              <span>Website CMS Editor</span>
+              <span>Website Content</span>
             </button>
           )}
 
-          {/* Socials: Visible to secret_admin, primary_admin */}
-          {["secret_admin", "primary_admin"].includes(currentUser.role) && (
+          {/* Socials: Visible to secret_admin, primary_admin, secondary_admin, third_admin */}
+          {["secret_admin", "primary_admin", "secondary_admin", "third_admin"].includes(currentUser.role) && (
             <button
               onClick={() => setActiveTab("socials")}
               className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
@@ -558,7 +559,7 @@ export default function AdminDashboard() {
               }`}
             >
               <Globe size={14} />
-              <span>Social Media Links</span>
+              <span>Social Links</span>
             </button>
           )}
 
@@ -571,17 +572,17 @@ export default function AdminDashboard() {
             }`}
           >
             <Briefcase size={14} />
-            <span>Work Projects</span>
+            <span>My Tasks</span>
           </button>
 
           <button
             onClick={() => setActiveTab("ongoing_progress")}
             className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
-              activeTab === "ongoing_progress" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+              activeTab === "ongoing_progress" ? "bg-cyan-950/50 border border-cyan-500/10 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
             }`}
           >
             <CheckCircle2 size={14} className="text-teal-400" />
-            <span>Ongoing Progress</span>
+            <span>Ongoing Orders</span>
           </button>
 
           <div className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-bold px-3 pt-3 pb-1 text-left">Staffing & Intelligence</div>
@@ -593,7 +594,7 @@ export default function AdminDashboard() {
             }`}
           >
             <Users size={14} />
-            <span>Team Profiles</span>
+            <span>Team</span>
           </button>
 
           {/* AI training accessible to secret_admin, primary_admin, secondary_admin, or team_member with permission */}
@@ -605,7 +606,7 @@ export default function AdminDashboard() {
               }`}
             >
               <Cpu size={14} className="text-indigo-400" />
-              <span>AI Training</span>
+              <span>AI Assistant</span>
             </button>
           )}
 
@@ -618,7 +619,7 @@ export default function AdminDashboard() {
             }`}
           >
             <FileSignature size={14} />
-            <span>Quotes & Leads</span>
+            <span>Requests</span>
             {requests.filter(r => r.status === "Submitted").length > 0 && (
               <span className="bg-cyan-500 text-white text-[9px] rounded-full px-1.5 py-0.5 font-bold font-sans">
                 {requests.filter(r => r.status === "Submitted").length}
@@ -673,7 +674,7 @@ export default function AdminDashboard() {
             }`}
           >
             <Tag size={14} />
-            <span>Pricing Config</span>
+            <span>Settings</span>
           </button>
 
           <div className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-bold px-3 pt-3 pb-1 text-left">Communication & Logs</div>
@@ -685,7 +686,7 @@ export default function AdminDashboard() {
             }`}
           >
             <MessageSquare size={14} className="text-indigo-400" />
-            <span>Team Chats</span>
+            <span>Messages</span>
           </button>
 
           <button
@@ -695,7 +696,7 @@ export default function AdminDashboard() {
             }`}
           >
             <Briefcase size={14} className="text-sky-400" />
-            <span>Project Groups</span>
+            <span>Groups</span>
           </button>
 
           {/* Client Chats: Restricted by permissions / RBAC for non-admin team members */}
@@ -708,7 +709,7 @@ export default function AdminDashboard() {
               }`}
             >
               <MessageSquare size={14} className="text-teal-400" />
-              <span>Client Chats</span>
+              <span>Customer Chats</span>
               <span className="bg-emerald-500/10 text-emerald-400 text-[8px] rounded px-1 font-bold font-mono">RBAC</span>
             </button>
           )}
@@ -720,7 +721,7 @@ export default function AdminDashboard() {
             }`}
           >
             <Star size={14} />
-            <span>Reviews Auditing</span>
+            <span>Reviews</span>
           </button>
 
           <button
@@ -730,7 +731,7 @@ export default function AdminDashboard() {
             }`}
           >
             <History size={14} />
-            <span>Activity Logs</span>
+            <span>Alerts</span>
           </button>
         </div>
 
@@ -769,7 +770,7 @@ export default function AdminDashboard() {
                       setIsDragOver(true);
                     }}
                     onDragLeave={() => setIsDragOver(false)}
-                    onDrop={(e) => {
+                    onDrop={async (e) => {
                       e.preventDefault();
                       setIsDragOver(false);
                       const file = e.dataTransfer.files[0];
@@ -781,9 +782,17 @@ export default function AdminDashboard() {
                             isOpen: true,
                             title: "Save Profile Badge Image?",
                             message: "Do you want to apply this badge image permanently?",
-                            onConfirm: () => {
-                              const state = useStore.getState();
-                              state.updateUserProfile(currentUser.id, { avatar_url: reader.result as string });
+                            onConfirm: async () => {
+                              try {
+                                const ext = file.name.split('.').pop() || 'png';
+                                const filePath = `${currentUser.id}_${Date.now()}.${ext}`;
+                                const publicUrl = await uploadFileToBucket("profile-images", filePath, file);
+                                const state = useStore.getState();
+                                await state.updateUserProfile(currentUser.id, { avatar_url: publicUrl });
+                                setProfileAvatar(publicUrl);
+                              } catch (err) {
+                                console.error("Permanent upload failed:", err);
+                              }
                               setConfirmDialog(null);
                             }
                           });
@@ -802,14 +811,22 @@ export default function AdminDashboard() {
                       const input = document.createElement("input");
                       input.type = "file";
                       input.accept = "image/*";
-                      input.onchange = (e: any) => {
+                      input.onchange = async (e: any) => {
                         const file = e.target.files[0];
                         if (file) {
                           const reader = new FileReader();
-                          reader.onloadend = () => {
+                          reader.onloadend = async () => {
                             setProfileAvatar(reader.result as string);
-                            const state = useStore.getState();
-                            state.updateUserProfile(currentUser.id, { avatar_url: reader.result as string });
+                            try {
+                              const ext = file.name.split('.').pop() || 'png';
+                              const filePath = `${currentUser.id}_${Date.now()}.${ext}`;
+                              const publicUrl = await uploadFileToBucket("profile-images", filePath, file);
+                              const state = useStore.getState();
+                              await state.updateUserProfile(currentUser.id, { avatar_url: publicUrl });
+                              setProfileAvatar(publicUrl);
+                            } catch (err) {
+                              console.error("Permanent upload failed:", err);
+                            }
                           };
                           reader.readAsDataURL(file);
                         }
@@ -918,7 +935,14 @@ export default function AdminDashboard() {
                       isOpen: true,
                       title: "Reset Admin Password?",
                       message: "This will update your master security credentials.",
-                      onConfirm: () => {
+                      onConfirm: async () => {
+                        try {
+                          await updateUserProfile(currentUser.id, { password: passNew } as any);
+                          setDashAlert("Your security passkey has been successfully updated in Supabase Auth.");
+                          setTimeout(() => setDashAlert(null), 4000);
+                        } catch (err) {
+                          alert("Failed to reset password: " + err);
+                        }
                         setPassOld("");
                         setPassNew("");
                         setPassConfirm("");
@@ -1897,7 +1921,7 @@ export default function AdminDashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y dark:divide-slate-900 divide-slate-100 font-mono text-xs">
-                      {allUsers.map((member) => (
+                      {allUsers.filter(u => ["secret_admin", "primary_admin", "secondary_admin", "third_admin", "team_member", "developer"].includes(u.role || "")).map((member) => (
                         <tr key={member.id} className="hover:bg-slate-500/5">
                           <td className="p-4 font-bold">
                             <span className="block">{member.name}</span>
@@ -2809,13 +2833,13 @@ export default function AdminDashboard() {
             <AdminAiTraining />
           )}
 
-          {/* TAB 11: WEBSITE CMS CONTROLLER (SECRET & PRIMARY ADMIN) */}
-          {activeTab === "cms" && ["secret_admin", "primary_admin"].includes(currentUser.role) && (
+          {/* TAB 11: WEBSITE CMS CONTROLLER (SECRET & PRIMARY ADMIN, MORE) */}
+          {activeTab === "cms" && ["secret_admin", "primary_admin", "secondary_admin", "third_admin"].includes(currentUser.role) && (
             <AdminCms />
           )}
 
           {/* TAB: SOCIAL MEDIA MANAGEMENT PORTAL */}
-          {activeTab === "socials" && ["secret_admin", "primary_admin"].includes(currentUser.role) && (
+          {activeTab === "socials" && ["secret_admin", "primary_admin", "secondary_admin", "third_admin"].includes(currentUser.role) && (
             <div className="space-y-6" id="admin-tab-socials">
               <h3 className="text-lg font-display font-bold pb-3 border-b dark:border-slate-900 border-slate-100">Social Media Links Settings</h3>
               

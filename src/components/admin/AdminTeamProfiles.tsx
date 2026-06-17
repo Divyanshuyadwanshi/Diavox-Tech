@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useStore, sha256Sync } from "../../store";
+import { useStore } from "../../store";
 import { UserProfile, TeamDepartment, UserRole } from "../../types";
 import { Plus, Edit2, Trash2, Shield, UserPlus, Check, X, KeyRound, Lock, Eye, EyeOff } from "lucide-react";
 
@@ -18,6 +18,8 @@ export default function AdminTeamProfiles() {
   const [tempPassword, setTempPassword] = useState("");
   const [avatarUrl, setAvatarUrl] = useState("");
   const [permissions, setPermissions] = useState<string[]>(["view_assigned_projects", "update_progress"]);
+  const [description, setDescription] = useState("");
+  const [portfolio, setPortfolio] = useState("");
 
   // Local alert indicators
   const [showPasswordText, setShowPasswordText] = useState(false);
@@ -32,6 +34,8 @@ export default function AdminTeamProfiles() {
     setTempPassword("");
     setAvatarUrl("");
     setPermissions(["view_assigned_projects", "update_progress"]);
+    setDescription("");
+    setPortfolio("");
     setIsAdding(false);
     setEditingId(null);
     setFormAlert(null);
@@ -45,7 +49,7 @@ export default function AdminTeamProfiles() {
     }
   };
 
-  const handleOnboardSubmit = (e: React.FormEvent) => {
+  const handleOnboardSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // Check unique username restriction
@@ -60,45 +64,53 @@ export default function AdminTeamProfiles() {
     if (editingId) {
       // Editing details (retaining original username)
       const originalUser = allUsers.find(u => u.id === editingId);
-      const updates: Partial<UserProfile> = {
+      const updates: any = {
         name,
         email,
         role,
         department,
         permissions,
+        description,
+        portfolio,
         avatar_url: avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name)}`
       };
       if (tempPassword) {
-        updates.password_hash = sha256Sync(tempPassword);
+        updates.password = tempPassword;
       }
       updateTeamMember(editingId, updates);
       addActivityLog(currentUser.id, `Updated staff profile of ${name}`, JSON.stringify(originalUser), JSON.stringify(updates));
+      resetForm();
     } else {
       // Creating new staff account
       const securePass = tempPassword || "DiavoxPass2026!";
-      const securePassHash = sha256Sync(securePass);
       const finalAvatar = avatarUrl || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(name)}`;
 
-      addTeamMember(
-        name,
-        "Specialist",
-        department,
-        email,
-        username.trim().toLowerCase(),
-        role,
-        permissions,
-        securePassHash,
-        finalAvatar
-      );
+      try {
+        await addTeamMember(
+          name,
+          "Specialist",
+          department,
+          email,
+          username.trim().toLowerCase(),
+          role,
+          permissions,
+          securePass,
+          finalAvatar,
+          description,
+          portfolio
+        );
 
-      addActivityLog(
-        currentUser.id,
-        `Onboarded new team profile: ${name} (Username: @${username})`,
-        "Account created",
-        `Temporary Credential Secure Password assigned: ${securePass} (SHA-256: ${securePassHash.substring(0, 8)}...)`
-      );
+        addActivityLog(
+          currentUser.id,
+          `Onboarded new team profile: ${name} (Username: @${username})`,
+          "Account created",
+          `Temporary Credential Secure Password assigned: ${securePass}`
+        );
+        resetForm();
+      } catch (err: any) {
+        setFormAlert("Creation Error: " + (err.message || "Failed to create user."));
+      }
     }
-    resetForm();
   };
 
   const triggerEdit = (user: UserProfile) => {
@@ -110,6 +122,8 @@ export default function AdminTeamProfiles() {
     setUsername(user.username || "");
     setAvatarUrl(user.avatar_url || "");
     setPermissions(user.permissions || []);
+    setDescription(user.description || "");
+    setPortfolio(user.portfolio || "");
     setIsAdding(true);
   };
 
@@ -120,6 +134,7 @@ export default function AdminTeamProfiles() {
     secondary_admin: 3,
     third_admin: 2,
     team_member: 1,
+    developer: 1,
     client: 0
   };
 
@@ -153,11 +168,16 @@ export default function AdminTeamProfiles() {
   };
 
   const getManageableUsers = (currentUserRole: UserRole, users: UserProfile[]) => {
-    const maxVal = roleValues[currentUserRole] || 0;
+    const isStaff = (r: string) => ["secret_admin", "primary_admin", "secondary_admin", "third_admin", "team_member", "developer"].includes(r);
+    
     return users.filter(u => {
+      // Show all staff to other staff for visibility
+      if (isStaff(currentUserRole) && isStaff(u.role)) return true;
+      
+      const maxVal = roleValues[currentUserRole] || 0;
       const uVal = roleValues[u.role] || 0;
-      // Only return team/staff accounts below current user's level
-      return uVal > 0 && uVal < maxVal;
+      // Only return team/staff accounts
+      return uVal > 0 && uVal <= maxVal;
     });
   };
 
@@ -248,6 +268,21 @@ export default function AdminTeamProfiles() {
             </div>
 
             <div className="space-y-1">
+              <label className="text-[10px] font-mono uppercase text-slate-400 font-bold">Profile Image URL (Avatar)</label>
+              <input
+                type="url"
+                value={avatarUrl}
+                onChange={(e) => setAvatarUrl(e.target.value)}
+                placeholder="https://api.dicebear.com/7.x/initials/svg?seed=Diavox"
+                className={`w-full p-2.5 rounded-xl text-xs font-sans border focus:ring-1 outline-none transition-all ${
+                  theme === "dark" 
+                    ? "bg-slate-900 border-slate-800 focus:border-cyan-50 w-full text-white" 
+                    : "bg-white border-slate-200 focus:border-cyan-500 text-slate-900"
+                }`}
+              />
+            </div>
+
+            <div className="space-y-1">
               <label className="text-[10px] font-mono uppercase text-slate-400 font-bold">
                 Operational Username {editingId && <span className="text-rose-400 font-normal tracking-tight">(Immutable field)</span>}
               </label>
@@ -329,6 +364,38 @@ export default function AdminTeamProfiles() {
               </select>
             </div>
 
+            <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-mono uppercase text-slate-400 font-bold">Biographic Biography Description</label>
+                <textarea
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="e.g. Diavox system certified development supervisor specializing in elite-scale full-stack delivery modules."
+                  rows={2}
+                  className={`w-full p-2.5 rounded-xl text-xs font-sans border focus:ring-1 outline-none transition-all ${
+                    theme === "dark" 
+                      ? "bg-slate-900 border-slate-800 focus:border-cyan-50 text-white" 
+                      : "bg-white border-slate-200 focus:border-cyan-500 text-slate-900"
+                  }`}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-mono uppercase text-slate-400 font-bold">Portfolio Website Address Link</label>
+                <input
+                  type="url"
+                  value={portfolio}
+                  onChange={(e) => setPortfolio(e.target.value)}
+                  placeholder="https://portfolio.diavox.com/specialist"
+                  className={`w-full p-2.5 rounded-xl text-xs font-sans border focus:ring-1 outline-none transition-all ${
+                    theme === "dark" 
+                      ? "bg-slate-900 border-slate-800 focus:border-cyan-50 text-white" 
+                      : "bg-white border-slate-200 focus:border-cyan-500 text-slate-900"
+                  }`}
+                />
+              </div>
+            </div>
+
             <div className="col-span-1 md:col-span-2 space-y-2 border-t border-slate-850 pt-3">
               <label className="text-[10px] font-mono uppercase text-slate-400 font-bold block">Configure System Clearance Permissions</label>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
@@ -400,9 +467,23 @@ export default function AdminTeamProfiles() {
                   </div>
                 </div>
 
-                <div className="mt-4 space-y-1.5 border-t border-slate-850 pt-3 text-[11px] font-mono text-slate-400">
+                <div className="mt-4 space-y-1.5 border-t border-slate-850 pt-3 text-[11px] font-mono text-slate-400 text-left">
                   <p className="truncate"><span className="text-slate-550">Email:</span> {user.email}</p>
                   <p className="capitalize"><span className="text-slate-550">Dept:</span> {user.department || "General Operations"}</p>
+                  {user.description && (
+                    <p className="text-[10px] text-slate-400 font-sans line-clamp-2 mt-1">
+                      <span className="text-slate-500 font-mono text-[11px]">Bio: </span>
+                      {user.description}
+                    </p>
+                  )}
+                  {user.portfolio && (
+                    <p className="text-[10px] text-cyan-400 font-mono truncate mt-0.5">
+                      <span className="text-slate-500">Portfolio: </span>
+                      <a href={user.portfolio} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                        Link ↗
+                      </a>
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex flex-wrap gap-1 mt-3">

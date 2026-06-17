@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { MessageSquare, X, Send, Bot, ArrowRight, Sparkles, MessageCircle } from "lucide-react";
 import { useStore } from "../store";
+import logoUrl from "../assets/images/diavox_tech_logo_1781679695870.jpg";
 
 export default function AIAssistantPopup() {
   const { theme, currentUser, aiKnowledge, pricingOptions } = useStore();
@@ -145,7 +146,12 @@ export default function AIAssistantPopup() {
           }`}
           title="Diavox AI Support Concierge"
         >
-          <Bot size={24} />
+          <img 
+            src={logoUrl} 
+            alt="AI Assistant" 
+            className="w-8 h-8 rounded-full object-cover border border-white/20 shadow-md"
+            referrerPolicy="no-referrer"
+          />
           {unreadCount > 0 && (
             <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center animate-pulse">
               {unreadCount}
@@ -168,7 +174,12 @@ export default function AIAssistantPopup() {
           <div className="p-4 bg-gradient-to-r from-cyan-600 to-purple-600 text-white flex items-center justify-between">
             <div className="flex items-center space-x-2.5">
               <div className="p-1.5 bg-white/10 rounded-lg">
-                <Bot size={20} className="text-cyan-200 animate-pulse" />
+                <img 
+                  src={logoUrl} 
+                  alt="AI Assistant" 
+                  className="w-6 h-6 rounded-full object-cover border border-white/10"
+                  referrerPolicy="no-referrer"
+                />
               </div>
               <div>
                 <h4 className="text-xs font-black tracking-wider uppercase">Diavox Assistant</h4>
