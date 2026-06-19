@@ -9,9 +9,11 @@ import { uploadFileToBucket } from "../supabase";
 import { 
   Compass, Briefcase, FileSignature, Receipt, Bell, MessageSquare, 
   Send, AlertTriangle, Star, CheckCircle, Clock, Check, ChevronRight, X,
-  User, Key, Upload, Bot, Lock, FileText, Info, Eye, EyeOff
+  User, Key, Upload, Bot, Lock, FileText, Info, Eye, EyeOff, BookOpen, Activity
 } from "lucide-react";
 import { ClientReview, RequestStatus } from "../types";
+import HelpCenter from "./HelpCenter";
+import TimelineCenter from "./TimelineCenter";
 
 export default function ClientDashboard() {
   const { 
@@ -20,7 +22,7 @@ export default function ClientDashboard() {
     quoteReplies, quoteAttachments, quoteStatusHistory, submitQuoteReply
   } = useStore();
 
-  const [activeTab, setActiveTab] = useState<"profile" | "projects" | "contracts" | "plans" | "requests" | "chat" | "reviews">("profile");
+  const [activeTab, setActiveTab] = useState<"profile" | "projects" | "contracts" | "plans" | "requests" | "chat" | "reviews" | "help-kb" | "timeline">("profile");
   
   // Expanded quote request and quote replies inputs
   const [expandedRequestId, setExpandedRequestId] = useState<string | null>(null);
@@ -44,6 +46,12 @@ export default function ClientDashboard() {
     if (preselected === "chat") {
       setActiveTab("chat");
       localStorage.removeItem("preselected_tab");
+    }
+
+    const linkedTab = localStorage.getItem("diavox_client_active_tab");
+    if (linkedTab) {
+      setActiveTab(linkedTab as any);
+      localStorage.removeItem("diavox_client_active_tab");
     }
   }, []);
   
@@ -257,6 +265,26 @@ export default function ClientDashboard() {
           >
             <Star size={15} />
             <span>Reviews</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("help-kb")}
+            className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors ${
+              activeTab === "help-kb" ? "bg-slate-900 text-amber-400 border border-amber-500/10" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+            }`}
+          >
+            <BookOpen size={15} />
+            <span>Knowledge Desk</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("timeline")}
+            className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors ${
+              activeTab === "timeline" ? "bg-slate-900 text-cyan-400 border border-cyan-500/10" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+            }`}
+          >
+            <Activity size={15} />
+            <span>Operations Timeline</span>
           </button>
         </div>
 
@@ -1543,6 +1571,18 @@ Receipt authenticity check: SECURE PORTAL STABLE TRANSACTION
                 </div>
               </div>
 
+            </div>
+          )}
+
+          {activeTab === "help-kb" && (
+            <div className="space-y-6 animate-fade-in" id="client-panel-help-kb animate-fade-in">
+              <HelpCenter />
+            </div>
+          )}
+
+          {activeTab === "timeline" && (
+            <div className="space-y-6 animate-fade-in" id="client-panel-timeline animate-fade-in">
+              <TimelineCenter mode="client" />
             </div>
           )}
 

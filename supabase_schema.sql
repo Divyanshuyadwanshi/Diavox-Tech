@@ -786,6 +786,23 @@ CREATE POLICY "Audit Logs restricted select" ON public.audit_logs FOR SELECT USI
 -- 15. PROVISION BUCKETS AND FILES SYSTEM IN STORAGE SCHEMAS
 --------------------------------------------------------------------------------
 
+--------------------------------------------------------------------------------
+-- 16. PRICING OPTIONS
+--------------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.pricing_options (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    type TEXT NOT NULL,
+    tiers JSONB NOT NULL DEFAULT '[]'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE public.pricing_options ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "pricing_select_all" ON public.pricing_options;
+CREATE POLICY "pricing_select_all" ON public.pricing_options FOR SELECT USING (true);
+
+
 -- Storage selector roles
 DROP POLICY IF EXISTS "Select Public Buckets" ON storage.objects;
 CREATE POLICY "Select Public Buckets" ON storage.objects FOR SELECT USING (

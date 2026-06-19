@@ -10,7 +10,8 @@ import {
   Notification, Contract, ActivePlan, AgencyMetrics, UserRole, RequestStatus, TeamDepartment,
   PricingOption, PricingTierObj, ActivityLog, Invoice, PaymentHistoryItem, AiKnowledgeItem,
   CmsContent, MilestonePayment, QuoteReply, QuoteAttachment, QuoteStatusHistory, Conversation,
-  SocialMediaLink, PortfolioItem, PrivateMessage, TeamGroup, TeamMessage, ProjectGroup, AiTrainingFile, PlanApproval
+  SocialMediaLink, PortfolioItem, PrivateMessage, TeamGroup, TeamMessage, ProjectGroup, AiTrainingFile, PlanApproval,
+  KnowledgeCategory, KnowledgeTag, KnowledgeArticle, SavedArticle, TimelineEvent, UserActivity
 } from "./types";
 
 interface AgencyState {
@@ -132,6 +133,29 @@ interface AgencyState {
   projectGroups: ProjectGroup[];
   aiTrainingFiles: AiTrainingFile[];
   planApprovals: PlanApproval[];
+
+  // Help Center & Activity states
+  knowledgeArticles: KnowledgeArticle[];
+  knowledgeCategories: KnowledgeCategory[];
+  knowledgeTags: KnowledgeTag[];
+  savedArticles: SavedArticle[];
+  timelineEvents: TimelineEvent[];
+  userActivities: UserActivity[];
+
+  // Help Center & Activity action methods
+  fetchHelpCenterData: () => Promise<void>;
+  addKnowledgeArticle: (article: Omit<KnowledgeArticle, "id" | "views_count" | "likes_count" | "created_at">) => Promise<void>;
+  updateKnowledgeArticle: (id: string, updates: Partial<KnowledgeArticle>) => Promise<void>;
+  deleteKnowledgeArticle: (id: string) => Promise<void>;
+  addKnowledgeCategory: (name: string, description?: string) => Promise<void>;
+  deleteKnowledgeCategory: (id: string) => Promise<void>;
+  addKnowledgeTag: (name: string) => Promise<void>;
+  deleteKnowledgeTag: (id: string) => Promise<void>;
+  toggleSavedArticle: (articleId: string) => Promise<void>;
+  incrementArticleViews: (id: string) => Promise<void>;
+  incrementArticleLikes: (id: string) => Promise<void>;
+  addTimelineEvent: (event: Omit<TimelineEvent, "id" | "created_at"> & { user_id?: string; user_name?: string }) => Promise<void>;
+  addUserActivity: (activity: Omit<UserActivity, "id" | "created_at">) => Promise<void>;
 
   // Action methods
   addBlog: (blog: Omit<Blog, "id" | "created_at">) => Promise<void>;
@@ -495,6 +519,22 @@ const DEFAULT_SOCIAL_MEDIA_LINKS: SocialMediaLink[] = [
   { id: "sml-github", platform: "GitHub", url: "https://github.com/diavoxtech", icon: "GitHub", display_order: 6, visible: true, created_at: new Date().toISOString() }
 ];
 
+const secureFetch = async (url: string, options: RequestInit = {}) => {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    const token = session?.access_token;
+    const headers = {
+      "Content-Type": "application/json",
+      ...options.headers,
+      ...(token ? { "Authorization": `Bearer ${token}` } : {})
+    };
+    return fetch(url, { ...options, headers });
+  } catch (err) {
+    console.warn("[ZERO TRUST] Failed to retrieve session JWT for API route:", err);
+    return fetch(url, options);
+  }
+};
+
 // Combine all seeded items with localStorage caching to guarantee persistence. (Save Zustand UI state ONLY, remove local business data caching)
 const loadSavedState = () => {
   if (typeof window === "undefined") return {};
@@ -756,6 +796,81 @@ export const useStore = create<AgencyState>((set, get) => {
     aiTrainingFiles: [],
     planApprovals: [],
     
+    // Help Center & Activity states
+    knowledgeArticles: [
+      {
+        id: "ka-1",
+        title: "Introduction to Diavox Automated Workflows",
+        content: "### Getting Started\n\nWelcome to Diavox Tech! In this guide, we will walk you through how our automatic client portals, invoice flows, and custom micro-databases function together securely under standard encryption systems.\n\n#### Key Milestones:\n- **Beta Layout Phase (30% value realization):** Review the interactive layout and test client portals.\n- **Midway Integration (40% value realization):** Database schemas are populated, and API connectors are activated.\n- **Final Verification (30% value realization):** Complete compliance checks and live hosting initiation.",
+        category_id: "kc-1",
+        tags: ["intro", "workflows", "database"],
+        is_published: true,
+        views_count: 52,
+        likes_count: 12,
+        is_featured: true,
+        created_at: new Date(Date.now() - 3600000 * 24 * 5).toISOString()
+      },
+      {
+        id: "ka-2",
+        title: "How to manage and customize your Dynamic CMS",
+        content: "### Managing Website Content via the Live Admin Console\n\nAdmins can modify headings, brand logos, primary banners, action buttons, and slide presentations directly using our high-utility visual controls.\n\n1. Sign in to the administrative dashboard\n2. Open the **Branding & Layout** segment tabs\n3. Click **Update** to publish changes live instantly",
+        category_id: "kc-2",
+        tags: ["cms", "guide"],
+        is_published: true,
+        views_count: 31,
+        likes_count: 7,
+        is_featured: false,
+        created_at: new Date(Date.now() - 3600000 * 24 * 2).toISOString()
+      },
+      {
+        id: "ka-3",
+        title: "Connecting and Training custom Gemini AI models",
+        content: "### Training Your Custom Assistant\n\nYou can feed plain-text documentation, specialized service spreadsheets, FAQs, or raw service guidelines directly to the AI trainer.\n\n- Supported types: PDF content, FAQ lists, pricing schedules, or blog references.\n- Training files have absolute security and isolation strictly per-workspace.",
+        category_id: "kc-3",
+        tags: ["ai", "gemini", "tutorial"],
+        is_published: true,
+        views_count: 85,
+        likes_count: 24,
+        is_featured: true,
+        created_at: new Date(Date.now() - 3600000 * 24 * 10).toISOString()
+      }
+    ],
+    knowledgeCategories: [
+      { id: "kc-1", name: "Client Workflows", description: "Operational guidelines and engagement workflows" },
+      { id: "kc-2", name: "Dynamic CMS & Systems", description: "Learn how to manage and customize your web presence" },
+      { id: "kc-3", name: "Gemini AI Automation", description: "Supercharging workflows using smart model rules" }
+    ],
+    knowledgeTags: [
+      { id: "kt-1", name: "intro" },
+      { id: "kt-2", name: "workflows" },
+      { id: "kt-3", name: "database" },
+      { id: "kt-4", name: "cms" },
+      { id: "kt-5", name: "guide" },
+      { id: "kt-6", name: "ai" },
+      { id: "kt-7", name: "gemini" },
+      { id: "kt-8", name: "tutorial" }
+    ],
+    savedArticles: [],
+    timelineEvents: [
+      {
+        id: "te-1",
+        event_type: "project_created",
+        title: "Apex E-Commerce Platform project initialized",
+        details: "Development schedule established and linked to standard client workspace.",
+        status: "success",
+        created_at: new Date(Date.now() - 3600000 * 24 * 12).toISOString()
+      },
+      {
+        id: "te-2", // Keep unique fallback or use te-2
+        event_type: "contract_generated",
+        title: "Bespoke development agreement generated",
+        details: "Draft contract compiled by billing admin. Awaiting authorization.",
+        status: "pending",
+        created_at: new Date(Date.now() - 3600000 * 24 * 11).toISOString()
+      }
+    ],
+    userActivities: [],
+    
     // Actions implementation
     toggleTheme: () => {
       set((state) => {
@@ -808,7 +923,7 @@ export const useStore = create<AgencyState>((set, get) => {
         // Fetch Profiles via Secure API to bypass RLS issues
         let profilesList: any[] = [];
         try {
-          const res = await fetch("/api/admin/profiles");
+          const res = await secureFetch("/api/admin/profiles");
           if (res.ok) {
             const data = await res.json();
             profilesList = data.profiles;
@@ -1014,6 +1129,94 @@ export const useStore = create<AgencyState>((set, get) => {
         const { data: aiKnowledgeList } = await supabase.from("ai_knowledge").select("*");
         if (aiKnowledgeList) {
           set({ aiKnowledge: aiKnowledgeList as AiKnowledgeItem[] });
+        }
+
+        // Fetch Pricing Options securely from Backend
+        try {
+          const prRes = await secureFetch("/api/pricing");
+          if (prRes.ok) {
+            const prData = await prRes.json();
+            if (prData.pricing && prData.pricing.length > 0) {
+              set({ pricingOptions: prData.pricing });
+            }
+          }
+        } catch (e) {
+          console.warn("[ZERO TRUST] Failed to sync pricing via API:", e);
+        }
+
+        // Fetch Help Center Articles
+        try {
+          const { data: artList } = await supabase.from("knowledge_base").select("*").order("created_at", { ascending: false });
+          if (artList) {
+            set({ knowledgeArticles: artList as KnowledgeArticle[] });
+          }
+        } catch (e) {
+          console.warn("Bypass knowledge_base sync:", e);
+        }
+
+        // Fetch Help Center Categories
+        try {
+          const { data: catList } = await supabase.from("knowledge_categories").select("*");
+          if (catList) {
+            set({ knowledgeCategories: catList as KnowledgeCategory[] });
+          }
+        } catch (e) {
+          console.warn("Bypass knowledge_categories sync:", e);
+        }
+
+        // Fetch Help Center Tags
+        try {
+          const { data: tagList } = await supabase.from("knowledge_tags").select("*");
+          if (tagList) {
+            set({ knowledgeTags: tagList as KnowledgeTag[] });
+          }
+        } catch (e) {
+          console.warn("Bypass knowledge_tags sync:", e);
+        }
+
+        // Fetch Saved Articles
+        try {
+          const { data: savedList } = await supabase.from("saved_articles").select("*");
+          if (savedList) {
+            set({ savedArticles: savedList as SavedArticle[] });
+          }
+        } catch (e) {
+          console.warn("Bypass saved_articles sync:", e);
+        }
+
+        // Fetch Timeline Events
+        try {
+          const { data: timelineList } = await supabase.from("timeline_events").select("*").order("created_at", { ascending: false });
+          if (timelineList) {
+            set({ timelineEvents: timelineList as TimelineEvent[] });
+          }
+        } catch (e) {
+          console.warn("Bypass timeline_events sync:", e);
+        }
+
+        // Fetch User Activities
+        try {
+          const { data: userActList } = await supabase.from("user_activities").select("*").order("created_at", { ascending: false });
+          if (userActList) {
+            set({ userActivities: userActList as UserActivity[] });
+          }
+        } catch (e) {
+          console.warn("Bypass user_activities sync:", e);
+        }
+
+        // Realtime Subscription for instant timeline updates
+        try {
+          supabase
+            .channel("public-timeline-sync")
+            .on("postgres_changes", { event: "INSERT", schema: "public", table: "timeline_events" }, (payload) => {
+              const newEv = payload.new as TimelineEvent;
+              if (newEv && !get().timelineEvents.some(x => x.id === newEv.id)) {
+                set(state => ({ timelineEvents: [newEv, ...state.timelineEvents] }));
+              }
+            })
+            .subscribe();
+        } catch (err) {
+          console.warn("Unable to initiate Realtime subscription feed:", err);
         }
       } catch (err) {
         console.warn("Supabase database synchronization failed, operating offline.", err);
@@ -1525,9 +1728,8 @@ export const useStore = create<AgencyState>((set, get) => {
     
     addTeamMember: async (name, position, department, email, username, role, permissions, password, avatar_url, description, portfolio) => {
       // 1. Call Secure Onboarding API
-      const response = await fetch("/api/admin/onboard-staff", {
+      const response = await secureFetch("/api/admin/onboard-staff", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, position, department, email, username, role, permissions, password, avatarUrl: avatar_url, description, portfolio })
       });
       
@@ -1563,9 +1765,8 @@ export const useStore = create<AgencyState>((set, get) => {
       if ((updates as any).password) {
         console.log(`[STORE] Initiating password reset for user ID: ${id}`);
         try {
-          const res = await fetch("/api/admin/reset-password", {
+          const res = await secureFetch("/api/admin/reset-password", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ userId: id, newPassword: (updates as any).password })
           });
           console.log(`[STORE] Reset API response status: ${res.status}`);
@@ -1582,9 +1783,8 @@ export const useStore = create<AgencyState>((set, get) => {
       }
 
       try {
-        const updateRes = await fetch("/api/admin/update-profile", {
+        const updateRes = await secureFetch("/api/admin/update-profile", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id, updates })
         });
         if (!updateRes.ok) {
@@ -1634,9 +1834,8 @@ export const useStore = create<AgencyState>((set, get) => {
       if ((updates as any).password) {
         console.log(`[STORE] Initiating self-password update via Admin API for ID: ${id}`);
         try {
-          const res = await fetch("/api/admin/reset-password", {
+          const res = await secureFetch("/api/admin/reset-password", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ userId: id, newPassword: (updates as any).password })
           });
           if (!res.ok) {
@@ -1651,9 +1850,8 @@ export const useStore = create<AgencyState>((set, get) => {
       }
 
       try {
-        const updateRes = await fetch("/api/admin/update-profile", {
+        const updateRes = await secureFetch("/api/admin/update-profile", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id, updates })
         });
         if (!updateRes.ok) {
@@ -1687,19 +1885,18 @@ export const useStore = create<AgencyState>((set, get) => {
       
       set({ allUsers: nextUsers, metrics: updatedMetrics });
       saveStateToCache({ allUsers: nextUsers });
-
+ 
       try {
         await supabase.from("profiles").delete().eq("id", id);
       } catch (err) {
         console.warn("Failed to delete team member from profiles in Supabase:", err);
       }
     },
-
+ 
     deleteUserAccount: async (id) => {
       try {
-        const res = await fetch("/api/admin/delete-account", {
+        const res = await secureFetch("/api/admin/delete-account", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ id })
         });
         if (!res.ok) {
@@ -2009,25 +2206,32 @@ export const useStore = create<AgencyState>((set, get) => {
       saveStateToCache({ ...get(), projects: updated });
     },
 
-    updatePricingOption: (optionId, updates) => {
+    updatePricingOption: async (optionId, updates) => {
       const updated = get().pricingOptions.map(opt => opt.id === optionId ? { ...opt, ...updates } : opt);
       set({ pricingOptions: updated });
       saveStateToCache({ ...get(), pricingOptions: updated });
+      await secureFetch("/api/admin/pricing/update", {
+        method: "POST",
+        body: JSON.stringify({ id: optionId, updates })
+      }).catch(err => console.warn("[ZERO TRUST] Error syncing pricing update:", err));
     },
 
-    updatePricingTier: (optionId, tierId, updates) => {
-      const updated = get().pricingOptions.map(opt => {
-        if (opt.id !== optionId) return opt;
-        return {
-          ...opt,
-          tiers: opt.tiers.map(t => t.id === tierId ? { ...t, ...updates } as any : t)
-        };
-      });
+    updatePricingTier: async (optionId, tierId, updates) => {
+      const optTarget = get().pricingOptions.find(o => o.id === optionId);
+      if (!optTarget) return;
+      const updatedTiers = optTarget.tiers.map(t => t.id === tierId ? { ...t, ...updates } as any : t);
+      
+      const updated = get().pricingOptions.map(opt => opt.id === optionId ? { ...opt, tiers: updatedTiers } : opt);
       set({ pricingOptions: updated });
       saveStateToCache({ ...get(), pricingOptions: updated });
+      
+      await secureFetch("/api/admin/pricing/update", {
+        method: "POST",
+        body: JSON.stringify({ id: optionId, updates: { tiers: updatedTiers } })
+      }).catch(err => console.warn("[ZERO TRUST] Error syncing tier update:", err));
     },
 
-    addPricingOption: (title, type) => {
+    addPricingOption: async (title, type) => {
       const id = "price-" + Math.random().toString(36).substring(4);
       const newOption: PricingOption = {
         id,
@@ -2066,12 +2270,22 @@ export const useStore = create<AgencyState>((set, get) => {
       const updated = [...get().pricingOptions, newOption];
       set({ pricingOptions: updated });
       saveStateToCache({ ...get(), pricingOptions: updated });
+
+      await secureFetch("/api/admin/pricing", {
+        method: "POST",
+        body: JSON.stringify(newOption)
+      }).catch(err => console.warn("[ZERO TRUST] Error adding pricing:", err));
     },
 
-    deletePricingOption: (optionId) => {
+    deletePricingOption: async (optionId) => {
       const updated = get().pricingOptions.filter(opt => opt.id !== optionId);
       set({ pricingOptions: updated });
       saveStateToCache({ ...get(), pricingOptions: updated });
+      
+      await secureFetch("/api/admin/pricing/delete", {
+        method: "POST",
+        body: JSON.stringify({ id: optionId })
+      }).catch(err => console.warn("[ZERO TRUST] Error deleting pricing:", err));
     },
 
     addActivityLog: (userId, action, prev, next) => {
@@ -2410,6 +2624,226 @@ export const useStore = create<AgencyState>((set, get) => {
       
       set({ planApprovals: updatedApprovals, activePlans: updatedPlans });
       saveStateToCache({ ...get(), planApprovals: updatedApprovals, activePlans: updatedPlans });
+    },
+
+    fetchHelpCenterData: async () => {
+      await get().syncSupabase();
+    },
+
+    addKnowledgeArticle: async (article) => {
+      const newArticle: KnowledgeArticle = {
+        id: "ka-" + Math.random().toString(36).substring(4),
+        title: article.title,
+        content: article.content,
+        category_id: article.category_id,
+        category_name: article.category_name,
+        tags: article.tags,
+        image_url: article.image_url,
+        video_url: article.video_url,
+        pdf_url: article.pdf_url,
+        pdf_name: article.pdf_name,
+        is_published: article.is_published,
+        views_count: 0,
+        likes_count: 0,
+        is_featured: article.is_featured || false,
+        created_at: new Date().toISOString()
+      };
+      const updated = [newArticle, ...get().knowledgeArticles];
+      set({ knowledgeArticles: updated });
+      saveStateToCache({ ...get(), knowledgeArticles: updated });
+
+      try {
+        await supabase.from("knowledge_base").insert([newArticle]);
+      } catch (err) {
+        console.warn("Offline knowledge_base bypass insert:", err);
+      }
+    },
+
+    updateKnowledgeArticle: async (id, updates) => {
+      const updated = get().knowledgeArticles.map(art => art.id === id ? { ...art, ...updates, updated_at: new Date().toISOString() } : art);
+      set({ knowledgeArticles: updated });
+      saveStateToCache({ ...get(), knowledgeArticles: updated });
+
+      try {
+        await supabase.from("knowledge_base").update(updates).eq("id", id);
+      } catch (err) {
+        console.warn("Offline knowledge_base bypass update:", err);
+      }
+    },
+
+    deleteKnowledgeArticle: async (id) => {
+      const updated = get().knowledgeArticles.filter(art => art.id !== id);
+      set({ knowledgeArticles: updated });
+      saveStateToCache({ ...get(), knowledgeArticles: updated });
+
+      try {
+        await supabase.from("knowledge_base").delete().eq("id", id);
+      } catch (err) {
+        console.warn("Offline knowledge_base bypass delete:", err);
+      }
+    },
+
+    addKnowledgeCategory: async (name, description) => {
+      const newCat: KnowledgeCategory = {
+        id: "kc-" + Math.random().toString(36).substring(4),
+        name,
+        description,
+        created_at: new Date().toISOString()
+      };
+      const updated = [...get().knowledgeCategories, newCat];
+      set({ knowledgeCategories: updated });
+      saveStateToCache({ ...get(), knowledgeCategories: updated });
+
+      try {
+        await supabase.from("knowledge_categories").insert([newCat]);
+      } catch (err) {
+        console.warn("Offline knowledge_categories bypass insert:", err);
+      }
+    },
+
+    deleteKnowledgeCategory: async (id) => {
+      const updated = get().knowledgeCategories.filter(cat => cat.id !== id);
+      set({ knowledgeCategories: updated });
+      saveStateToCache({ ...get(), knowledgeCategories: updated });
+
+      try {
+        await supabase.from("knowledge_categories").delete().eq("id", id);
+      } catch (err) {
+        console.warn("Offline knowledge_categories bypass delete:", err);
+      }
+    },
+
+    addKnowledgeTag: async (name) => {
+      const newTag: KnowledgeTag = {
+        id: "kt-" + Math.random().toString(36).substring(4),
+        name,
+        created_at: new Date().toISOString()
+      };
+      const updated = [...get().knowledgeTags, newTag];
+      set({ knowledgeTags: updated });
+      saveStateToCache({ ...get(), knowledgeTags: updated });
+
+      try {
+        await supabase.from("knowledge_tags").insert([newTag]);
+      } catch (err) {
+        console.warn("Offline knowledge_tags bypass insert:", err);
+      }
+    },
+
+    deleteKnowledgeTag: async (id) => {
+      const updated = get().knowledgeTags.filter(tag => tag.id !== id);
+      set({ knowledgeTags: updated });
+      saveStateToCache({ ...get(), knowledgeTags: updated });
+
+      try {
+        await supabase.from("knowledge_tags").delete().eq("id", id);
+      } catch (err) {
+        console.warn("Offline knowledge_tags bypass delete:", err);
+      }
+    },
+
+    toggleSavedArticle: async (articleId) => {
+      const me = get().currentUser;
+      if (!me) return;
+      const existing = get().savedArticles.find(sa => sa.user_id === me.id && sa.article_id === articleId);
+      let updated: SavedArticle[] = [];
+      if (existing) {
+        updated = get().savedArticles.filter(sa => sa.id !== existing.id);
+        try {
+          await supabase.from("saved_articles").delete().eq("id", existing.id);
+        } catch (err) {
+          console.warn("Offline saved_articles bypass delete:", err);
+        }
+      } else {
+        const newSaved: SavedArticle = {
+          id: "sa-" + Math.random().toString(36).substring(4),
+          user_id: me.id,
+          article_id: articleId,
+          created_at: new Date().toISOString()
+        };
+        updated = [...get().savedArticles, newSaved];
+        try {
+          await supabase.from("saved_articles").insert([newSaved]);
+        } catch (err) {
+          console.warn("Offline saved_articles bypass insert:", err);
+        }
+      }
+      set({ savedArticles: updated });
+      saveStateToCache({ ...get(), savedArticles: updated });
+    },
+
+    incrementArticleViews: async (id) => {
+      const list = get().knowledgeArticles;
+      const target = list.find(art => art.id === id);
+      if (!target) return;
+      const views = (target.views_count || 0) + 1;
+      const updated = list.map(art => art.id === id ? { ...art, views_count: views } : art);
+      set({ knowledgeArticles: updated });
+      try {
+        await supabase.from("knowledge_base").update({ views_count: views }).eq("id", id);
+      } catch (err) {
+        console.warn("Offline views update bypass:", err);
+      }
+    },
+
+    incrementArticleLikes: async (id) => {
+      const list = get().knowledgeArticles;
+      const target = list.find(art => art.id === id);
+      if (!target) return;
+      const likes = (target.likes_count || 0) + 1;
+      const updated = list.map(art => art.id === id ? { ...art, likes_count: likes } : art);
+      set({ knowledgeArticles: updated });
+      try {
+        await supabase.from("knowledge_base").update({ likes_count: likes }).eq("id", id);
+      } catch (err) {
+        console.warn("Offline likes update bypass:", err);
+      }
+    },
+
+    addTimelineEvent: async (event) => {
+      const newEv: TimelineEvent = {
+        id: "te-" + Math.random().toString(36).substring(4),
+        user_id: event.user_id,
+        user_name: event.user_name || "System",
+        event_type: event.event_type,
+        title: event.title,
+        details: event.details,
+        status: event.status || "success",
+        created_at: new Date().toISOString()
+      };
+      
+      const updated = [newEv, ...get().timelineEvents];
+      set({ timelineEvents: updated });
+      saveStateToCache({ ...get(), timelineEvents: updated });
+
+      try {
+        await supabase.from("timeline_events").insert([newEv]);
+      } catch (err) {
+        console.warn("Offline timeline_events bypass insert:", err);
+      }
+    },
+
+    addUserActivity: async (activity) => {
+      const newAct: UserActivity = {
+        id: "ua-" + Math.random().toString(36).substring(4),
+        user_id: activity.user_id,
+        user_name: activity.user_name,
+        user_role: activity.user_role,
+        action: activity.action,
+        category: activity.category,
+        details: activity.details,
+        created_at: new Date().toISOString()
+      };
+      
+      const updated = [newAct, ...get().userActivities];
+      set({ userActivities: updated });
+      saveStateToCache({ ...get(), userActivities: updated });
+
+      try {
+        await supabase.from("user_activities").insert([newAct]);
+      } catch (err) {
+        console.warn("Offline user_activities bypass insert:", err);
+      }
     }
   };
 });

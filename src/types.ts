@@ -430,6 +430,63 @@ export interface PlanApproval {
   billing_cycle: "Monthly" | "Annually";
   status: "Pending Approval" | "Approved" | "Rejected";
   created_at: string;
+}export interface KnowledgeCategory {
+  id: string;
+  name: string;
+  description?: string;
+  created_at?: string;
 }
 
+export interface KnowledgeTag {
+  id: string;
+  name: string;
+  created_at?: string;
+}
 
+export interface KnowledgeArticle {
+  id: string;
+  title: string;
+  content: string;
+  category_id?: string;
+  category_name?: string;
+  tags?: string[];
+  image_url?: string;
+  video_url?: string;
+  pdf_url?: string;
+  pdf_name?: string;
+  is_published: boolean;
+  views_count: number;
+  likes_count: number;
+  is_featured: boolean;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface SavedArticle {
+  id: string;
+  user_id: string;
+  article_id: string;
+  created_at: string;
+}
+
+export interface TimelineEvent {
+  id: string;
+  user_id?: string;
+  user_name?: string;
+  event_type: string;
+  title: string;
+  details?: string;
+  status?: string;
+  created_at: string;
+}
+
+export interface UserActivity {
+  id: string;
+  user_id: string;
+  user_name: string;
+  user_role: string;
+  action: string;
+  category: string;
+  details?: string;
+  created_at: string;
+}

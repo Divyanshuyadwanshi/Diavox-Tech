@@ -21,6 +21,7 @@ import AdminDashboard from "./components/AdminDashboard";
 import ClientDashboard from "./components/ClientDashboard";
 import TeamDashboard from "./components/TeamDashboard";
 import AIAssistantPopup from "./components/AIAssistantPopup";
+import GlobalCommandCenter from "./components/GlobalCommandCenter";
 import logoUrl from "./assets/images/diavox_tech_logo_1781679695870.jpg";
 import { 
   Phone, Mail, MessageCircle, Laptop, ArrowUp, 
@@ -46,11 +47,26 @@ export default function App() {
   const [activeSection, setActiveSection] = useState<string>("hero");
   const [authModalOpen, setAuthModalOpen] = useState<boolean>(false);
   const [showScrollTop, setShowScrollTop] = useState<boolean>(false);
+  const [commandCenterOpen, setCommandCenterOpen] = useState<boolean>(false);
 
   useEffect(() => {
     // Sync review data from Supabase if tables exist
     syncSupabase();
-    
+
+    // Hotkey listener for advanced command center
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setCommandCenterOpen(prev => !prev);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
+
+  useEffect(() => {
     // Theme setup initial
     const root = document.documentElement;
     if (theme === "dark") {
@@ -623,6 +639,52 @@ export default function App() {
 
       {/* Global AI Assistant Floating Popup */}
       <AIAssistantPopup />
+
+      {/* Global Advanced Command Center Modal Overlay */}
+      <GlobalCommandCenter 
+        isOpen={commandCenterOpen}
+        onClose={() => setCommandCenterOpen(false)}
+        onNavigate={(section, params) => {
+          if (!currentUser) {
+            setAuthModalOpen(true);
+            return;
+          }
+          if (section === "help") {
+            if (["primary_admin", "secondary_admin", "secret_admin", "third_admin"].includes(currentUser.role)) {
+              setActiveSection("admin-dash");
+              localStorage.setItem("diavox_admin_active_tab", "help-kb");
+            } else if (currentUser.role === "team_member") {
+              setActiveSection("team-dash");
+            } else {
+              setActiveSection("client-dash");
+              localStorage.setItem("diavox_client_active_tab", "help-kb");
+            }
+          } else if (["projects", "quotes", "billing", "chats"].includes(section)) {
+            if (["primary_admin", "secondary_admin", "secret_admin", "third_admin"].includes(currentUser.role)) {
+              setActiveSection("admin-dash");
+              if (section === "projects") localStorage.setItem("diavox_admin_active_tab", "projects");
+              if (section === "billing") localStorage.setItem("diavox_admin_active_tab", "payments");
+              if (section === "quotes") localStorage.setItem("diavox_admin_active_tab", "leads");
+              if (section === "chats") localStorage.setItem("diavox_admin_active_tab", "chats");
+            } else if (currentUser.role === "team_member") {
+              setActiveSection("team-dash");
+            } else {
+              setActiveSection("client-dash");
+              if (section === "projects") localStorage.setItem("diavox_client_active_tab", "workspace");
+              if (section === "billing") localStorage.setItem("diavox_client_active_tab", "billing");
+              if (section === "quotes") localStorage.setItem("diavox_client_active_tab", "quote");
+              if (section === "chats") localStorage.setItem("diavox_client_active_tab", "chat");
+            }
+          } else if (section === "portfolio") {
+            handleNavigate("portfolio");
+          } else if (section === "people") {
+            if (["primary_admin", "secondary_admin", "secret_admin", "third_admin"].includes(currentUser.role)) {
+              setActiveSection("admin-dash");
+              localStorage.setItem("diavox_admin_active_tab", "team");
+            }
+          }
+        }}
+      />
 
     </div>
   );

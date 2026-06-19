@@ -21,13 +21,15 @@ import AdminAiTraining from "./admin/AdminAiTraining";
 import AdminCms from "./admin/AdminCms";
 import AdminTeamChats from "./admin/AdminTeamChats";
 import AdminProjectGroups from "./admin/AdminProjectGroups";
+import HelpCenter from "./HelpCenter";
+import TimelineCenter from "./TimelineCenter";
 
 import { 
   BarChart3, Users, Briefcase, FileSignature, CheckCircle2, 
   Trash2, Plus, Edit2, Lock, Shield, UserCheck, AlertCircle, 
   MessageSquare, LockKeyhole, Mail, UserPlus, Star, Save, Tag, DollarSign, PlusCircle,
   History, CreditCard, Cpu, Layout, Eye, Download, Search, FileText, Filter,
-  ChevronUp, ChevronDown, GripVertical, EyeOff, Globe,
+  ChevronUp, ChevronDown, GripVertical, EyeOff, Globe, Clock,
   Facebook, Instagram, Linkedin, Twitter, Youtube, Github, HelpCircle
 } from "lucide-react";
 import { TeamDepartment, UserRole, RequestStatus, UserProfile, Message, PricingOption, PricingTierObj } from "../types";
@@ -84,6 +86,8 @@ export default function AdminDashboard() {
     | "team_chats"
     | "project_groups"
     | "chats"
+    | "help-kb"
+    | "timeline"
   >("profile");
 
   // Local state for searching/filtering quote requests
@@ -234,6 +238,12 @@ export default function AdminDashboard() {
     if (preselected === "chat") {
       setActiveTab("chats");
       localStorage.removeItem("preselected_tab");
+    }
+
+    const linkedTab = localStorage.getItem("diavox_admin_active_tab");
+    if (linkedTab) {
+      setActiveTab(linkedTab as any);
+      localStorage.removeItem("diavox_admin_active_tab");
     }
   }, []);
 
@@ -732,6 +742,26 @@ export default function AdminDashboard() {
           >
             <History size={14} />
             <span>Alerts</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("help-kb")}
+            className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+              activeTab === "help-kb" ? "bg-cyan-950/50 border border-cyan-500/20 text-amber-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+            }`}
+          >
+            <HelpCircle size={14} className="text-amber-500" />
+            <span>Knowledge Desk</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab("timeline")}
+            className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+              activeTab === "timeline" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+            }`}
+          >
+            <Clock size={14} className="text-cyan-400" />
+            <span>Operations Timeline</span>
           </button>
         </div>
 
@@ -2587,6 +2617,18 @@ export default function AdminDashboard() {
                   </tbody>
                 </table>
               </div>
+            </div>
+          )}
+
+          {activeTab === "help-kb" && (
+            <div className="space-y-6 animate-fade-in text-left" id="admin-tab-help-kb animate-fade-in">
+              <HelpCenter />
+            </div>
+          )}
+
+          {activeTab === "timeline" && (
+            <div className="space-y-6 animate-fade-in text-left" id="admin-tab-timeline animate-fade-in">
+              <TimelineCenter mode="admin" />
             </div>
           )}
 
