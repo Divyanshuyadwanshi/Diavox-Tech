@@ -28,6 +28,8 @@ export default function Reviews({ onOpenAuth, preview, onNavigate }: ReviewsProp
     ? (approvedReviews.reduce((acc, curr) => acc + curr.rating, 0) / approvedReviews.length).toFixed(1)
     : "5.0";
 
+  const [errorMsg, setErrorMsg] = useState<string>("");
+
   const handleComposeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) {
@@ -36,22 +38,28 @@ export default function Reviews({ onOpenAuth, preview, onNavigate }: ReviewsProp
     }
     
     if (!text.trim()) return;
+    setErrorMsg("");
 
-    await addReview({
-      client_id: currentUser.id,
-      client_name: currentUser.name,
-      client_avatar: currentUser.avatar_url || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(currentUser.name)}`,
-      rating,
-      review_text: text,
-      service_used: service,
-      status: "Pending", // Needs admin approval to display on public feed
-      is_featured: false
-    });
+    try {
+      await addReview({
+        client_id: currentUser.id,
+        client_name: currentUser.name,
+        client_avatar: currentUser.avatar_url || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(currentUser.name)}`,
+        rating,
+        review_text: text,
+        service_used: service,
+        status: "Pending", // Needs admin approval to display on public feed
+        is_featured: false
+      });
 
-    setText("");
-    setIsFeatureMsg(true);
-    setComposerOpen(false);
-    setTimeout(() => setIsFeatureMsg(false), 4000);
+      setText("");
+      setIsFeatureMsg(true);
+      setComposerOpen(false);
+      setTimeout(() => setIsFeatureMsg(false), 4000);
+    } catch (err: any) {
+      console.error("Review submission failed:", err);
+      setErrorMsg(err.message || "Failed to submit testimonial. Please try again.");
+    }
   };
 
   return (
@@ -112,6 +120,16 @@ export default function Reviews({ onOpenAuth, preview, onNavigate }: ReviewsProp
             <div className="text-xs font-mono">
               <p className="font-bold uppercase tracking-wider">Review Submitted Successfully</p>
               <p className="opacity-80 mt-1">Thank you! Your feedback has been queued for Diavox Team review and approval.</p>
+            </div>
+          </div>
+        )}
+
+        {errorMsg && (
+          <div className="mb-8 p-4 rounded-xl bg-rose-950/40 text-rose-400 border border-rose-800/60 flex items-start space-x-3 max-w-xl animate-fade-in">
+            <ShieldAlert className="shrink-0 text-rose-400 mt-1" size={18} />
+            <div className="text-xs font-mono">
+              <p className="font-bold uppercase tracking-wider">Submission Failed</p>
+              <p className="opacity-80 mt-1">{errorMsg}</p>
             </div>
           </div>
         )}

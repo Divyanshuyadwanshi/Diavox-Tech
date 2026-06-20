@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS public.plans (
   price_monthly NUMERIC(10,2) NOT NULL,
   price_yearly NUMERIC(10,2) NOT NULL,
   features TEXT[] NOT NULL,
+  is_popular BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

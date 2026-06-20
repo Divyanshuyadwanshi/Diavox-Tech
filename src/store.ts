@@ -165,6 +165,7 @@ interface AgencyState {
   addPortfolioItem: (item: Omit<PortfolioItem, "id" | "created_at">) => Promise<void>;
   updatePortfolioItem: (id: string, updates: Partial<PortfolioItem>) => Promise<void>;
   deletePortfolioItem: (id: string) => Promise<void>;
+  fetchPortfolio: () => Promise<void>;
 
   sendPrivateMessage: (senderId: string, senderName: string, recipientId: string, text: string) => void;
   sendTeamMessage: (groupId: string, senderId: string, senderName: string, senderRole: string, text: string, file_url?: string, file_name?: string, is_image?: boolean) => void;
@@ -177,7 +178,10 @@ interface AgencyState {
   deleteAiTrainingFile: (id: string) => void;
 
   submitPlanApproval: (clientId: string, clientName: string, planName: "Starter" | "Professional" | "Enterprise", price: string, billingCycle: "Monthly" | "Annually") => void;
-  updatePlanApprovalStatus: (id: string, status: "Approved" | "Rejected") => void;
+  updatePlanApprovalStatus: (id: string, status: "Approved" | "Rejected") => Promise<void>;
+  addActivePlan: (plan: Omit<ActivePlan, "id">) => Promise<void>;
+  updateActivePlan: (id: string, updates: Partial<ActivePlan>) => Promise<void>;
+  deleteActivePlan: (id: string) => Promise<void>;
 }
 
 // Key initial assets seeds
@@ -522,7 +526,16 @@ const DEFAULT_SOCIAL_MEDIA_LINKS: SocialMediaLink[] = [
 const secureFetch = async (url: string, options: RequestInit = {}) => {
   try {
     const { data: { session } } = await supabase.auth.getSession();
-    const token = session?.access_token;
+    let token = session?.access_token;
+
+    // Support admin-secret bypass credentials if active
+    try {
+      const activeUser = useStore?.getState()?.currentUser;
+      if (activeUser && activeUser.id === "admin-secret") {
+        token = "admin-secret-bypass-token";
+      }
+    } catch (_) {}
+
     const headers = {
       "Content-Type": "application/json",
       ...options.headers,
@@ -557,6 +570,22 @@ const saveStateToCache = (state: Partial<AgencyState>) => {
   } catch (err) {
     console.error("Cache persistence failed:", err);
   }
+};
+
+const mapDbReviewToClientReview = (row: any): ClientReview => {
+  return {
+    id: row.id,
+    client_id: row.client_id || "",
+    client_name: row.client_name || row.name || "Anonymous",
+    client_avatar: row.client_avatar || row.avatar_url || "",
+    rating: row.rating || 5,
+    review_text: row.review_text || "",
+    service_used: row.service_used || row.role || "Website Development",
+    status: row.status || "Pending",
+    is_featured: row.featured !== undefined ? row.featured : (row.is_featured || false),
+    reply_text: row.admin_reply || row.reply_text || "",
+    date: row.date || new Date().toISOString().split("T")[0]
+  };
 };
 
 export const useStore = create<AgencyState>((set, get) => {
@@ -601,7 +630,7 @@ export const useStore = create<AgencyState>((set, get) => {
     theme: cached.theme || "dark",
     
     // Dynamic Pricing Dataset
-    pricingOptions: [],
+    pricingOptions: INITIAL_PRICING,
 
     activityLogs: [],
     invoices: [],
@@ -907,7 +936,8 @@ export const useStore = create<AgencyState>((set, get) => {
                   department: dbProf.department as TeamDepartment,
                   avatar_url: dbProf.avatar_url,
                   username: dbProf.username,
-                  permissions: dbProf.skills || dbProf.permissions || []
+                  permissions: dbProf.skills || dbProf.permissions || [],
+                  status: dbProf.status
                 };
                 set({ currentUser: synchronizedUser });
                 saveStateToCache({ currentUser: synchronizedUser });
@@ -1039,19 +1069,51 @@ export const useStore = create<AgencyState>((set, get) => {
         // Fetch Reviews
         const { data: revList } = await supabase.from("reviews").select("*");
         if (revList) {
-          set({ reviews: revList as ClientReview[] });
+          const mappedReviews: ClientReview[] = revList.map((row: any) => ({
+            id: row.id,
+            client_id: row.client_id || "",
+            client_name: row.client_name || row.name || "Anonymous",
+            client_avatar: row.client_avatar || row.avatar_url || "",
+            rating: row.rating || 5,
+            review_text: row.review_text || "",
+            service_used: row.service_used || row.role || "Website Development",
+            status: row.status || "Pending",
+            is_featured: row.featured !== undefined ? row.featured : (row.is_featured || false),
+            reply_text: row.admin_reply || row.reply_text || "",
+            date: row.date || new Date().toISOString().split("T")[0]
+          }));
+          set({ reviews: mappedReviews });
         }
 
-        // Fetch Blogs
-        const { data: blogsList } = await supabase.from("blogs").select("*");
-        if (blogsList) {
-          set({ blogs: blogsList as Blog[] });
+        // Fetch Blogs securely via API
+        try {
+          const blogsRes = await secureFetch("/api/blogs");
+          if (blogsRes.ok) {
+            const blogsData = await blogsRes.json();
+            if (blogsData.blogs) {
+              set({ blogs: blogsData.blogs as Blog[] });
+            }
+          }
+        } catch (e) {
+          console.warn("Failed to fetch blogs securely, fetching direct fallback:", e);
+          const { data: blogsList } = await supabase.from("blogs").select("*");
+          if (blogsList) {
+            set({ blogs: blogsList as Blog[] });
+          }
         }
 
-        // Fetch Messages
-        const { data: messagesList } = await supabase.from("messages").select("*").order("created_at", { ascending: true });
-        if (messagesList) {
-          set({ messages: messagesList as Message[] });
+        // Fetch Messages with Zero-Trust permission checks
+        const currentUserObj = get().currentUser || cached?.currentUser;
+        const isTeamUser = currentUserObj && currentUserObj.role === "team_member";
+        const hasChatPermission = !isTeamUser || (currentUserObj?.permissions?.includes("contact_clients") === true);
+
+        if (hasChatPermission) {
+          const { data: messagesList } = await supabase.from("messages").select("*").order("created_at", { ascending: true });
+          if (messagesList) {
+            set({ messages: messagesList as Message[] });
+          }
+        } else {
+          set({ messages: [] });
         }
 
         // Fetch Team Groups
@@ -1084,7 +1146,25 @@ export const useStore = create<AgencyState>((set, get) => {
           set({ planApprovals: planApprovalsList as PlanApproval[] });
         }
 
-        // Social links
+        // Social links and CMS config
+        try {
+          // Fetch CMS securely first
+          const cmsRes = await secureFetch("/api/cms");
+          if (cmsRes.ok) {
+            const cmsData = await cmsRes.json();
+            if (cmsData.cms) {
+              set(state => ({
+                cmsContent: {
+                  ...state.cmsContent,
+                  ...cmsData.cms
+                }
+              }));
+            }
+          }
+        } catch (err) {
+          console.warn("[ZERO TRUST] CMS secure API fetch warning:", err);
+        }
+
         const { data: linksList } = await supabase.from("social_media_links").select("*").order("display_order", { ascending: true });
         if (linksList && linksList.length > 0) {
           const cmsConfigRow = linksList.find(l => l.id === "cms_app_state");
@@ -1107,10 +1187,21 @@ export const useStore = create<AgencyState>((set, get) => {
           set({ socialMediaLinks: actualSocialLinks as SocialMediaLink[] });
         }
 
-        // Portfolio items
+        // Portfolio items with enterprise schema field mapping
         const { data: portfolioItemsList } = await supabase.from("portfolio_items").select("*");
         if (portfolioItemsList) {
-          set({ portfolioItems: portfolioItemsList as PortfolioItem[] });
+          const mapped = portfolioItemsList.map((item: any) => ({
+            id: item.id,
+            title: item.title,
+            description: item.description,
+            category: item.category,
+            image_url: item.image_url || item.cover_image || "https://images.unsplash.com/photo-1547082299-de196ea013d6?q=80&w=800",
+            is_featured: item.is_featured !== undefined ? item.is_featured : (item.featured ?? true),
+            live_url: item.live_url || item.demo_url || "",
+            created_at: item.created_at || new Date().toISOString(),
+            tags: item.tags || []
+          }));
+          set({ portfolioItems: mapped as PortfolioItem[] });
         }
 
         // Notifications
@@ -1218,6 +1309,178 @@ export const useStore = create<AgencyState>((set, get) => {
         } catch (err) {
           console.warn("Unable to initiate Realtime subscription feed:", err);
         }
+
+        // Realtime Subscription for instant CMS changes
+        try {
+          supabase
+            .channel("cms-state-sync")
+            .on("postgres_changes", { event: "UPDATE", schema: "public", table: "social_media_links", filter: "id=eq.cms_app_state" }, (payload) => {
+              const row = payload.new as any;
+              if (row && row.url) {
+                try {
+                  const parsed = JSON.parse(row.url);
+                  if (parsed) {
+                    set(state => ({
+                      cmsContent: {
+                        ...state.cmsContent,
+                        ...parsed
+                      }
+                    }));
+                  }
+                } catch (e) {
+                  console.warn("Realtime CMS parsed fail:", e);
+                }
+              }
+            })
+            .subscribe();
+        } catch (e) {}
+
+        // Realtime Subscription for instant pricing alterations
+        try {
+          supabase
+            .channel("pricing-options-sync")
+            .on("postgres_changes", { event: "*", schema: "public", table: "pricing_options" }, async () => {
+              try {
+                const prRes = await secureFetch("/api/pricing");
+                if (prRes.ok) {
+                  const prData = await prRes.json();
+                  if (prData.pricing && prData.pricing.length > 0) {
+                    set({ pricingOptions: prData.pricing });
+                  }
+                }
+              } catch (err) {}
+            })
+            .subscribe();
+        } catch (e) {}
+
+        // Realtime Subscription for instant portfolio adjustments
+        try {
+          supabase
+            .channel("portfolio-items-sync")
+            .on("postgres_changes", { event: "*", schema: "public", table: "portfolio_items" }, async () => {
+              try {
+                const { data } = await supabase.from("portfolio_items").select("*");
+                if (data) {
+                  const mapped = data.map((item: any) => ({
+                    id: item.id,
+                    title: item.title,
+                    description: item.description,
+                    category: item.category,
+                    image_url: item.image_url || item.cover_image || "https://images.unsplash.com/photo-1547082299-de196ea013d6?q=80&w=800",
+                    is_featured: item.is_featured !== undefined ? item.is_featured : (item.featured ?? true),
+                    live_url: item.live_url || item.demo_url || "",
+                    created_at: item.created_at || new Date().toISOString(),
+                    tags: item.tags || []
+                  }));
+                  set({ portfolioItems: mapped as PortfolioItem[] });
+                }
+              } catch (err) {}
+            })
+            .subscribe();
+        } catch (e) {}
+
+        // Realtime Subscription for instant blog updates
+        try {
+          supabase
+            .channel("blogs-sync")
+            .on("postgres_changes", { event: "*", schema: "public", table: "blogs" }, async () => {
+              try {
+                const bRes = await secureFetch("/api/blogs");
+                if (bRes.ok) {
+                  const bData = await bRes.json();
+                  if (bData.blogs) {
+                    set({ blogs: bData.blogs as Blog[] });
+                  }
+                }
+              } catch (err) {}
+            })
+            .subscribe();
+        } catch (e) {}
+
+        // Realtime Subscription for instant active plans updates
+        try {
+          supabase
+            .channel("active-plans-sync")
+            .on("postgres_changes", { event: "*", schema: "public", table: "active_plans" }, async () => {
+              try {
+                const { data } = await supabase.from("active_plans").select("*");
+                if (data) {
+                  set({ activePlans: data as ActivePlan[] });
+                }
+              } catch (err) {}
+            })
+            .subscribe();
+        } catch (e) {}
+
+        // Realtime Subscription for instant reviews updates
+        try {
+          supabase
+            .channel("reviews-sync")
+            .on("postgres_changes", { event: "*", schema: "public", table: "reviews" }, async () => {
+              try {
+                const { data: revList } = await supabase.from("reviews").select("*");
+                if (revList) {
+                  const mappedReviews: ClientReview[] = revList.map((row: any) => ({
+                    id: row.id,
+                    client_id: row.client_id || "",
+                    client_name: row.client_name || row.name || "Anonymous",
+                    client_avatar: row.client_avatar || row.avatar_url || "",
+                    rating: row.rating || 5,
+                    review_text: row.review_text || "",
+                    service_used: row.service_used || row.role || "Website Development",
+                    status: row.status || "Pending",
+                    is_featured: row.featured !== undefined ? row.featured : (row.is_featured || false),
+                    reply_text: row.admin_reply || row.reply_text || "",
+                    date: row.date || new Date().toISOString().split("T")[0]
+                  }));
+                  set({ reviews: mappedReviews });
+                }
+              } catch (err) {}
+            })
+            .subscribe();
+        } catch (e) {}
+
+        // Realtime Subscription for instant quote requests updates
+        try {
+          supabase
+            .channel("quote-requests-sync")
+            .on("postgres_changes", { event: "*", schema: "public", table: "quote_requests" }, async () => {
+              try {
+                const { data: requestsList } = await supabase.from("quote_requests").select("*");
+                if (requestsList) {
+                  const sorted = (requestsList as ServiceRequest[]).sort((a, b) => {
+                    return new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime();
+                  });
+                  set({ requests: sorted });
+                }
+              } catch (err) {}
+            })
+            .subscribe();
+        } catch (e) {}
+
+        // Realtime Subscription for instant chat messages updates
+        try {
+          supabase
+            .channel("messages-sync")
+            .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, async () => {
+              try {
+                const currentUserObj = get().currentUser || cached?.currentUser;
+                const isTeamUser = currentUserObj && currentUserObj.role === "team_member";
+                const hasChatPermission = !isTeamUser || (currentUserObj?.permissions?.includes("contact_clients") === true);
+
+                if (hasChatPermission) {
+                  const { data: messagesList } = await supabase.from("messages").select("*").order("created_at", { ascending: true });
+                  if (messagesList) {
+                    set({ messages: messagesList as Message[] });
+                  }
+                } else {
+                  set({ messages: [] });
+                }
+              } catch (err) {}
+            })
+            .subscribe();
+        } catch (e) {}
+
       } catch (err) {
         console.warn("Supabase database synchronization failed, operating offline.", err);
       }
@@ -1233,48 +1496,78 @@ export const useStore = create<AgencyState>((set, get) => {
         visible: true,
         created_at: new Date().toISOString()
       };
-      const updated = [...get().socialMediaLinks, newLink];
-      set({ socialMediaLinks: updated });
-      saveStateToCache({ socialMediaLinks: updated });
       try {
-        await supabase.from("social_media_links").insert([newLink]);
-      } catch (err) {
-        console.warn("Failed to insert to Supabase social_media_links, saved locally:", err);
+        const res = await secureFetch("/api/admin/social-links", {
+          method: "POST",
+          body: JSON.stringify({ link: newLink })
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || "Failed to create social link");
+        }
+        const updated = [...get().socialMediaLinks, newLink];
+        set({ socialMediaLinks: updated });
+        saveStateToCache({ ...get(), socialMediaLinks: updated });
+      } catch (err: any) {
+        console.error("[ZERO TRUST ERROR] Failed to insert to Supabase social_media_links securely:", err.message);
+        throw err;
       }
     },
 
     updateSocialMediaLink: async (id, updates) => {
-      const updated = get().socialMediaLinks.map(l => l.id === id ? { ...l, ...updates } : l);
-      set({ socialMediaLinks: updated });
-      saveStateToCache({ socialMediaLinks: updated });
       try {
-        await supabase.from("social_media_links").update(updates).eq("id", id);
-      } catch (err) {
-        console.warn("Failed to update Supabase social_media_links, saved locally:", err);
+        const res = await secureFetch("/api/admin/social-links/update", {
+          method: "POST",
+          body: JSON.stringify({ id, updates })
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || "Failed to update social link");
+        }
+        const updated = get().socialMediaLinks.map(l => l.id === id ? { ...l, ...updates } : l);
+        set({ socialMediaLinks: updated });
+        saveStateToCache({ ...get(), socialMediaLinks: updated });
+      } catch (err: any) {
+        console.error("[ZERO TRUST ERROR] Failed to update Supabase social_media_links securely:", err.message);
+        throw err;
       }
     },
 
     deleteSocialMediaLink: async (id) => {
-      const updated = get().socialMediaLinks.filter(l => l.id !== id);
-      set({ socialMediaLinks: updated });
-      saveStateToCache({ socialMediaLinks: updated });
       try {
-        await supabase.from("social_media_links").delete().eq("id", id);
-      } catch (err) {
-        console.warn("Failed to delete from Supabase social_media_links, saved locally:", err);
+        const res = await secureFetch("/api/admin/social-links/delete", {
+          method: "POST",
+          body: JSON.stringify({ id })
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || "Failed to delete social link");
+        }
+        const updated = get().socialMediaLinks.filter(l => l.id !== id);
+        set({ socialMediaLinks: updated });
+        saveStateToCache({ ...get(), socialMediaLinks: updated });
+      } catch (err: any) {
+        console.error("[ZERO TRUST ERROR] Failed to delete from Supabase social_media_links securely:", err.message);
+        throw err;
       }
     },
 
     reorderSocialMediaLinks: async (newOrderList) => {
       const updated = newOrderList.map((link, idx) => ({ ...link, display_order: idx + 1 }));
-      set({ socialMediaLinks: updated });
-      saveStateToCache({ socialMediaLinks: updated });
       try {
-        await Promise.allSettled(
-          updated.map(link => supabase.from("social_media_links").update({ display_order: link.display_order }).eq("id", link.id))
-        );
-      } catch (err) {
-        console.warn("Failed to reorder Supabase social_media_links, saved locally:", err);
+        const res = await secureFetch("/api/admin/social-links/reorder", {
+          method: "POST",
+          body: JSON.stringify({ updatedLinks: updated })
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || "Failed to reorder social links");
+        }
+        set({ socialMediaLinks: updated });
+        saveStateToCache({ ...get(), socialMediaLinks: updated });
+      } catch (err: any) {
+        console.error("[ZERO TRUST ERROR] Failed to reorder Supabase social_media_links securely:", err.message);
+        throw err;
       }
     },
     
@@ -1448,7 +1741,7 @@ export const useStore = create<AgencyState>((set, get) => {
       saveStateToCache({ currentUser: null });
     },
     
-    // Reviews & Testimonials operations (Synced directly to reviews table)
+    // Reviews & Testimonials operations (Synced securely via server APIs)
     addReview: async (review) => {
       const id = "rev-" + Math.random().toString(36).substring(4);
       const newReview: ClientReview = {
@@ -1459,25 +1752,40 @@ export const useStore = create<AgencyState>((set, get) => {
         date: new Date().toISOString().split("T")[0]
       };
       
-      const updatedReviews = [newReview, ...get().reviews];
-      set({ reviews: updatedReviews });
-      saveStateToCache({ reviews: updatedReviews });
-      
       try {
-        await supabase.from("reviews").insert([newReview]);
-      } catch (e) {
-        console.warn("Supabase review write failed:", e);
+        const res = await secureFetch("/api/admin/reviews", {
+          method: "POST",
+          body: JSON.stringify({ review: newReview })
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || "Failed to submit testimonial");
+        }
+        const updatedReviews = [newReview, ...get().reviews];
+        set({ reviews: updatedReviews });
+        saveStateToCache({ ...get(), reviews: updatedReviews });
+      } catch (e: any) {
+        console.error("[ZERO TRUST ERROR] Supabase review write failed:", e.message);
+        throw e;
       }
     },
     
     updateReviewStatus: async (reviewId, status) => {
-      const updated = get().reviews.map(r => r.id === reviewId ? { ...r, status } : r);
-      set({ reviews: updated });
-      saveStateToCache({ reviews: updated });
       try {
-        await supabase.from("reviews").update({ status }).eq("id", reviewId);
-      } catch (err) {
-        console.warn("Failed to update review status in Supabase:", err);
+        const res = await secureFetch("/api/admin/reviews/update", {
+          method: "POST",
+          body: JSON.stringify({ id: reviewId, updates: { status } })
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || "Failed to update review status");
+        }
+        const updated = get().reviews.map(r => r.id === reviewId ? { ...r, status } : r);
+        set({ reviews: updated });
+        saveStateToCache({ ...get(), reviews: updated });
+      } catch (err: any) {
+        console.error("[ZERO TRUST ERROR] Failed to update review status in Supabase:", err.message);
+        throw err;
       }
     },
     
@@ -1485,35 +1793,59 @@ export const useStore = create<AgencyState>((set, get) => {
       const target = get().reviews.find(r => r.id === reviewId);
       if (!target) return;
       const nextFeatured = !target.is_featured;
-      const updated = get().reviews.map(r => r.id === reviewId ? { ...r, is_featured: nextFeatured } : r);
-      set({ reviews: updated });
-      saveStateToCache({ reviews: updated });
       try {
-        await supabase.from("reviews").update({ is_featured: nextFeatured }).eq("id", reviewId);
-      } catch (err) {
-        console.warn("Failed to toggle review feature flag in Supabase:", err);
+        const res = await secureFetch("/api/admin/reviews/update", {
+          method: "POST",
+          body: JSON.stringify({ id: reviewId, updates: { is_featured: nextFeatured } })
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || "Failed to toggle review feature");
+        }
+        const updated = get().reviews.map(r => r.id === reviewId ? { ...r, is_featured: nextFeatured } : r);
+        set({ reviews: updated });
+        saveStateToCache({ ...get(), reviews: updated });
+      } catch (err: any) {
+        console.error("[ZERO TRUST ERROR] Failed to toggle review feature flag in Supabase:", err.message);
+        throw err;
       }
     },
     
     replyToReview: async (reviewId, text) => {
-      const updated = get().reviews.map(r => r.id === reviewId ? { ...r, reply_text: text } : r);
-      set({ reviews: updated });
-      saveStateToCache({ reviews: updated });
       try {
-        await supabase.from("reviews").update({ reply_text: text }).eq("id", reviewId);
-      } catch (err) {
-        console.warn("Failed to reply to review in Supabase:", err);
+        const res = await secureFetch("/api/admin/reviews/update", {
+          method: "POST",
+          body: JSON.stringify({ id: reviewId, updates: { reply_text: text } })
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || "Failed to reply to review");
+        }
+        const updated = get().reviews.map(r => r.id === reviewId ? { ...r, reply_text: text } : r);
+        set({ reviews: updated });
+        saveStateToCache({ ...get(), reviews: updated });
+      } catch (err: any) {
+        console.error("[ZERO TRUST ERROR] Failed to reply to review in Supabase:", err.message);
+        throw err;
       }
     },
     
     deleteReview: async (reviewId) => {
-      const updated = get().reviews.filter(r => r.id !== reviewId);
-      set({ reviews: updated });
-      saveStateToCache({ reviews: updated });
       try {
-        await supabase.from("reviews").delete().eq("id", reviewId);
-      } catch (err) {
-        console.warn("Failed to delete review from Supabase:", err);
+        const res = await secureFetch("/api/admin/reviews/delete", {
+          method: "POST",
+          body: JSON.stringify({ id: reviewId })
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || "Failed to delete review");
+        }
+        const updated = get().reviews.filter(r => r.id !== reviewId);
+        set({ reviews: updated });
+        saveStateToCache({ ...get(), reviews: updated });
+      } catch (err: any) {
+        console.error("[ZERO TRUST ERROR] Failed to delete review from Supabase:", err.message);
+        throw err;
       }
     },
     
@@ -1526,78 +1858,92 @@ export const useStore = create<AgencyState>((set, get) => {
         status: "Submitted",
         created_at: new Date().toISOString()
       };
-      
-      const updatedRequests = [newRequest, ...get().requests];
-      
-      const infoNotif: Notification = {
-        id: "not-" + Math.random().toString(36).substring(4),
-        user_id: "all_admins",
-        title: "New Request Submitted",
-        content: `Service requested: ${request.service_type} from ${request.client_name}.`,
-        is_read: false,
-        created_at: new Date().toISOString()
-      };
-      
-      set({ 
-        requests: updatedRequests,
-        notifications: [infoNotif, ...get().notifications]
-      });
-      saveStateToCache({ 
-        requests: updatedRequests, 
-        notifications: [infoNotif, ...get().notifications] 
-      });
-      
+
       try {
-        await supabase.from("quote_requests").insert([{
-          id: newRequest.id,
-          client_id: newRequest.client_id,
-          client_name: newRequest.client_name,
-          client_email: newRequest.client_email,
-          service_type: newRequest.service_type,
-          description: newRequest.description,
-          budget: newRequest.budget,
-          status: newRequest.status,
-          created_at: newRequest.created_at
-        }]);
-        await supabase.from("notifications").insert([infoNotif]);
-      } catch (err) {
-        console.warn("Quote requests database insert failed:", err);
+        const res = await secureFetch("/api/quote-requests", {
+          method: "POST",
+          body: JSON.stringify({ request: newRequest })
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || "Failed to submit quote request.");
+        }
+
+        const infoNotif: Notification = {
+          id: "not-" + Math.random().toString(36).substring(4),
+          user_id: "all_admins",
+          title: "New Request Submitted",
+          content: `Service requested: ${request.service_type} from ${request.client_name}.`,
+          is_read: false,
+          created_at: new Date().toISOString()
+        };
+
+        try {
+          await supabase.from("notifications").insert([infoNotif]);
+        } catch (eNotif) {
+          console.warn("Failed to save quote request notification in Supabase:", eNotif);
+        }
+
+        const updatedRequests = [newRequest, ...get().requests];
+        set({ 
+          requests: updatedRequests,
+          notifications: [infoNotif, ...get().notifications]
+        });
+        saveStateToCache({ 
+          requests: updatedRequests, 
+          notifications: [infoNotif, ...get().notifications] 
+        });
+      } catch (err: any) {
+        console.error("Database insert failed for quote request:", err.message);
+        throw err;
       }
     },
     
     updateRequestStatus: async (id, status) => {
-      const updated = get().requests.map(r => r.id === id ? { ...r, status } : r);
-      
-      let updatedPlans = [...get().activePlans];
-      const targetReq = get().requests.find(r => r.id === id);
-      
-      let newlyInsertedPlan: ActivePlan | null = null;
-      if (status === "Approved" && targetReq) {
-        const hasActivePlan = updatedPlans.some(p => p.client_id === targetReq.client_id);
-        if (!hasActivePlan) {
-          newlyInsertedPlan = {
-            id: "plan-" + Math.random().toString(36).substring(4),
-            client_id: targetReq.client_id,
-            plan_name: targetReq.service_type.includes("E-commerce") || targetReq.service_type.includes("SaaS") ? "Enterprise" : "Professional",
-            price: targetReq.budget || "$4,999",
-            status: "Active",
-            billing_cycle: "Monthly",
-            start_date: new Date().toISOString().split("T")[0]
-          };
-          updatedPlans.push(newlyInsertedPlan);
-        }
-      }
-      
-      set({ requests: updated, activePlans: updatedPlans });
-      saveStateToCache({ requests: updated, activePlans: updatedPlans });
-
       try {
-        await supabase.from("quote_requests").update({ status }).eq("id", id);
-        if (newlyInsertedPlan) {
-          await supabase.from("active_plans").insert([newlyInsertedPlan]);
+        const res = await secureFetch("/api/quote-requests/update", {
+          method: "POST",
+          body: JSON.stringify({ id, updates: { status } })
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || "Failed to update quote request status.");
         }
-      } catch (err) {
-        console.warn("Failed to update quote request status in Supabase:", err);
+
+        let updatedPlans = [...get().activePlans];
+        const targetReq = get().requests.find(r => r.id === id);
+        
+        let newlyInsertedPlan: ActivePlan | null = null;
+        if (status === "Approved" && targetReq) {
+          const hasActivePlan = updatedPlans.some(p => p.client_id === targetReq.client_id);
+          if (!hasActivePlan) {
+            newlyInsertedPlan = {
+              id: "plan-" + Math.random().toString(36).substring(4),
+              client_id: targetReq.client_id,
+              plan_name: targetReq.service_type.includes("E-commerce") || targetReq.service_type.includes("SaaS") ? "Enterprise" : "Professional",
+              price: targetReq.budget || "$4,999",
+              status: "Active",
+              billing_cycle: "Monthly",
+              start_date: new Date().toISOString().split("T")[0]
+            };
+            updatedPlans.push(newlyInsertedPlan);
+          }
+        }
+
+        if (newlyInsertedPlan) {
+          try {
+            await supabase.from("active_plans").insert([newlyInsertedPlan]);
+          } catch (ePlan) {
+            console.warn("Failed to insert plan in Supabase:", ePlan);
+          }
+        }
+
+        const updated = get().requests.map(r => r.id === id ? { ...r, status } : r);
+        set({ requests: updated, activePlans: updatedPlans });
+        saveStateToCache({ requests: updated, activePlans: updatedPlans });
+      } catch (err: any) {
+        console.error("Failed to update quote request status in database:", err.message);
+        throw err;
       }
     },
 
@@ -2099,73 +2445,164 @@ export const useStore = create<AgencyState>((set, get) => {
     },
     
     // Messages
-    sendMessage: (recipientId, text) => {
+    sendMessage: async (recipientId, text) => {
       const user = get().currentUser;
       if (!user) return;
-      
+
+      // 1. Resolve recipient name & role
+      let recipientName = "Diavox Support Team";
+      let recipientRole = "team_member";
+      if (recipientId !== "team") {
+        const recipientUser = get().allUsers.find(u => u.id === recipientId);
+        if (recipientUser) {
+          recipientName = recipientUser.name;
+          recipientRole = recipientUser.role;
+        } else {
+          recipientName = "Anonymous Client";
+          recipientRole = "client";
+        }
+      }
+
+      // 2. Build the primary message using valid UUID
+      const newMessageId = crypto.randomUUID();
       const newMessage: Message = {
-        id: "msg-" + Math.random().toString(36).substring(4),
+        id: newMessageId,
         sender_id: user.id,
         sender_name: user.name,
         sender_role: user.role,
         recipient_id: recipientId,
+        recipient_name: recipientName,
+        recipient_role: recipientRole,
         message_text: text,
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        is_read: false
       };
-      
-      let nextMsgs = [...get().messages, newMessage];
-      
-      // Auto reply with the SLA AI message if a client sent a message
-      if (user.role === "client") {
-        // 1. SLA immediate alert message
-        const slaMsg: Message = {
-          id: "msg-" + Math.random().toString(36).substring(4),
-          sender_id: "system-ai",
-          sender_name: "Diavox AI Support",
-          sender_role: "team_member",
-          recipient_id: user.id,
-          message_text: "Your request is marked under review. Our developers will post the complete API schema in about 4 hours.",
-          created_at: new Date(Date.now() + 200).toISOString()
-        };
-        nextMsgs.push(slaMsg);
 
-        // 2. AI conversational assistance based on trained knowledge base
-        const query = text.toLowerCase();
-        let aiReplyText = "";
+      try {
+        // Database success first! Insert the message into Supabase "messages" table.
+        const { error } = await supabase.from("messages").insert([{
+          id: newMessage.id,
+          sender_id: newMessage.sender_id,
+          sender_name: newMessage.sender_name,
+          sender_role: newMessage.sender_role,
+          recipient_id: newMessage.recipient_id,
+          recipient_name: newMessage.recipient_name,
+          recipient_role: newMessage.recipient_role,
+          message_text: newMessage.message_text,
+          created_at: newMessage.created_at,
+          is_read: newMessage.is_read
+        }]);
 
-        // Check our trained AI knowledge base
-        const knowledge = get().aiKnowledge || [];
-        const matched = knowledge.find(k => 
-          query.includes(k.question.toLowerCase()) || 
-          k.question.toLowerCase().split(" ").filter(w => w.length > 4).some(w => query.includes(w))
-        );
-
-        if (matched) {
-          aiReplyText = matched.answer;
-        } else if (query.includes("price") || query.includes("cost") || query.includes("pricing") || query.includes("plan") || query.includes("subscription")) {
-          aiReplyText = "Diavox provides three main plans:\n1. Website Maintenance (basic $199/mo, standard $499/mo, expert $999/mo)\n2. SEO campaigns (starts at $399/mo)\n3. Custom Project Design & Development (on-demand starting at $1,999 one-time payment). Feel free to toggle the Currency converter on our website to see real-time price updates in INR or GBP!";
-        } else if (query.includes("recommend") || query.includes("which one") || query.includes("suggest") || query.includes("need")) {
-          aiReplyText = "For most new businesses looking to launch a SaaS, platform, or showcase layout, we recommend our 'Project Design & Development (Standard Tier)' at $4,999 (₹415,000) as it includes complete custom React & Supabase backend architecture, priority support cover, and full-stack responsiveness.";
-        } else if (query.includes("service") || query.includes("what do you do") || query.includes("capabilities")) {
-          aiReplyText = "Our core disciplines include high-speed React web app development, custom Supabase cloud database architectures, Search Engine Optimization (SEO) subscription growth, daily backups and maintenance helpdesk support, and workflow automation.";
+        if (error) {
+          console.error("Database INSERT failed for primary message:", error);
+          throw new Error(error.message || "Failed to save message in Supabase.");
         }
 
-        if (aiReplyText) {
-          const converseMsg: Message = {
-            id: "msg-" + Math.random().toString(36).substring(4),
-            sender_id: "system-ai-expert",
-            sender_name: "Diavox Smart Agent",
-            sender_role: "team_member",
+        // Now, UI update second!
+        let nextMsgs = [...get().messages, newMessage];
+
+        // 3. Auto replies with standard SLA AI message or knowledge-based responses if a client sent a message
+        if (user.role === "client") {
+          // A. SLA automated response
+          const slaMsgId = crypto.randomUUID();
+          const slaMsg: Message = {
+            id: slaMsgId,
+            sender_id: "system-ai",
+            sender_name: "Diavox AI Support",
+            sender_role: "team_member" as UserRole,
             recipient_id: user.id,
-            message_text: `[AI Co-pilot Insight]\n${aiReplyText}`,
-            created_at: new Date(Date.now() + 800).toISOString()
+            recipient_name: user.name,
+            recipient_role: user.role,
+            message_text: "Your request is marked under review. Our developers will post the complete API schema in about 4 hours.",
+            created_at: new Date(Date.now() + 200).toISOString(),
+            is_read: false
           };
-          nextMsgs.push(converseMsg);
+
+          // Database first!
+          const { error: eSla } = await supabase.from("messages").insert([{
+            id: slaMsg.id,
+            sender_id: slaMsg.sender_id,
+            sender_name: slaMsg.sender_name,
+            sender_role: slaMsg.sender_role,
+            recipient_id: slaMsg.recipient_id,
+            recipient_name: slaMsg.recipient_name,
+            recipient_role: slaMsg.recipient_role,
+            message_text: slaMsg.message_text,
+            created_at: slaMsg.created_at,
+            is_read: slaMsg.is_read
+          }]);
+
+          if (!eSla) {
+            nextMsgs.push(slaMsg);
+          } else {
+            console.warn("Failed to insert system AI SLA response into Supabase:", eSla.message);
+          }
+
+          // B. AI conversational assistance based on trained knowledge base
+          const query = text.toLowerCase();
+          let aiReplyText = "";
+
+          const knowledge = get().aiKnowledge || [];
+          const matched = knowledge.find(k => 
+            query.includes(k.question.toLowerCase()) || 
+            k.question.toLowerCase().split(" ").filter(w => w.length > 4).some(w => query.includes(w))
+          );
+
+          if (matched) {
+            aiReplyText = matched.answer;
+          } else if (query.includes("price") || query.includes("cost") || query.includes("pricing") || query.includes("plan") || query.includes("subscription")) {
+            aiReplyText = "Diavox provides three main plans:\n1. Website Maintenance (basic $199/mo, standard $499/mo, expert $999/mo)\n2. SEO campaigns (starts at $399/mo)\n3. Custom Project Design & Development (on-demand starting at $1,999 one-time payment). Feel free to toggle the Currency converter on our website to see real-time price updates in INR or GBP!";
+          } else if (query.includes("recommend") || query.includes("which one") || query.includes("suggest") || query.includes("need")) {
+            aiReplyText = "For most new businesses looking to launch a SaaS, platform, or showcase layout, we recommend our 'Project Design & Development (Standard Tier)' at $4,999 (₹415,000) as it includes complete custom React & Supabase backend architecture, priority support cover, and full-stack responsiveness.";
+          } else if (query.includes("service") || query.includes("what do you do") || query.includes("capabilities")) {
+            aiReplyText = "Our core disciplines include high-speed React web app development, custom Supabase cloud database architectures, Search Engine Optimization (SEO) subscription growth, daily backups and maintenance helpdesk support, and workflow automation.";
+          }
+
+          if (aiReplyText) {
+            const converseMsgId = crypto.randomUUID();
+            const converseMsg: Message = {
+              id: converseMsgId,
+              sender_id: "system-ai-expert",
+              sender_name: "Diavox Smart Agent",
+              sender_role: "team_member" as UserRole,
+              recipient_id: user.id,
+              recipient_name: user.name,
+              recipient_role: user.role,
+              message_text: `[AI Co-pilot Insight]\n${aiReplyText}`,
+              created_at: new Date(Date.now() + 800).toISOString(),
+              is_read: false
+            };
+
+            // Database first!
+            const { error: eConv } = await supabase.from("messages").insert([{
+              id: converseMsg.id,
+              sender_id: converseMsg.sender_id,
+              sender_name: converseMsg.sender_name,
+              sender_role: converseMsg.sender_role,
+              recipient_id: converseMsg.recipient_id,
+              recipient_name: converseMsg.recipient_name,
+              recipient_role: converseMsg.recipient_role,
+              message_text: converseMsg.message_text,
+              created_at: converseMsg.created_at,
+              is_read: converseMsg.is_read
+            }]);
+
+            if (!eConv) {
+              nextMsgs.push(converseMsg);
+            } else {
+              console.warn("Failed to insert system AI conversational response into Supabase:", eConv.message);
+            }
+          }
         }
+
+        // Apply changes to UI (local state + cache)
+        set({ messages: nextMsgs });
+        saveStateToCache({ ...get(), messages: nextMsgs });
+
+      } catch (err: any) {
+        console.error("Failed to post chat message in Supabase:", err.message);
+        throw err;
       }
-      
-      set({ messages: nextMsgs });
-      saveStateToCache({ ...get(), messages: nextMsgs });
     },
     
     // Notifications & Alert rules
@@ -2207,13 +2644,22 @@ export const useStore = create<AgencyState>((set, get) => {
     },
 
     updatePricingOption: async (optionId, updates) => {
-      const updated = get().pricingOptions.map(opt => opt.id === optionId ? { ...opt, ...updates } : opt);
-      set({ pricingOptions: updated });
-      saveStateToCache({ ...get(), pricingOptions: updated });
-      await secureFetch("/api/admin/pricing/update", {
-        method: "POST",
-        body: JSON.stringify({ id: optionId, updates })
-      }).catch(err => console.warn("[ZERO TRUST] Error syncing pricing update:", err));
+      try {
+        const res = await secureFetch("/api/admin/pricing/update", {
+          method: "POST",
+          body: JSON.stringify({ id: optionId, updates })
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || "Failed to update pricing option");
+        }
+        const updated = get().pricingOptions.map(opt => opt.id === optionId ? { ...opt, ...updates } : opt);
+        set({ pricingOptions: updated });
+        saveStateToCache({ ...get(), pricingOptions: updated });
+      } catch (err: any) {
+        console.error("[ZERO TRUST ERROR] Error syncing pricing update:", err.message);
+        throw err;
+      }
     },
 
     updatePricingTier: async (optionId, tierId, updates) => {
@@ -2221,14 +2667,22 @@ export const useStore = create<AgencyState>((set, get) => {
       if (!optTarget) return;
       const updatedTiers = optTarget.tiers.map(t => t.id === tierId ? { ...t, ...updates } as any : t);
       
-      const updated = get().pricingOptions.map(opt => opt.id === optionId ? { ...opt, tiers: updatedTiers } : opt);
-      set({ pricingOptions: updated });
-      saveStateToCache({ ...get(), pricingOptions: updated });
-      
-      await secureFetch("/api/admin/pricing/update", {
-        method: "POST",
-        body: JSON.stringify({ id: optionId, updates: { tiers: updatedTiers } })
-      }).catch(err => console.warn("[ZERO TRUST] Error syncing tier update:", err));
+      try {
+        const res = await secureFetch("/api/admin/pricing/update", {
+          method: "POST",
+          body: JSON.stringify({ id: optionId, updates: { tiers: updatedTiers } })
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || "Failed to update pricing tier");
+        }
+        const updated = get().pricingOptions.map(opt => opt.id === optionId ? { ...opt, tiers: updatedTiers } : opt);
+        set({ pricingOptions: updated });
+        saveStateToCache({ ...get(), pricingOptions: updated });
+      } catch (err: any) {
+        console.error("[ZERO TRUST ERROR] Error syncing tier update:", err.message);
+        throw err;
+      }
     },
 
     addPricingOption: async (title, type) => {
@@ -2267,25 +2721,42 @@ export const useStore = create<AgencyState>((set, get) => {
           }
         ]
       };
-      const updated = [...get().pricingOptions, newOption];
-      set({ pricingOptions: updated });
-      saveStateToCache({ ...get(), pricingOptions: updated });
 
-      await secureFetch("/api/admin/pricing", {
-        method: "POST",
-        body: JSON.stringify(newOption)
-      }).catch(err => console.warn("[ZERO TRUST] Error adding pricing:", err));
+      try {
+        const res = await secureFetch("/api/admin/pricing", {
+          method: "POST",
+          body: JSON.stringify(newOption)
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || "Failed to create pricing package");
+        }
+        const updated = [...get().pricingOptions, newOption];
+        set({ pricingOptions: updated });
+        saveStateToCache({ ...get(), pricingOptions: updated });
+      } catch (err: any) {
+        console.error("[ZERO TRUST ERROR] Error adding pricing:", err.message);
+        throw err;
+      }
     },
 
     deletePricingOption: async (optionId) => {
-      const updated = get().pricingOptions.filter(opt => opt.id !== optionId);
-      set({ pricingOptions: updated });
-      saveStateToCache({ ...get(), pricingOptions: updated });
-      
-      await secureFetch("/api/admin/pricing/delete", {
-        method: "POST",
-        body: JSON.stringify({ id: optionId })
-      }).catch(err => console.warn("[ZERO TRUST] Error deleting pricing:", err));
+      try {
+        const res = await secureFetch("/api/admin/pricing/delete", {
+          method: "POST",
+          body: JSON.stringify({ id: optionId })
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || "Failed to delete pricing package");
+        }
+        const updated = get().pricingOptions.filter(opt => opt.id !== optionId);
+        set({ pricingOptions: updated });
+        saveStateToCache({ ...get(), pricingOptions: updated });
+      } catch (err: any) {
+        console.error("[ZERO TRUST ERROR] Error deleting pricing:", err.message);
+        throw err;
+      }
     },
 
     addActivityLog: (userId, action, prev, next) => {
@@ -2377,19 +2848,20 @@ export const useStore = create<AgencyState>((set, get) => {
 
     updateCmsContent: async (content) => {
       const updated = { ...get().cmsContent, ...content };
-      set({ cmsContent: updated });
-      saveStateToCache({ ...get(), cmsContent: updated });
       try {
-        await supabase.from("social_media_links").upsert({
-          id: "cms_app_state",
-          platform: "cms_json_config",
-          url: JSON.stringify(updated),
-          icon: "config",
-          display_order: -999,
-          visible: false
+        const res = await secureFetch("/api/admin/cms", {
+          method: "POST",
+          body: JSON.stringify({ content: updated })
         });
-      } catch (err) {
-        console.warn("Failed to save CMS config to Supabase:", err);
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || "Failed to update CMS config");
+        }
+        set({ cmsContent: updated });
+        saveStateToCache({ ...get(), cmsContent: updated });
+      } catch (err: any) {
+        console.error("Failed to save CMS config to Supabase securely:", err.message);
+        throw err;
       }
     },
 
@@ -2426,73 +2898,217 @@ export const useStore = create<AgencyState>((set, get) => {
         ...blog,
         created_at: new Date().toISOString()
       };
-      const updated = [newBlog, ...get().blogs];
-      set({ blogs: updated });
-      saveStateToCache({ ...get(), blogs: updated });
       try {
-        await supabase.from("blogs").insert([newBlog]);
-      } catch (err) {
-        console.warn("Failed to insert blog to Supabase:", err);
+        const res = await secureFetch("/api/admin/blogs", {
+          method: "POST",
+          body: JSON.stringify({ blog: newBlog })
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || "Failed to create blog post");
+        }
+        const updated = [newBlog, ...get().blogs];
+        set({ blogs: updated });
+        saveStateToCache({ ...get(), blogs: updated });
+      } catch (err: any) {
+        console.error("Failed to insert blog to Supabase securely:", err.message);
+        throw err;
       }
     },
 
     updateBlog: async (id, updates) => {
-      const updated = get().blogs.map(item => item.id === id ? { ...item, ...updates } : item);
-      set({ blogs: updated });
-      saveStateToCache({ ...get(), blogs: updated });
       try {
-        await supabase.from("blogs").update(updates).eq("id", id);
-      } catch (err) {
-        console.warn("Failed to update blog in Supabase:", err);
+        const res = await secureFetch("/api/admin/blogs/update", {
+          method: "POST",
+          body: JSON.stringify({ id, updates })
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || "Failed to update blog post");
+        }
+        const updated = get().blogs.map(item => item.id === id ? { ...item, ...updates } : item);
+        set({ blogs: updated });
+        saveStateToCache({ ...get(), blogs: updated });
+      } catch (err: any) {
+        console.error("Failed to update blog in Supabase securely:", err.message);
+        throw err;
       }
     },
 
     deleteBlog: async (id) => {
-      const updated = get().blogs.filter(item => item.id !== id);
-      set({ blogs: updated });
-      saveStateToCache({ ...get(), blogs: updated });
+      console.log(`[STORE DELETE] Starting deletion pipeline for blog ID: ${id}`);
       try {
-        await supabase.from("blogs").delete().eq("id", id);
-      } catch (err) {
-        console.warn("Failed to delete blog from Supabase:", err);
+        // Find the blog item from state first to check for associated images
+        const target = get().blogs.find(b => b.id === id);
+        if (target && target.image_url) {
+          try {
+            const urlStr = target.image_url;
+            if (urlStr.includes("/blog-images/")) {
+              const parts = urlStr.split("/blog-images/");
+              if (parts.length > 1) {
+                const cleanPath = decodeURIComponent(parts[1]);
+                console.log(`[STORE STORAGE DELETION] Removing associated image from 'blog-images' bucket: ${cleanPath}`);
+                const { error: storageErr } = await supabase.storage.from("blog-images").remove([cleanPath]);
+                if (storageErr) {
+                  console.error("[STORE STORAGE DELETION ERROR] Failed to remove blog image from Supabase Storage:", storageErr.message);
+                } else {
+                  console.log("[STORE STORAGE DELETION SUCCESS] Successfully removed blog image from Supabase Storage:", cleanPath);
+                }
+              }
+            }
+          } catch (stErr: any) {
+            console.error("[STORE STORAGE DELETION EXCEPTION] Unexpected error during blog image storage deletion:", stErr.message);
+          }
+        }
+
+        // Deleting the database record. Ensure we correctly execute and await the .delete() call on Supabase
+        console.log(`[STORE DB DELETION] Executing and awaiting Supabase delete for blog: ${id}`);
+        const { error: dbErr } = await supabase.from("blogs").delete().eq("id", id);
+        
+        if (dbErr) {
+          console.warn("[STORE DB DELETION WARNING] Direct Supabase delete failed or restricted by RLS rules. Attempting secure API proxy deletion:", dbErr.message);
+          
+          // Secure route fallback for authorized admins (bypasses direct client RLS limitations)
+          const res = await secureFetch("/api/admin/blogs/delete", {
+            method: "POST",
+            body: JSON.stringify({ id })
+          });
+          
+          if (!res.ok) {
+            const errData = await res.json();
+            const errorMessage = errData.error || "Failed to delete blog post via secure API route";
+            console.error(`[STORE DB DELETION ERROR] Secure API deletion fallback failed: ${errorMessage}`);
+            throw new Error(errorMessage);
+          }
+          console.log("[STORE DB DELETION SUCCESS] Successfully deleted blog record via secure API route.");
+        } else {
+          console.log(`[STORE DB DELETION SUCCESS] Directly deleted blog ID: ${id} from Supabase blogs table.`);
+        }
+
+        // Perform UI state updates ONLY after database & storage deletion are successfully completed and awaited
+        console.log("[STORE STATE UPDATE] Database deletion completed. Updating local state...");
+        const updated = get().blogs.filter(item => item.id !== id);
+        set({ blogs: updated });
+        saveStateToCache({ ...get(), blogs: updated });
+        console.log("[STORE STATE UPDATE SUCCESS] UI state and local cache successfully updated.");
+      } catch (err: any) {
+        console.error(`[STORE DELETE PIPELINE FATAL ERROR] Failed to completely delete blog ID: ${id}. Error:`, err.message);
+        throw err;
       }
     },
 
     addPortfolioItem: async (item) => {
+      const id = "port-" + Math.random().toString(36).substring(4);
       const newItem: PortfolioItem = {
-        id: "port-" + Math.random().toString(36).substring(4),
+        id,
         ...item,
         created_at: new Date().toISOString()
       };
-      const updated = [newItem, ...get().portfolioItems];
-      set({ portfolioItems: updated });
-      saveStateToCache({ ...get(), portfolioItems: updated });
+      
+      const dbPayload = {
+        id,
+        title: item.title,
+        description: item.description,
+        category: item.category,
+        cover_image: item.image_url,
+        featured: item.is_featured,
+        demo_url: item.live_url || "",
+        tags: []
+      };
+
       try {
-        await supabase.from("portfolio_items").insert([newItem]);
-      } catch (err) {
-        console.warn("Failed to insert portfolio item to Supabase:", err);
+        const res = await secureFetch("/api/admin/portfolio", {
+          method: "POST",
+          body: JSON.stringify({ item: dbPayload })
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || "Failed to create portfolio item");
+        }
+        const updated = [newItem, ...get().portfolioItems];
+        set({ portfolioItems: updated });
+        saveStateToCache({ ...get(), portfolioItems: updated });
+      } catch (err: any) {
+        console.error("Failed to insert portfolio item to Supabase securely:", err.message);
+        throw err;
       }
     },
 
     updatePortfolioItem: async (id, updates) => {
-      const updated = get().portfolioItems.map(item => item.id === id ? { ...item, ...updates } : item);
-      set({ portfolioItems: updated });
-      saveStateToCache({ ...get(), portfolioItems: updated });
+      const dbUpdates: any = {};
+      if (updates.title !== undefined) dbUpdates.title = updates.title;
+      if (updates.description !== undefined) dbUpdates.description = updates.description;
+      if (updates.category !== undefined) dbUpdates.category = updates.category;
+      if (updates.image_url !== undefined) {
+        dbUpdates.cover_image = updates.image_url;
+      }
+      if (updates.is_featured !== undefined) {
+        dbUpdates.featured = updates.is_featured;
+      }
+      if (updates.live_url !== undefined) {
+        dbUpdates.demo_url = updates.live_url;
+      }
+
       try {
-        await supabase.from("portfolio_items").update(updates).eq("id", id);
-      } catch (err) {
-        console.warn("Failed to update portfolio item in Supabase:", err);
+        const res = await secureFetch("/api/admin/portfolio/update", {
+          method: "POST",
+          body: JSON.stringify({ id, updates: dbUpdates })
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || "Failed to update portfolio item");
+        }
+        const updated = get().portfolioItems.map(item => item.id === id ? { ...item, ...updates } : item);
+        set({ portfolioItems: updated });
+        saveStateToCache({ ...get(), portfolioItems: updated });
+      } catch (err: any) {
+        console.error("Failed to update portfolio item in Supabase securely:", err.message);
+        throw err;
       }
     },
 
     deletePortfolioItem: async (id) => {
-      const updated = get().portfolioItems.filter(item => item.id !== id);
-      set({ portfolioItems: updated });
-      saveStateToCache({ ...get(), portfolioItems: updated });
       try {
-        await supabase.from("portfolio_items").delete().eq("id", id);
-      } catch (err) {
-        console.warn("Failed to delete portfolio item from Supabase:", err);
+        const res = await secureFetch("/api/admin/portfolio/delete", {
+          method: "POST",
+          body: JSON.stringify({ id })
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || "Failed to delete portfolio item");
+        }
+        const updated = get().portfolioItems.filter(item => item.id !== id);
+        set({ portfolioItems: updated });
+        saveStateToCache({ ...get(), portfolioItems: updated });
+      } catch (err: any) {
+        console.error("Failed to delete portfolio item from Supabase securely:", err.message);
+        throw err;
+      }
+    },
+
+    fetchPortfolio: async () => {
+      try {
+        const res = await secureFetch("/api/portfolio");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.portfolio) {
+            const mapped = data.portfolio.map((item: any) => ({
+              id: item.id,
+              title: item.title,
+              description: item.description,
+              category: item.category,
+              image_url: item.image_url || item.cover_image || "https://images.unsplash.com/photo-1547082299-de196ea013d6?q=80&w=800",
+              is_featured: item.is_featured !== undefined ? item.is_featured : (item.featured ?? true),
+              live_url: item.live_url || item.demo_url || "",
+              created_at: item.created_at || new Date().toISOString(),
+              tags: item.tags || []
+            }));
+            set({ portfolioItems: mapped as PortfolioItem[] });
+            saveStateToCache({ ...get(), portfolioItems: mapped as PortfolioItem[] });
+          }
+        }
+      } catch (err: any) {
+        console.error("Failed to fetch portfolio securely:", err.message);
       }
     },
 
@@ -2602,28 +3218,121 @@ export const useStore = create<AgencyState>((set, get) => {
       saveStateToCache({ ...get(), planApprovals: updated });
     },
 
-    updatePlanApprovalStatus: (id, status) => {
+    updatePlanApprovalStatus: async (id, status) => {
       const target = get().planApprovals.find(pa => pa.id === id);
-      const updatedApprovals = get().planApprovals.map(pa => pa.id === id ? { ...pa, status } : pa);
-      
-      let updatedPlans = [...get().activePlans];
-      if (status === "Approved" && target) {
-        const start = new Date();
-        const nextActivePlan: ActivePlan = {
-          id: "plan-" + Math.random().toString(36).substring(4),
-          client_id: target.client_id,
-          plan_name: target.plan_name,
-          price: target.price,
-          status: "Active",
-          billing_cycle: target.billing_cycle,
-          start_date: start.toISOString().split("T")[0]
-        };
-        updatedPlans = updatedPlans.map(p => p.client_id === target.client_id ? { ...p, status: "Expired" as const } : p);
-        updatedPlans.push(nextActivePlan);
+      if (!target) return;
+
+      try {
+        const { error: appErr } = await supabase.from("plan_approvals").update({ status }).eq("id", id);
+        if (appErr) throw appErr;
+
+        if (status === "Approved") {
+          const start = new Date();
+          const renewal = new Date();
+          renewal.setMonth(renewal.getMonth() + (target.billing_cycle === "Annually" ? 12 : 1));
+
+          const { error: expErr } = await supabase.from("active_plans").update({ status: "Expired" }).eq("client_id", target.client_id);
+          if (expErr) {
+            console.warn("Failed to expire old active plans, proceeding:", expErr.message);
+          }
+
+          const planId = "plan-" + Math.random().toString(36).substring(4);
+          const nextActivePlan = {
+            id: planId,
+            client_id: target.client_id,
+            plan_name: target.plan_name,
+            price: target.price,
+            status: "Active",
+            billing_cycle: target.billing_cycle,
+            start_date: start.toISOString().split("T")[0],
+            renewal_date: renewal.toISOString().split("T")[0],
+            features: [
+              "Standard customer support queue priority access",
+              "Sub-second loading times custom cache configs",
+              "Bi-weekly system updates audits",
+              "Visual activity logging"
+            ],
+            duration: target.billing_cycle === "Annually" ? "12 Months" : "1 Month",
+            notes: "Approved automatically via Client Elevations panel."
+          };
+
+          const { error: planErr } = await supabase.from("active_plans").insert([nextActivePlan]);
+          if (planErr) throw planErr;
+        }
+
+        const updatedApprovals = get().planApprovals.map(pa => pa.id === id ? { ...pa, status } : pa);
+        set({ planApprovals: updatedApprovals });
+        await get().syncSupabase();
+      } catch (err: any) {
+        console.error("Failed to update plan approval status securely:", err.message);
       }
-      
-      set({ planApprovals: updatedApprovals, activePlans: updatedPlans });
-      saveStateToCache({ ...get(), planApprovals: updatedApprovals, activePlans: updatedPlans });
+    },
+
+    addActivePlan: async (plan) => {
+      try {
+        const planId = "plan-" + Math.random().toString(36).substring(4);
+        const fullPlan = {
+          id: planId,
+          ...plan
+        };
+
+        const res = await secureFetch("/api/admin/active-plans", {
+          method: "POST",
+          body: JSON.stringify({ plan: fullPlan })
+        });
+
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || "Failed to create active plan");
+        }
+
+        await get().syncSupabase();
+      } catch (err: any) {
+        console.error("Failed to insert active plan to Supabase securely:", err.message);
+        throw err;
+      }
+    },
+
+    updateActivePlan: async (id, updates) => {
+      try {
+        const res = await secureFetch("/api/admin/active-plans/update", {
+          method: "POST",
+          body: JSON.stringify({ id, updates })
+        });
+
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || "Failed to update active plan");
+        }
+
+        await get().syncSupabase();
+      } catch (err: any) {
+        console.error("Failed to update active plan secure API:", err.message);
+        throw err;
+      }
+    },
+
+    deleteActivePlan: async (id) => {
+      console.log("Attempting to delete active plan:", id);
+      try {
+        const res = await secureFetch("/api/admin/active-plans/delete", {
+          method: "POST",
+          body: JSON.stringify({ id })
+        });
+        
+        const resData = await res.json();
+        console.log("Delete response:", resData);
+
+        if (!res.ok) {
+          throw new Error(resData.error || "Failed to delete active plan");
+        }
+
+        await get().syncSupabase();
+        console.log("Active plans synced after deletion.");
+      } catch (err: any) {
+        console.error("Failed to delete active plan secure API:", err.message);
+        throw err;
+      }
     },
 
     fetchHelpCenterData: async () => {

@@ -24,6 +24,7 @@ export default function AdminCms() {
   // Local active sub-tab: "hero_layout" | "branding" | "services" | "faqs" | "contact" | "custom_sections" | "interactive_3d" | "hero_slider"
   const [subTab, setSubTab] = useState<"hero_layout" | "branding" | "services" | "faqs" | "contact" | "custom_sections" | "interactive_3d" | "hero_slider">("hero_layout");
   const [successAlert, setSuccessAlert] = useState<string | null>(null);
+  const [errorAlert, setErrorAlert] = useState<string | null>(null);
   const [previewMode, setPreviewMode] = useState<boolean>(false);
 
   // Hero Slider Config
@@ -47,6 +48,11 @@ export default function AdminCms() {
   const showToast = (msg: string) => {
     setSuccessAlert(msg);
     setTimeout(() => setSuccessAlert(null), 3000);
+  };
+
+  const showErrorToast = (msg: string) => {
+    setErrorAlert(msg);
+    setTimeout(() => setErrorAlert(null), 5000);
   };
 
   // 1. HERO & SEQUENCE STATES
@@ -265,20 +271,24 @@ export default function AdminCms() {
 
   // SAVE ACTIONS
   const saveHeroAndLayout = async () => {
-    await updateCmsContent({
-      heroTitle,
-      heroSubtitle,
-      heroBadge,
-      heroBadgeEffect,
-      heroCtaPrimaryText,
-      heroCtaSecondaryText,
-      homepageSections: sectionsOrder,
-      sectionVisibility
-    });
-    if (currentUser) {
-      addActivityLog(currentUser.id, "Executed structural website CMS layout sequence and hero update", "Hero & Homepage order customized", `Visible: ${sectionsOrder.filter(k => sectionVisibility[k] !== false).join(", ")}`);
+    try {
+      await updateCmsContent({
+        heroTitle,
+        heroSubtitle,
+        heroBadge,
+        heroBadgeEffect,
+        heroCtaPrimaryText,
+        heroCtaSecondaryText,
+        homepageSections: sectionsOrder,
+        sectionVisibility
+      });
+      if (currentUser) {
+        addActivityLog(currentUser.id, "Executed structural website CMS layout sequence and hero update", "Hero & Homepage order customized", `Visible: ${sectionsOrder.filter(k => sectionVisibility[k] !== false).join(", ")}`);
+      }
+      showToast("Hero content & sections layout applied successfully!");
+    } catch (err: any) {
+      showErrorToast(err.message || "Failed to update Hero section");
     }
-    showToast("Hero content & sections layout applied successfully!");
   };
 
   const resetHeroDefaults = () => {
@@ -300,29 +310,33 @@ export default function AdminCms() {
   };
 
   const saveBrandingAndColors = async () => {
-    await updateCmsContent({
-      sectionTitles: sectTitles,
-      sectionSubtitles: sectSubtitles,
-      sectionDescriptions: sectDescriptions,
-      sectionColors: sectColors,
-      fontSans,
-      fontDisplay,
-      fontMono,
-      headerLogoTitle,
-      headerLogoAccent,
-      headerLogoSubtitle,
-      footerLogoText,
-      footerLogoAccent,
-      footerBrandDesc,
-      footerCopyright,
-      footerCredit,
-      footerNotation1,
-      footerNotation2
-    });
-    if (currentUser) {
-      addActivityLog(currentUser.id, "Updated section titles, typography fonts, header branding & footer information", "Branding Customization", "Custom branding parameters and fonts successfully saved.");
+    try {
+      await updateCmsContent({
+        sectionTitles: sectTitles,
+        sectionSubtitles: sectSubtitles,
+        sectionDescriptions: sectDescriptions,
+        sectionColors: sectColors,
+        fontSans,
+        fontDisplay,
+        fontMono,
+        headerLogoTitle,
+        headerLogoAccent,
+        headerLogoSubtitle,
+        footerLogoText,
+        footerLogoAccent,
+        footerBrandDesc,
+        footerCopyright,
+        footerCredit,
+        footerNotation1,
+        footerNotation2
+      });
+      if (currentUser) {
+        addActivityLog(currentUser.id, "Updated section titles, typography fonts, header branding & footer information", "Branding Customization", "Custom branding parameters and fonts successfully saved.");
+      }
+      showToast("Branding, fonts, header & footer updated! Refreshing live overrides.");
+    } catch (err: any) {
+      showErrorToast(err.message || "Failed to save Branding options");
     }
-    showToast("Branding, fonts, header & footer updated! Refreshing live overrides.");
   };
 
   // SERVICES HANDLERS
@@ -347,11 +361,15 @@ export default function AdminCms() {
   };
 
   const saveServices = async () => {
-    await updateCmsContent({ services });
-    if (currentUser) {
-      addActivityLog(currentUser.id, "Configured custom services list for website portfolio", "Services list update", `${services.length} items active`);
+    try {
+      await updateCmsContent({ services });
+      if (currentUser) {
+        addActivityLog(currentUser.id, "Configured custom services list for website portfolio", "Services list update", `${services.length} items active`);
+      }
+      showToast("Core website capabilities saved!");
+    } catch (err: any) {
+      showErrorToast(err.message || "Failed to save capabilities");
     }
-    showToast("Core website capabilities saved!");
   };
 
   // FAQS HANDLERS
@@ -405,11 +423,15 @@ export default function AdminCms() {
   };
 
   const saveFaqs = async () => {
-    await updateCmsContent({ faqs });
-    if (currentUser) {
-      addActivityLog(currentUser.id, "Configured custom FAQ items for main services accordion", "FAQs updated", `${faqs.length} FAQs active`);
+    try {
+      await updateCmsContent({ faqs });
+      if (currentUser) {
+        addActivityLog(currentUser.id, "Configured custom FAQ items for main services accordion", "FAQs updated", `${faqs.length} FAQs active`);
+      }
+      showToast("Interactive FAQs updated!");
+    } catch (err: any) {
+      showErrorToast(err.message || "Failed to save FAQs");
     }
-    showToast("Interactive FAQs updated!");
   };
 
   // CUSTOM WEBSECTIONS HANDLERS
@@ -430,15 +452,19 @@ export default function AdminCms() {
     setSectionsOrder(updatedOrder);
     setCustomSections(updatedList);
 
-    await updateCmsContent({
-      customSections: updatedList,
-      homepageSections: updatedOrder
-    });
+    try {
+      await updateCmsContent({
+        customSections: updatedList,
+        homepageSections: updatedOrder
+      });
 
-    if (currentUser) {
-      addActivityLog(currentUser.id, "Saved bespoke custom sections list & updated page sequence stack", "Custom Sections compiled", `${updatedList.length} custom-built rows compiled`);
+      if (currentUser) {
+        addActivityLog(currentUser.id, "Saved bespoke custom sections list & updated page sequence stack", "Custom Sections compiled", `${updatedList.length} custom-built rows compiled`);
+      }
+      showToast("Interactive Custom Sections updated & homepage stack synchronized!");
+    } catch (err: any) {
+      showErrorToast(err.message || "Failed to save custom sections");
     }
-    showToast("Interactive Custom Sections updated & homepage stack synchronized!");
   };
 
   const handleCreateOrUpdateSection = async () => {
@@ -522,55 +548,67 @@ export default function AdminCms() {
 
   // CONTACT HANDLERS
   const saveContactSettings = async () => {
-    await updateCmsContent({
-      contactSettings: {
-        whatsapp: cWhatsapp,
-        email: cEmail,
-        phone: cPhone,
-        supportEmail: cSupportEmail,
-        businessHours: cBusinessHours,
-        facebook: cFacebook,
-        instagram: cInstagram,
-        linkedin: cLinkedin,
-        twitter: cTwitter,
-        youtube: cYoutube,
-        github: cGithub
+    try {
+      await updateCmsContent({
+        contactSettings: {
+          whatsapp: cWhatsapp,
+          email: cEmail,
+          phone: cPhone,
+          supportEmail: cSupportEmail,
+          businessHours: cBusinessHours,
+          facebook: cFacebook,
+          instagram: cInstagram,
+          linkedin: cLinkedin,
+          twitter: cTwitter,
+          youtube: cYoutube,
+          github: cGithub
+        }
+      });
+      if (currentUser) {
+        addActivityLog(currentUser.id, "Updated corporate contact channels, hotline, business hours & social links", "Contact Settings customized", cEmail);
       }
-    });
-    if (currentUser) {
-      addActivityLog(currentUser.id, "Updated corporate contact channels, hotline, business hours & social links", "Contact Settings customized", cEmail);
+      showToast("Corporate contact credentials synced successfully!");
+    } catch (err: any) {
+      showErrorToast(err.message || "Failed to save contact settings");
     }
-    showToast("Corporate contact credentials synced successfully!");
   };
 
   const saveSphereConfig = async () => {
-    await updateCmsContent({
-      sphereConfig: {
-        color: sphereColor,
-        size: sphereSize,
-        labels: sphereLabels,
-        sparkEnabled,
-        sparkFrequency: sparkFreq,
-        rotationSpeed: sphereRotation,
-        rings: sphereRings,
-        segments: sphereSegments
+    try {
+      await updateCmsContent({
+        sphereConfig: {
+          color: sphereColor,
+          size: sphereSize,
+          labels: sphereLabels,
+          sparkEnabled,
+          sparkFrequency: sparkFreq,
+          rotationSpeed: sphereRotation,
+          rings: sphereRings,
+          segments: sphereSegments
+        }
+      });
+      if (currentUser) {
+        addActivityLog(currentUser.id, "Updated 3D Interactive Sphere configuration", "Sphere Customization", `${sphereLabels.length} labels active`);
       }
-    });
-    if (currentUser) {
-      addActivityLog(currentUser.id, "Updated 3D Interactive Sphere configuration", "Sphere Customization", `${sphereLabels.length} labels active`);
+      showToast("3D Orbit Map configuration applied successfully!");
+    } catch (err: any) {
+      showErrorToast(err.message || "Failed to save 3D Orbit Map configuration");
     }
-    showToast("3D Orbit Map configuration applied successfully!");
   };
 
   const saveHeroSlider = async () => {
-    await updateCmsContent({
-      heroSliderConfig: sliderConfig as any,
-      heroSlides: heroSlides
-    });
-    if (currentUser) {
-      addActivityLog(currentUser.id, "Updated Hero Slider configuration & slides", "Hero Customization", `${heroSlides.length} slides configured`);
+    try {
+      await updateCmsContent({
+        heroSliderConfig: sliderConfig as any,
+        heroSlides: heroSlides
+      });
+      if (currentUser) {
+        addActivityLog(currentUser.id, "Updated Hero Slider configuration & slides", "Hero Customization", `${heroSlides.length} slides configured`);
+      }
+      showToast("Hero Slider settings published successfully!");
+    } catch (err: any) {
+      showErrorToast(err.message || "Failed to save Hero Slider settings");
     }
-    showToast("Hero Slider settings published successfully!");
   };
 
   const sectionMetadata: Record<string, { title: string; desc: string }> = {
@@ -591,6 +629,14 @@ export default function AdminCms() {
         <div className="fixed top-5 right-5 z-50 bg-emerald-900 border border-emerald-500 text-emerald-200 px-6 py-3.5 rounded-2xl shadow-xl flex items-center space-x-2.5 font-sans text-xs animate-bounce" id="cms-toast-alert">
           <Check size={16} className="text-emerald-400 shrink-0" />
           <span>{successAlert}</span>
+        </div>
+      )}
+
+      {/* ERROR ALERTS */}
+      {errorAlert && (
+        <div className="fixed top-5 right-5 z-50 bg-rose-900 border border-rose-500 text-rose-200 px-6 py-3.5 rounded-2xl shadow-xl flex items-center space-x-2.5 font-sans text-xs animate-bounce" id="cms-error-toast-alert">
+          <AlertCircle size={16} className="text-rose-400 shrink-0" />
+          <span>{errorAlert}</span>
         </div>
       )}
 

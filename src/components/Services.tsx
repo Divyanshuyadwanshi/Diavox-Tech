@@ -5,6 +5,7 @@
 
 import React, { useState } from "react";
 import { useStore } from "../store";
+import { motion, AnimatePresence } from "motion/react";
 import { 
   Laptop, Compass, Zap, Bot, Download, ArrowUpRight, 
   Settings, Layers, ShoppingBag, Terminal, CheckCircle2,
@@ -165,6 +166,101 @@ export default function Services({ onNavigate, onOpenAuth, preview = true }: Ser
     }
   };
 
+  const renderServiceDetails = (index: number) => {
+    const service = servicesData[index];
+    if (!service) return null;
+    return (
+      <div className={`h-full p-6 sm:p-8 rounded-2xl border flex flex-col justify-between ${
+        theme === "dark"
+          ? "bg-slate-900/30 border-slate-900 text-white"
+          : "bg-slate-50 border-slate-200 text-slate-900 shadow-md shadow-slate-100/50"
+      }`}>
+        <div className="space-y-6">
+          <div className="flex items-center space-x-3.5">
+            <div className="p-3 bg-gradient-to-tr from-cyan-500/20 to-purple-500/10 rounded-xl">
+              {service.icon}
+            </div>
+            <div>
+              <h3 className="text-xl sm:text-2xl font-display font-bold">
+                {service.title}
+              </h3>
+              <span className="text-[10px] font-mono tracking-widest text-cyan-500 bg-cyan-500/10 px-2.5 py-0.5 rounded-lg font-semibold uppercase mt-1 inline-block">
+                Diavox Core Service
+              </span>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <p className="text-sm sm:text-base opacity-85 leading-relaxed font-light">
+              {service.description}
+            </p>
+            
+            {/* Human Friendly Benefits text block */}
+            <div className={`p-4 rounded-xl border text-xs font-light leading-relaxed ${
+              theme === "dark" 
+                ? "bg-slate-950/60 border-slate-800 text-slate-300" 
+                : "bg-white border-slate-200 text-slate-700"
+            }`}>
+              <strong className="font-semibold text-cyan-500 mr-1.5 font-mono uppercase text-[9px] tracking-wider block mb-1">Key Growth Outcome:</strong>
+              {service.benefits}
+            </div>
+          </div>
+
+          <div className="space-y-3.5 pt-2">
+            <p className="text-xs font-mono font-bold uppercase tracking-wider opacity-60">Deliverable Assets:</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" id="service-checklist">
+              {service.items.map((item, idx) => (
+                <div key={idx} className="flex items-center space-x-2 text-xs">
+                  <CheckCircle2 size={13} className="text-cyan-500 shrink-0" />
+                  <span className="opacity-85 font-light leading-snug">{item}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Technologies Grid */}
+          <div className="space-y-2 pt-2">
+            <p className="text-xs font-mono font-bold uppercase tracking-wider opacity-60">Technologies & Tools:</p>
+            <div className="flex flex-wrap gap-1.5">
+              {service.techUsed.map((t, idx) => (
+                <span key={idx} className={`px-2.5 py-1 text-[10px] font-mono rounded-lg border ${
+                  theme === "dark"
+                    ? "bg-slate-950 border-slate-850 text-slate-300"
+                    : "bg-white border-slate-200 text-slate-700 shadow-sm"
+                }`}>
+                  {t}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Action trigger footer */}
+        <div className="mt-8 pt-6 border-t dark:border-slate-800 border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="text-left font-mono text-[10px] opacity-60 space-y-1">
+            <p className="flex items-center space-x-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              <span>Free Tech Architecture Assessment</span>
+            </p>
+            <p className="flex items-center space-x-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              <span>24-Hour Lead Response SLA Ticket</span>
+            </p>
+          </div>
+          
+          <button
+            onClick={handleBookSelected}
+            id="cta-active-service"
+            className="px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-gradient-to-r from-cyan-500 hover:brightness-110 to-purple-600 text-white flex items-center justify-center space-x-1.5 self-start sm:self-auto cursor-pointer"
+          >
+            <span>Request Full Specification</span>
+            <ArrowUpRight size={14} />
+          </button>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <section id="services" className={`py-16 md:py-24 text-left font-sans transition-colors duration-300 ${
       theme === "dark" 
@@ -188,129 +284,55 @@ export default function Services({ onNavigate, onOpenAuth, preview = true }: Ser
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch" id="services-bento-grid">
           
           {/* Tabs Selector list */}
-          <div className="lg:col-span-5 flex flex-col space-y-3 justify-center" id="services-tabs-panel">
+          <div className="lg:col-span-5 flex flex-col justify-center gap-3" id="services-tabs-panel">
             {servicesData.map((serv, index) => {
               const isActive = selectedService === index;
               return (
-                <button
-                  key={index}
-                  id={`service-tab-${index}`}
-                  onClick={() => setSelectedService(index)}
-                  className={`p-4 rounded-xl text-left border transition-all flex items-center space-x-4 cursor-pointer ${
-                    isActive
-                      ? theme === "dark"
-                        ? "bg-slate-900 border-cyan-500/40 text-white shadow-lg shadow-cyan-500/5 scale-[1.01]"
-                        : "bg-slate-50 border-slate-300 text-slate-950 font-semibold shadow-sm"
-                      : theme === "dark"
-                      ? "bg-slate-950/40 border-slate-900/60 text-slate-400 hover:bg-slate-900/40 hover:text-white"
-                      : "bg-white border-slate-100 text-slate-600 hover:bg-slate-50 hover:text-slate-900"
-                  }`}
-                >
-                  <div className={`p-2 rounded-lg ${isActive ? "bg-cyan-500/20 text-cyan-400" : "bg-slate-500/5 text-slate-500"}`}>
-                    {serv.icon}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <h3 className="text-sm font-bold truncate leading-snug">{serv.title}</h3>
-                    <p className={`text-xs mt-0.5 truncate ${isActive ? "text-cyan-400/80 dark:text-cyan-400" : "opacity-60"}`}>
-                      {serv.description}
-                    </p>
-                  </div>
-                  <ArrowUpRight size={14} className={`opacity-40 transition-transform ${isActive ? "translate-x-0.5 -translate-y-0.5 opacity-100 text-cyan-500" : ""}`} />
-                </button>
+                <div key={index} className="flex flex-col gap-3">
+                  <button
+                    id={`service-tab-${index}`}
+                    onClick={() => setSelectedService(index)}
+                    className={`p-4 rounded-xl text-left border transition-all flex items-center space-x-4 cursor-pointer ${
+                      isActive
+                        ? theme === "dark"
+                          ? "bg-slate-900 border-cyan-500/40 text-white shadow-lg shadow-cyan-500/5 scale-100 lg:scale-[1.01]"
+                          : "bg-slate-50 border-slate-300 text-slate-950 font-semibold shadow-sm scale-100 lg:scale-[1.01]"
+                        : theme === "dark"
+                        ? "bg-slate-950/40 border-slate-900/60 text-slate-400 hover:bg-slate-900/40 hover:text-white"
+                        : "bg-white border-slate-100 text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                    }`}
+                  >
+                    <div className={`p-2 rounded-lg ${isActive ? "bg-cyan-500/20 text-cyan-400" : "bg-slate-500/5 text-slate-500"}`}>
+                      {serv.icon}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-sm font-bold truncate leading-snug">{serv.title}</h3>
+                      <p className={`text-xs mt-0.5 truncate ${isActive ? "text-cyan-400/80 dark:text-cyan-400" : "opacity-60"}`}>
+                        {serv.description}
+                      </p>
+                    </div>
+                    <ArrowUpRight size={14} className={`opacity-40 transition-transform ${isActive ? "rotate-90 lg:translate-x-0.5 lg:-translate-y-0.5 opacity-100 text-cyan-500 lg:rotate-0" : "rotate-90 lg:rotate-0"}`} />
+                  </button>
+                  <AnimatePresence>
+                    {isActive && (
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="lg:hidden overflow-hidden"
+                      >
+                        {renderServiceDetails(index)}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
               );
             })}
           </div>
 
           {/* Expansive Details View */}
-          <div className="lg:col-span-7" id="services-active-details">
-            <div className={`h-full p-6 sm:p-8 rounded-2xl border flex flex-col justify-between ${
-              theme === "dark"
-                ? "bg-slate-900/30 border-slate-900 text-white"
-                : "bg-slate-50 border-slate-200 text-slate-900 shadow-md shadow-slate-100/50"
-            }`}>
-              <div className="space-y-6">
-                <div className="flex items-center space-x-3.5">
-                  <div className="p-3 bg-gradient-to-tr from-cyan-500/20 to-purple-500/10 rounded-xl">
-                    {servicesData[selectedService].icon}
-                  </div>
-                  <div>
-                    <h3 className="text-xl sm:text-2xl font-display font-bold">
-                      {servicesData[selectedService].title}
-                    </h3>
-                    <span className="text-[10px] font-mono tracking-widest text-cyan-500 bg-cyan-500/10 px-2.5 py-0.5 rounded-lg font-semibold uppercase mt-1 inline-block">
-                      Diavox Core Service
-                    </span>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <p className="text-sm sm:text-base opacity-85 leading-relaxed font-light">
-                    {servicesData[selectedService].description}
-                  </p>
-                  
-                  {/* Human Friendly Benefits text block */}
-                  <div className={`p-4 rounded-xl border text-xs font-light leading-relaxed ${
-                    theme === "dark" 
-                      ? "bg-slate-950/60 border-slate-800 text-slate-300" 
-                      : "bg-white border-slate-200 text-slate-700"
-                  }`}>
-                    <strong className="font-semibold text-cyan-500 mr-1.5 font-mono uppercase text-[9px] tracking-wider block mb-1">Key Growth Outcome:</strong>
-                    {servicesData[selectedService].benefits}
-                  </div>
-                </div>
-
-                <div className="space-y-3.5 pt-2">
-                  <p className="text-xs font-mono font-bold uppercase tracking-wider opacity-60">Deliverable Assets:</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3" id="service-checklist">
-                    {servicesData[selectedService].items.map((item, idx) => (
-                      <div key={idx} className="flex items-center space-x-2 text-xs">
-                        <CheckCircle2 size={13} className="text-cyan-500 shrink-0" />
-                        <span className="opacity-85 font-light leading-snug">{item}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Technologies Grid */}
-                <div className="space-y-2 pt-2">
-                  <p className="text-xs font-mono font-bold uppercase tracking-wider opacity-60">Technologies & Tools:</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {servicesData[selectedService].techUsed.map((t, idx) => (
-                      <span key={idx} className={`px-2.5 py-1 text-[10px] font-mono rounded-lg border ${
-                        theme === "dark"
-                          ? "bg-slate-950 border-slate-850 text-slate-300"
-                          : "bg-white border-slate-200 text-slate-700 shadow-sm"
-                      }`}>
-                        {t}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              {/* Action trigger footer */}
-              <div className="mt-8 pt-6 border-t dark:border-slate-800 border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div className="text-left font-mono text-[10px] opacity-60 space-y-1">
-                  <p className="flex items-center space-x-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                    <span>Free Tech Architecture Assessment</span>
-                  </p>
-                  <p className="flex items-center space-x-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                    <span>24-Hour Lead Response SLA Ticket</span>
-                  </p>
-                </div>
-                
-                <button
-                  onClick={handleBookSelected}
-                  id="cta-active-service"
-                  className="px-5 py-2.5 rounded-xl text-xs font-bold transition-all bg-gradient-to-r from-cyan-500 hover:brightness-110 to-purple-600 text-white flex items-center justify-center space-x-1.5 self-start sm:self-auto cursor-pointer"
-                >
-                  <span>Request Full Specification</span>
-                  <ArrowUpRight size={14} />
-                </button>
-              </div>
-            </div>
+          <div className="hidden lg:block lg:col-span-7" id="services-active-details">
+            {renderServiceDetails(selectedService)}
           </div>
 
         </div>

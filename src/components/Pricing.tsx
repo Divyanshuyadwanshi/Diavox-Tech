@@ -5,7 +5,7 @@
 
 import React, { useState } from "react";
 import { useStore } from "../store";
-import { Check, ArrowUpRight, CheckCircle2, ShieldCheck, Globe, CreditCard, X, MessageSquare } from "lucide-react";
+import { Check, ArrowUpRight, CheckCircle2, ShieldCheck, Globe, CreditCard, X, MessageSquare, MessageCircle } from "lucide-react";
 
 interface PricingProps {
   onOpenAuth: () => void;
@@ -14,7 +14,7 @@ interface PricingProps {
 }
 
 export default function Pricing({ onOpenAuth, onNavigate, preview }: PricingProps) {
-  const { theme, currentUser, pricingOptions, purchasePlan } = useStore();
+  const { theme, currentUser, pricingOptions, purchasePlan, cmsContent } = useStore();
   const [isAnnual, setIsAnnual] = useState<boolean>(false);
   const [currency, setCurrency] = useState<"USD" | "INR" | "GBP font-sans">("INR"); // Default to Indian Rupees (INR) to delight clients as requested!
   const [notification, setNotification] = useState<string | null>(null);
@@ -398,13 +398,15 @@ export default function Pricing({ onOpenAuth, onNavigate, preview }: PricingProp
                   <span>Talk With Team</span>
                 </button>
 
-                <button
-                  onClick={executeRazorpayPayment}
-                  className="p-3 rounded-xl bg-gradient-to-r from-cyan-500 to-purple-600 hover:brightness-115 text-white font-mono text-xs font-bold transition-all shadow-md shadow-cyan-500/10 flex items-center justify-center space-x-2"
+                <a
+                  href={`https://wa.me/${cmsContent?.contactSettings?.whatsapp?.replace(/[^0-9]/g, "") || "911234567890"}?text=${encodeURIComponent(`Hello Diavox Team, I would like to purchase the ${selectedPlan?.optionTitle} (${selectedPlan?.tierName} Tier) for ${selectedPlan?.price}. Let's discuss details!`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 hover:scale-[1.02] text-white font-mono text-xs font-bold transition-all shadow-md shadow-emerald-600/10 flex items-center justify-center space-x-2 cursor-pointer text-center"
                 >
-                  <CreditCard size={13} />
-                  <span>Pay Now (Razorpay)</span>
-                </button>
+                  <MessageCircle size={13} />
+                  <span>Chat on WhatsApp</span>
+                </a>
               </div>
 
             </div>

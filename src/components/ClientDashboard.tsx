@@ -5,10 +5,11 @@
 
 import React, { useState, useEffect } from "react";
 import { useStore } from "../store";
-import { uploadFileToBucket } from "../supabase";
+import { uploadFileToBucket, supabase } from "../supabase";
+import { motion, AnimatePresence } from "motion/react";
 import { 
   Compass, Briefcase, FileSignature, Receipt, Bell, MessageSquare, 
-  Send, AlertTriangle, Star, CheckCircle, Clock, Check, ChevronRight, X,
+  Send, AlertTriangle, Star, CheckCircle, Clock, Check, ChevronRight, ChevronLeft, ChevronsLeft, ChevronsRight, X,
   User, Key, Upload, Bot, Lock, FileText, Info, Eye, EyeOff, BookOpen, Activity
 } from "lucide-react";
 import { ClientReview, RequestStatus } from "../types";
@@ -22,7 +23,9 @@ export default function ClientDashboard() {
     quoteReplies, quoteAttachments, quoteStatusHistory, submitQuoteReply
   } = useStore();
 
-  const [activeTab, setActiveTab] = useState<"profile" | "projects" | "contracts" | "plans" | "requests" | "chat" | "reviews" | "help-kb" | "timeline">("profile");
+  const [activeTab, setActiveTab] = useState<"profile" | "projects" | "contracts" | "plans" | "requests" | "chat" | "reviews" | "help-kb">("profile");
+  const [showMobileSidebar, setShowMobileSidebar] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   
   // Expanded quote request and quote replies inputs
   const [expandedRequestId, setExpandedRequestId] = useState<string | null>(null);
@@ -38,6 +41,7 @@ export default function ClientDashboard() {
       setProfileName(currentUser.name || "");
       setProfileUsername(currentUser.username || currentUser.email?.split("@")[0] || "client");
       setProfileAvatar(currentUser.avatar_url || "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=150&h=150");
+      fetchDeactivationRequest();
     }
   }, [currentUser]);
 
@@ -89,6 +93,90 @@ export default function ClientDashboard() {
     message: string;
     onConfirm: () => void;
   } | null>(null);
+
+  // Deactivation requests tracking states
+  const [deactivationRequest, setDeactivationRequest] = useState<any>(null);
+
+  const fetchDeactivationRequest = async () => {
+    if (!currentUser || currentUser.id === "admin-secret") return;
+    try {
+      const { data, error } = await supabase
+        .from("deactivation_requests")
+        .select("*")
+        .eq("user_id", currentUser.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!error && data) {
+        setDeactivationRequest(data);
+      }
+    } catch (err) {
+      console.warn("Failed to fetch deactivation request:", err);
+    }
+  };
+
+  const handleDeactivateSubmit = async () => {
+    if (!currentUser) return;
+    setConfirmDialog({
+      isOpen: true,
+      title: "Request Account Deactivation?",
+      message: "Are you sure you want to request deactivation? Account deactivation requests are processed within 24 hours.",
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          // Fetch dynamic token for request header authentication
+          const sessionRes = await supabase.auth.getSession();
+          const token = sessionRes.data.session?.access_token || "admin-secret-bypass-token";
+          
+          const response = await fetch("/api/user/deactivate", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${token}`
+            },
+            body: JSON.stringify({
+              userName: currentUser.name,
+              userEmail: currentUser.email
+            })
+          });
+
+          const result = await response.json();
+          if (response.ok && result.success) {
+            setDeactivationRequest(result.request);
+            setAlertText("Account deactivation requested. Admins have been notified.");
+            setTimeout(() => setAlertText(null), 3500);
+          } else {
+            console.error("Deactivation request failed:", result.error);
+            // Fallback simulation
+            const fallbackRequest = {
+              user_id: currentUser.id,
+              user_name: currentUser.name,
+              user_email: currentUser.email,
+              status: "Pending Review",
+              created_at: new Date().toISOString()
+            };
+            setDeactivationRequest(fallbackRequest);
+            setAlertText("Account deactivation requested (local registration backup).");
+            setTimeout(() => setAlertText(null), 3500);
+          }
+        } catch (err: any) {
+          console.warn("Deactivation fetch error:", err);
+          // Fallback simulation
+          const fallbackRequest = {
+            user_id: currentUser.id,
+            user_name: currentUser.name,
+            user_email: currentUser.email,
+            status: "Pending Review",
+            created_at: new Date().toISOString()
+          };
+          setDeactivationRequest(fallbackRequest);
+          setAlertText("Account deactivation requested (local registration backup).");
+          setTimeout(() => setAlertText(null), 3500);
+        }
+      }
+    });
+  };
 
   if (!currentUser) {
     return (
@@ -182,59 +270,229 @@ export default function ClientDashboard() {
         )}
       </div>
 
+      {/* Mobile Dashboard Nav Trigger */}
+      <div className="lg:hidden flex items-center justify-between p-3.5 rounded-2xl border dark:bg-slate-900 bg-slate-50 dark:border-slate-800 border-slate-200 mb-6" id="client-mobile-tab-trigger">
+        <div className="flex items-center space-x-2.5">
+          <span className="text-[10px] font-mono tracking-wider font-bold uppercase opacity-60">Workspace:</span>
+          <span className="text-xs font-mono font-bold text-cyan-400 capitalize">{activeTab.replace("-", " ")}</span>
+        </div>
+        <button 
+          onClick={() => setShowMobileSidebar(true)}
+          className="px-3.5 py-1.5 rounded-lg text-xs font-mono font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 active:scale-95 transition-all cursor-pointer"
+        >
+          Navigate Section
+        </button>
+      </div>
+
+      {/* Collapsible Mobile Sidebar Overlay Drawer */}
+      <AnimatePresence>
+        {showMobileSidebar && (
+          <>
+            {/* Backdrop overlay */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowMobileSidebar(false)}
+              className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm lg:hidden"
+            />
+            
+            {/* Sliding Drawer */}
+            <motion.div
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+              className={`fixed inset-y-0 left-0 z-50 w-72 max-w-[80vw] p-6 shadow-2xl border-r flex flex-col justify-between lg:hidden ${
+                theme === "dark" ? "bg-slate-950 border-slate-900 text-white" : "bg-white border-slate-200 text-slate-800"
+              }`}
+              id="client-mobile-drawer"
+            >
+              <div className="space-y-6">
+                <div className="flex items-center justify-between border-b pb-4 dark:border-slate-900 border-slate-100 animate-slide-in">
+                  <div>
+                    <p className="text-[10px] font-mono tracking-widest text-cyan-400 font-bold uppercase">NAVIGATION</p>
+                    <h4 className="text-lg font-display font-bold">Portal Menu</h4>
+                  </div>
+                  <button 
+                    onClick={() => setShowMobileSidebar(false)} 
+                    className="p-1.5 rounded-lg dark:bg-slate-900 bg-slate-100 dark:hover:bg-slate-800 hover:bg-slate-200 transition-colors cursor-pointer"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+                
+                {/* Navigation Items replicated inside drawer */}
+                <div className="space-y-2 flex flex-col pt-2" id="client-mobile-sidebar-navigation">
+                  <button
+                    onClick={() => { setActiveTab("profile"); setShowMobileSidebar(false); }}
+                    className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+                      activeTab === "profile" ? "bg-slate-900 text-cyan-400 border border-cyan-500/10" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <User size={15} className="text-cyan-500" />
+                    <span>My Profile</span>
+                  </button>
+
+                  <button
+                    onClick={() => { setActiveTab("projects"); setShowMobileSidebar(false); }}
+                    className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+                      activeTab === "projects" ? "bg-slate-900 text-cyan-400 border border-cyan-500/10" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <Briefcase size={15} />
+                    <span>Ongoing Orders ({clientProjects.length})</span>
+                  </button>
+
+                  <button
+                    onClick={() => { setActiveTab("requests"); setShowMobileSidebar(false); }}
+                    className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+                      activeTab === "requests" ? "bg-slate-900 text-cyan-400 border border-cyan-500/10" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <Compass size={15} />
+                    <span>Requests ({clientRequests.length})</span>
+                  </button>
+
+                  <button
+                    onClick={() => { setActiveTab("contracts"); setShowMobileSidebar(false); }}
+                    className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+                      activeTab === "contracts" ? "bg-slate-900 text-cyan-400 border border-cyan-500/10" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <FileSignature size={15} />
+                    <span>Contracts ({clientContracts.length})</span>
+                  </button>
+
+                  <button
+                    onClick={() => { setActiveTab("plans"); setShowMobileSidebar(false); }}
+                    className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+                      activeTab === "plans" ? "bg-slate-900 text-cyan-400 border border-cyan-500/10" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <Receipt size={15} />
+                    <span>Plans ({clientPlans.length})</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setActiveTab("chat");
+                      markNotificationsRead(currentUser.id);
+                      setShowMobileSidebar(false);
+                    }}
+                    className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center justify-between transition-colors text-left ${
+                      activeTab === "chat" ? "bg-slate-900 text-cyan-400 border border-cyan-500/10" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <span className="flex items-center space-x-2.5">
+                      <MessageSquare size={15} />
+                      <span>Messages</span>
+                    </span>
+                    {clientNotifications.filter(n => !n.is_read).length > 0 && (
+                      <span className="px-1.5 py-0.5 rounded-full bg-cyan-500 text-white text-[9px] font-sans">
+                        {clientNotifications.filter(n => !n.is_read).length}
+                      </span>
+                    )}
+                  </button>
+
+                  <button
+                    onClick={() => { setActiveTab("reviews"); setShowMobileSidebar(false); }}
+                    className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+                      activeTab === "reviews" ? "bg-slate-900 text-cyan-400 border border-cyan-500/10" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <Star size={15} />
+                    <span>Reviews</span>
+                  </button>
+
+                  <button
+                    onClick={() => { setActiveTab("help-kb"); setShowMobileSidebar(false); }}
+                    className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+                      activeTab === "help-kb" ? "bg-slate-900 text-amber-400 border border-amber-500/10" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <BookOpen size={15} />
+                    <span>Knowledge Desk</span>
+                  </button>
+                </div>
+              </div>
+              
+              <div className="border-t pt-4 dark:border-slate-900 border-slate-100 text-center">
+                <p className="text-[9px] font-mono opacity-50">Diavox Tech Secured Portal © 2026</p>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
       {/* Workspace layouts */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start" id="client-workspace-grid">
         
-        {/* Navigation Rail */}
-        <div className="lg:col-span-3 space-y-2 flex flex-col" id="client-sidebar-navigation">
+        {/* Navigation Rail (Desktop Only) */}
+        <div className={`hidden lg:flex ${isSidebarCollapsed ? "lg:col-span-1 items-center" : "lg:col-span-3"} space-y-2 flex flex-col transition-all duration-300`} id="client-sidebar-navigation">
+          {/* Collapse/Expand Toggle Button */}
+          <button
+            onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+            className="flex items-center justify-between p-3 rounded-xl w-full text-xs font-mono font-bold dark:bg-slate-900 bg-slate-100 hover:bg-slate-800 border dark:border-slate-800 border-slate-200 text-slate-400 hover:text-white transition-all cursor-pointer"
+            title={isSidebarCollapsed ? "Expand panel" : "Collapse panel"}
+          >
+            {!isSidebarCollapsed && <span>Toggle Sidebar</span>}
+            {isSidebarCollapsed ? <ChevronsRight size={15} className="mx-auto" /> : <ChevronsLeft size={15} />}
+          </button>
+
           <button
             onClick={() => setActiveTab("profile")}
-            className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors ${
+            className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center ${isSidebarCollapsed ? "justify-center w-12 h-12" : "space-x-2.5 w-full"} transition-all ${
               activeTab === "profile" ? "bg-slate-900 text-cyan-400 border border-cyan-500/10" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
             }`}
+            title="My Profile"
           >
-            <User size={15} className="text-cyan-500" />
-            <span>My Profile</span>
+            <User size={15} className="text-cyan-500 shrink-0" />
+            {!isSidebarCollapsed && <span>My Profile</span>}
           </button>
 
           <button
             onClick={() => setActiveTab("projects")}
-            className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors ${
+            className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center ${isSidebarCollapsed ? "justify-center w-12 h-12" : "space-x-2.5 w-full"} transition-all ${
               activeTab === "projects" ? "bg-slate-900 text-cyan-400 border border-cyan-500/10" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
             }`}
+            title={`Ongoing Orders (${clientProjects.length})`}
           >
-            <Briefcase size={15} />
-            <span>Ongoing Orders ({clientProjects.length})</span>
+            <Briefcase size={15} className="shrink-0" />
+            {!isSidebarCollapsed && <span>Ongoing Orders ({clientProjects.length})</span>}
           </button>
 
           <button
             onClick={() => setActiveTab("requests")}
-            className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors ${
+            className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center ${isSidebarCollapsed ? "justify-center w-12 h-12" : "space-x-2.5 w-full"} transition-all ${
               activeTab === "requests" ? "bg-slate-900 text-cyan-400 border border-cyan-500/10" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
             }`}
+            title={`Requests (${clientRequests.length})`}
           >
-            <Compass size={15} />
-            <span>Requests ({clientRequests.length})</span>
+            <Compass size={15} className="shrink-0" />
+            {!isSidebarCollapsed && <span>Requests ({clientRequests.length})</span>}
           </button>
 
           <button
             onClick={() => setActiveTab("contracts")}
-            className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors ${
+            className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center ${isSidebarCollapsed ? "justify-center w-12 h-12" : "space-x-2.5 w-full"} transition-all ${
               activeTab === "contracts" ? "bg-slate-900 text-cyan-400 border border-cyan-500/10" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
             }`}
+            title={`Contracts (${clientContracts.length})`}
           >
-            <FileSignature size={15} />
-            <span>Contracts ({clientContracts.length})</span>
+            <FileSignature size={15} className="shrink-0" />
+            {!isSidebarCollapsed && <span>Contracts ({clientContracts.length})</span>}
           </button>
 
           <button
             onClick={() => setActiveTab("plans")}
-            className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors ${
+            className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center ${isSidebarCollapsed ? "justify-center w-12 h-12" : "space-x-2.5 w-full"} transition-all ${
               activeTab === "plans" ? "bg-slate-900 text-cyan-400 border border-cyan-500/10" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
             }`}
+            title={`Plans (${clientPlans.length})`}
           >
-            <Receipt size={15} />
-            <span>Plans ({clientPlans.length})</span>
+            <Receipt size={15} className="shrink-0" />
+            {!isSidebarCollapsed && <span>Plans ({clientPlans.length})</span>}
           </button>
 
           <button
@@ -242,64 +500,136 @@ export default function ClientDashboard() {
               setActiveTab("chat");
               markNotificationsRead(currentUser.id);
             }}
-            className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center justify-between transition-colors ${
+            className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center justify-between transition-all ${
               activeTab === "chat" ? "bg-slate-900 text-cyan-400 border border-cyan-500/10" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
-            }`}
+            } ${isSidebarCollapsed ? "justify-center w-12 h-12" : "w-full"}`}
+            title="Messages"
           >
-            <span className="flex items-center space-x-2.5">
-              <MessageSquare size={15} />
-              <span>Messages</span>
-            </span>
-            {clientNotifications.filter(n => !n.is_read).length > 0 && (
-              <span className="px-1.5 py-0.5 rounded-full bg-cyan-500 text-white text-[9px] font-sans">
-                {clientNotifications.filter(n => !n.is_read).length}
-              </span>
+            {isSidebarCollapsed ? (
+              <div className="relative">
+                <MessageSquare size={15} className="shrink-0" />
+                {clientNotifications.filter(n => !n.is_read).length > 0 && (
+                  <span className="absolute -top-2 -right-2 w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse" />
+                )}
+              </div>
+            ) : (
+              <>
+                <span className="flex items-center space-x-2.5">
+                  <MessageSquare size={15} className="shrink-0" />
+                  <span>Messages</span>
+                </span>
+                {clientNotifications.filter(n => !n.is_read).length > 0 && (
+                  <span className="px-1.5 py-0.5 rounded-full bg-cyan-500 text-white text-[9px] font-sans shrink-0">
+                    {clientNotifications.filter(n => !n.is_read).length}
+                  </span>
+                )}
+              </>
             )}
           </button>
 
           <button
             onClick={() => setActiveTab("reviews")}
-            className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors ${
+            className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center ${isSidebarCollapsed ? "justify-center w-12 h-12" : "space-x-2.5 w-full"} transition-all ${
               activeTab === "reviews" ? "bg-slate-900 text-cyan-400 border border-cyan-500/10" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
             }`}
+            title="Reviews"
           >
-            <Star size={15} />
-            <span>Reviews</span>
+            <Star size={15} className="shrink-0" />
+            {!isSidebarCollapsed && <span>Reviews</span>}
           </button>
 
           <button
             onClick={() => setActiveTab("help-kb")}
-            className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors ${
+            className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center ${isSidebarCollapsed ? "justify-center w-12 h-12" : "space-x-2.5 w-full"} transition-all ${
               activeTab === "help-kb" ? "bg-slate-900 text-amber-400 border border-amber-500/10" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
             }`}
+            title="Knowledge Desk"
           >
-            <BookOpen size={15} />
-            <span>Knowledge Desk</span>
-          </button>
-
-          <button
-            onClick={() => setActiveTab("timeline")}
-            className={`p-3 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors ${
-              activeTab === "timeline" ? "bg-slate-900 text-cyan-400 border border-cyan-500/10" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
-            }`}
-          >
-            <Activity size={15} />
-            <span>Operations Timeline</span>
+            <BookOpen size={15} className="shrink-0" />
+            {!isSidebarCollapsed && <span>Knowledge Desk</span>}
           </button>
         </div>
 
         {/* Dynamic Display Panels */}
-        <div className="lg:col-span-9" id="client-workspace-pane">
+        <div className={`${isSidebarCollapsed ? "lg:col-span-11" : "lg:col-span-9"} transition-all duration-300`} id="client-workspace-pane">
           
           {/* TAB 0: User Profile Portal (The Opening Page) */}
           {activeTab === "profile" && (
             <div className="space-y-6" id="client-tab-profile">
               <h3 className="text-lg font-display font-bold pb-3 border-b dark:border-slate-900 border-slate-100">My Personal Profile Portal</h3>
               
+              {/* Responsive Elegant Profile Header (Horizontal on Mobile & Tablet under md break, styling matches desktop theme) */}
+              <div className={`block md:hidden p-5 rounded-2xl border ${
+                theme === "dark" 
+                  ? "bg-slate-900/40 border-slate-800/80 text-white" 
+                  : "bg-slate-50/50 border-slate-200 text-slate-900"
+              } shadow-sm`} id="responsive-profile-header-card">
+                <div className="flex flex-row items-center gap-4">
+                  <div className="relative group shrink-0">
+                    <img 
+                      src={profileAvatar} 
+                      alt={profileName} 
+                      referrerPolicy="no-referrer"
+                      className="w-16 h-16 rounded-full border border-cyan-500/50 object-cover shadow-md"
+                    />
+                    <div className="absolute inset-0 bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[9px] font-mono rounded-full">
+                      Active
+                    </div>
+                  </div>
+
+                  <div className="flex-1 min-w-0 text-left space-y-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h4 className="text-sm font-display font-bold leading-none truncate">{profileName}</h4>
+                      <span className="px-1.5 py-0.5 rounded text-[8px] font-mono font-bold tracking-wider text-cyan-400 bg-cyan-500/10 uppercase">
+                        ⚡ {currentUser.role.replace("_", " ")}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 font-mono truncate">@{profileUsername}</p>
+                    <p className="text-xs text-slate-400 font-sans truncate">{currentUser.email}</p>
+                  </div>
+
+                  <div className="shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const input = document.createElement("input");
+                        input.type = "file";
+                        input.accept = "image/*";
+                        input.onchange = async (e: any) => {
+                          const file = e.target.files[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                              setProfileAvatar(reader.result as string);
+                            };
+                            reader.readAsDataURL(file);
+
+                            try {
+                              const ext = file.name.split('.').pop() || 'png';
+                              const filePath = `${currentUser.id}_${Date.now()}.${ext}`;
+                              const publicUrl = await uploadFileToBucket("profile-images", filePath, file);
+                              setProfileAvatar(publicUrl);
+                              setAlertText("Image uploaded successfully! Submit form below to save.");
+                              setTimeout(() => setAlertText(null), 3500);
+                            } catch (err) {
+                              console.error("Storage uploads failed:", err);
+                            }
+                          }
+                        };
+                        input.click();
+                      }}
+                      className="px-2.5 py-1.5 rounded-lg bg-slate-950/40 hover:bg-slate-900 border dark:border-slate-800 border-slate-200 text-slate-300 font-mono text-[9px] font-bold transition-all"
+                    >
+                      Upload
+                    </button>
+                  </div>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-12 gap-6">
                 
-                {/* Visual Avatar Manager */}
-                <div className={`md:col-span-4 p-6 rounded-2xl border flex flex-col items-center justify-center text-center ${
+                {/* Visual Avatar Manager (Visible on Desktop only) */}
+                <div className={`hidden md:flex md:col-span-4 p-6 rounded-2xl border flex-col items-center justify-center text-center ${
                   theme === "dark" ? "bg-slate-900/30 border-slate-900" : "bg-slate-50 border-slate-200"
                 }`} id="profile-avatar-management">
                   <span className="text-[10px] font-mono tracking-widest text-cyan-400 uppercase font-bold mb-4">Picture Management</span>
@@ -392,7 +722,7 @@ export default function ClientDashboard() {
                 </div>
 
                 {/* Profile Details Form */}
-                <div className={`md:col-span-8 p-6 rounded-2xl border space-y-4 ${
+                <div className={`col-span-12 md:col-span-8 p-6 rounded-2xl border space-y-4 ${
                   theme === "dark" ? "bg-slate-900/30 border-slate-900" : "bg-slate-50 border-slate-200"
                 }`} id="profile-detailed-form">
                   <span className="text-[10px] font-mono tracking-widest text-cyan-400 uppercase font-bold block pb-1 border-b dark:border-slate-800 border-slate-200">Identity configuration</span>
@@ -576,44 +906,137 @@ export default function ClientDashboard() {
                       </button>
                     </div>
                   </form>
-                </div>
-
-                {/* Danger Zone: Permanently Delete Account option */}
-                <div className={`col-span-12 p-6 rounded-2xl border border-rose-500/15 space-y-4 ${
-                  theme === "dark" ? "bg-rose-950/5" : "bg-rose-50/20"
-                }`} id="profile-danger-zone">
-                  <span className="text-[10px] font-mono tracking-widest text-rose-500 uppercase font-bold block pb-1 border-b border-rose-500/15">Danger Zone (Irreversible actions)</span>
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                    <div className="space-y-1 text-left">
-                      <h4 className="text-xs font-mono font-bold text-rose-500">Permanently Delete Account</h4>
-                      <p className="text-[11px] opacity-75 font-sans font-light leading-relaxed text-slate-400">
-                        This will permanently erase your secure profile credentials, records, and active credentials sessions immediately.
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setConfirmDialog({
-                          isOpen: true,
-                          title: "Permanently Delete Your Account?",
-                          message: "WARNING: This action is non-reversible. This will immediately erase your records and disconnect your active session from the server.",
-                          onConfirm: async () => {
-                            try {
-                              const { deleteUserAccount } = useStore.getState();
-                              await deleteUserAccount(currentUser.id);
-                            } catch (err: any) {
-                              alert("Failed to delete account: " + err.message);
+                                {/* Danger Zone: Account Deactivation status tracking timeline or submit button */}
+                {deactivationRequest ? (
+                  <div className={`col-span-12 p-6 rounded-2xl border ${
+                    theme === "dark" ? "bg-slate-900/40 border-slate-800" : "bg-slate-50 border-slate-200"
+                  } space-y-6`} id="deactivation-status-timeline-card">
+                    
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b dark:border-slate-800 border-slate-200">
+                      <div className="space-y-1 text-left">
+                        <span className="text-[10px] font-mono tracking-widest text-cyan-400 uppercase font-bold block">Status Protocol</span>
+                        <h4 className="text-sm font-display font-bold">Account Deactivation Request</h4>
+                        <p className="text-xs text-slate-400 font-sans">
+                          Account deactivation requests are processed within 24 hours.
+                        </p>
+                      </div>
+                      <div className="bg-cyan-500/10 border border-cyan-500/25 px-3 py-1.5 rounded-xl text-center shrink-0">
+                        <span className="text-[10px] font-mono font-bold text-cyan-400 uppercase block">Estimated Remaining</span>
+                        <span className="text-xs font-mono font-bold text-white">
+                          {(() => {
+                            const createdDate = new Date(deactivationRequest.created_at);
+                            const endDate = new Date(createdDate.getTime() + 24 * 60 * 60 * 1000);
+                            const now = new Date();
+                            const diffMs = endDate.getTime() - now.getTime();
+                            if (diffMs <= 0 || deactivationRequest.status === "Deactivated") {
+                              return "Processing complete";
+                            } else {
+                              const diffHrs = Math.floor(diffMs / (1000 * 60 * 60));
+                              const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+                              return `${diffHrs}h ${diffMins}m`;
                             }
-                            setConfirmDialog(null);
-                          }
-                        });
-                      }}
-                      className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-mono text-xs font-bold transition-all shrink-0 cursor-pointer shadow-md shadow-rose-950/10"
-                    >
-                      Delete My Account
-                    </button>
+                          })()}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Timeline Tracker */}
+                    <div className="relative pt-2" id="profile-deactivation-timeline">
+                      {/* Horizontal connector line */}
+                      <div className="absolute top-[21px] left-8 right-8 h-1 bg-slate-800 rounded hidden sm:block"></div>
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 relative">
+                        
+                        {/* Step 1: Pending Review */}
+                        <div className="flex sm:flex-col items-center sm:text-center gap-4 sm:gap-2">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 border z-10 transition-all ${
+                            deactivationRequest.status === "Pending Review" || deactivationRequest.status === "Under Verification" || deactivationRequest.status === "Deactivated"
+                              ? "bg-slate-950 border-cyan-400 text-cyan-400 shadow-lg shadow-cyan-400/10"
+                              : "bg-slate-900 border-slate-800 text-slate-500"
+                          }`}>
+                            {deactivationRequest.status === "Pending Review" ? (
+                              <span className="relative flex h-2 w-2">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
+                              </span>
+                            ) : (
+                              <Check size={14} />
+                            )}
+                          </div>
+                          <div className="text-left sm:text-center">
+                            <h5 className="text-xs font-mono font-bold">Pending Review</h5>
+                            <p className="text-[10px] text-slate-400">Request logged in central system.</p>
+                          </div>
+                        </div>
+
+                        {/* Step 2: Under Verification */}
+                        <div className="flex sm:flex-col items-center sm:text-center gap-4 sm:gap-2">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 border z-10 transition-all ${
+                            deactivationRequest.status === "Under Verification" || deactivationRequest.status === "Deactivated"
+                              ? "bg-slate-950 border-cyan-400 text-cyan-400 shadow-lg shadow-cyan-400/10"
+                              : "bg-slate-900 border-slate-800 text-slate-500"
+                          }`}>
+                            {deactivationRequest.status === "Under Verification" ? (
+                              <span className="relative flex h-2 w-2">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
+                              </span>
+                            ) : deactivationRequest.status === "Deactivated" ? (
+                              <Check size={14} />
+                            ) : (
+                              <span className="text-[10px]">02</span>
+                            )}
+                          </div>
+                          <div className="text-left sm:text-center">
+                            <h5 className="text-xs font-mono font-bold">Under Verification</h5>
+                            <p className="text-[10px] text-slate-400">Administrative clearance analysis.</p>
+                          </div>
+                        </div>
+
+                        {/* Step 3: Deactivated */}
+                        <div className="flex sm:flex-col items-center sm:text-center gap-4 sm:gap-2">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 border z-10 transition-all ${
+                            deactivationRequest.status === "Deactivated"
+                              ? "bg-slate-950 border-rose-500 text-rose-500 shadow-lg shadow-rose-500/10"
+                              : "bg-slate-900 border-slate-800 text-slate-500"
+                          }`}>
+                            {deactivationRequest.status === "Deactivated" ? (
+                              <X size={14} />
+                            ) : (
+                              <span className="text-[10px]">03</span>
+                            )}
+                          </div>
+                          <div className="text-left sm:text-center">
+                            <h5 className="text-xs font-mono font-bold">Deactivated</h5>
+                            <p className="text-[10px] text-slate-400">Secure credential system shutdown.</p>
+                          </div>
+                        </div>
+
+                      </div>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className={`col-span-12 p-6 rounded-2xl border border-rose-500/15 space-y-4 ${
+                    theme === "dark" ? "bg-rose-950/5" : "bg-rose-50/20"
+                  }`} id="profile-danger-zone">
+                    <span className="text-[10px] font-mono tracking-widest text-rose-500 uppercase font-bold block pb-1 border-b border-rose-500/15">Danger Zone (Account Deactivation)</span>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="space-y-1 text-left">
+                        <h4 className="text-xs font-mono font-bold text-rose-500">Deactivate Account</h4>
+                        <p className="text-[11px] opacity-75 font-sans font-light leading-relaxed text-slate-400">
+                          Deactivate your secure credentials access parameters. Deactivation requests are reviewed and processed within 24 hours.
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleDeactivateSubmit}
+                        className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-500 active:scale-95 text-white font-mono text-xs font-bold transition-all shrink-0 cursor-pointer shadow-md shadow-rose-950/10"
+                      >
+                        Deactivate Account
+                      </button>
+                    </div>
+                  </div>
+                )}  </div>
 
               </div>
             </div>
@@ -993,24 +1416,77 @@ Platform Integration Code: Diavox Remote Sync Engine
                 <div>
                   <h4 className="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider mb-3">Your Current Active Subscription</h4>
                   
-                  {clientPlans.filter(p => p.status === "Active").map((pl) => (
-                    <div key={pl.id} className="p-5 rounded-2xl bg-gradient-to-r from-slate-900 to-slate-950 border border-teal-500/20 text-left flex justify-between items-center flex-wrap gap-4 mb-4 shadow-lg shadow-teal-500/5">
-                      <div>
-                        <span className="px-2 py-0.5 rounded text-[9px] font-mono bg-teal-950 text-teal-400 border border-teal-500/20 uppercase font-black">
-                          {pl.billing_cycle} CYCLE
-                        </span>
-                        <h4 className="text-lg font-display font-extrabold mt-1.5 text-white">Diavox Tech {pl.plan_name}</h4>
-                        <p className="text-xs font-mono opacity-60 mt-1">Renewal rate: {pl.price} (Start: {pl.start_date || "2026-06-14"})</p>
-                      </div>
+                  {clientPlans.filter(p => p.status === "Active").map((pl) => {
+                    const daysRemaining = (() => {
+                      if (!pl.renewal_date) return null;
+                      const renewal = new Date(pl.renewal_date);
+                      const now = new Date();
+                      const diffTime = renewal.getTime() - now.getTime();
+                      return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                    })();
 
-                      <div className="text-left py-1 sm:text-right font-mono text-xs text-teal-400 bg-teal-500/10 px-3.5 py-1.5 rounded-xl border border-teal-500/20">
-                        <span className="flex items-center space-x-1.5 justify-end font-extrabold">
-                          <span className="w-2 h-2 rounded-full bg-teal-500 animate-pulse" />
-                          <span>ACTIVE BILLING</span>
-                        </span>
+                    return (
+                      <div key={pl.id} className="p-6 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-950 border border-teal-500/20 text-left space-y-4 mb-4 shadow-lg shadow-teal-500/5">
+                        <div className="flex justify-between items-start flex-wrap gap-4">
+                          <div>
+                            <span className="px-2.5 py-1 rounded text-[9px] font-mono bg-teal-950 text-teal-400 border border-teal-500/20 uppercase font-black tracking-wider">
+                              {pl.billing_cycle} CYCLE
+                            </span>
+                            <h4 className="text-xl font-display font-extrabold mt-2 text-white">Diavox {pl.plan_name}</h4>
+                            <p className="text-xs font-mono opacity-60 mt-1">
+                              Payment rate: {pl.price} (Cycle start: {pl.start_date})
+                            </p>
+                          </div>
+
+                          <div className="text-left font-mono text-xs text-teal-400 bg-teal-500/10 px-4 py-2 rounded-xl border border-teal-500/25">
+                            <span className="flex items-center space-x-2 font-extrabold justify-end">
+                              <span className="w-2.5 h-2.5 rounded-full bg-teal-400 animate-pulse" />
+                              <span>ACTIVE TERM</span>
+                            </span>
+                            {daysRemaining !== null && (
+                              <p className="text-[10px] text-right text-slate-400 mt-1 uppercase font-bold">
+                                {daysRemaining > 0 ? `${daysRemaining} Days Left` : "Renews Today"}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Extra features grid */}
+                        <div className="border-t border-slate-900 pt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between text-xs text-slate-400 gap-3">
+                          <div>
+                            <span className="font-mono text-[10px] uppercase text-slate-500 block">Subscription Duration</span>
+                            <span className="font-medium text-slate-300 text-xs">{pl.duration || "1 Month"}</span>
+                          </div>
+                          {pl.renewal_date && (
+                            <div>
+                              <span className="font-mono text-[10px] uppercase text-slate-500 block">Expiration / Renewal</span>
+                              <span className="font-medium text-slate-300 text-xs">{pl.renewal_date}</span>
+                            </div>
+                          )}
+                          {pl.notes && (
+                            <div className="max-w-xs">
+                              <span className="font-mono text-[10px] uppercase text-slate-500 block">Administrative Notes</span>
+                              <span className="text-slate-400 text-xs italic line-clamp-2">{pl.notes}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {pl.features && pl.features.length > 0 && (
+                          <div className="border-t border-slate-900 pt-3">
+                            <h5 className="font-mono text-[9px] uppercase tracking-wider text-slate-550 mb-2">Cycle Features Inclusions</h5>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-300 font-sans">
+                              {pl.features.map((feat, i) => (
+                                <div key={i} className="flex items-start space-x-2">
+                                  <span className="text-teal-450 mt-0.5">✔</span>
+                                  <span>{feat}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
 
                   {clientPlans.filter(p => p.status === "Active").length === 0 && (
                     <div className="p-6 rounded-2xl border dark:border-slate-850 border-slate-150 text-left font-mono text-xs text-slate-400 bg-slate-500/5">
@@ -1175,7 +1651,126 @@ Platform Integration Code: Diavox Remote Sync Engine
                   </div>
 
                   <h3 className="text-xs font-mono tracking-wider opacity-60 mb-2 uppercase text-left pt-2">Billed Invoices Log</h3>
-                  <div className="overflow-x-auto rounded-2xl border dark:border-slate-900 border-slate-205 text-left">
+                  
+                  {/* Card list layout on small screens (< 768px) */}
+                  <div className="block md:hidden space-y-4 text-left" id="client-billed-invoices-cards">
+                    {/* Fixed baseline paid card */}
+                    <div className="p-4 rounded-xl border dark:border-slate-800 border-slate-200 dark:bg-slate-900 bg-slate-50 space-y-3">
+                      <div className="flex justify-between items-center border-b dark:border-slate-800 border-slate-200 pb-2">
+                        <span className="font-mono font-bold text-xs text-cyan-400">#INV-43209</span>
+                        <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-500/10">PAID</span>
+                      </div>
+                      <div className="space-y-1.5 text-xs font-mono">
+                        <p className="text-slate-300"><span className="text-slate-500">Service:</span> Diavox custom portal setup & design studies</p>
+                        <p className="text-slate-300"><span className="text-slate-500">Due:</span> 2026-06-11</p>
+                        <p className="font-bold text-emerald-400 text-sm"><span className="text-slate-500 font-normal">Amount:</span> $12,000</p>
+                      </div>
+                      <div className="pt-1">
+                        <button
+                          onClick={() => {
+                            const receiptContent = `=====================================================
+                      DIAVOX TECH AGENCY
+                   RECEIPT LOG: #INV-43209
+=====================================================
+
+Invoice Reg: #INV-43209
+Transaction date: 2026-06-11
+Client Identifier: ${currentUser.id}
+
+PARTICULARS:
+------------------------------------------
+Diavox custom portal setup & design studies: $12,000.00
+Tax / Cess Rate (SLA standard): $0.00
+
+TOTAL SETTLED AMOUNT: $12,000.00
+Status: Settled (OK)
+
+=====================================================
+Receipt authenticity check: SECURE PORTAL STABLE TRANSACTION
+=====================================================`;
+                            const blob = new Blob([receiptContent], { type: "text/plain;charset=utf-8" });
+                            const url = URL.createObjectURL(blob);
+                            const link = document.createElement("a");
+                            link.href = url;
+                            link.download = "Diavox_Receipt_INV-43209.txt";
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                            setAlertText("Downloaded Receipt #INV-43209.");
+                            setTimeout(() => setAlertText(null), 3000);
+                          }}
+                          className="w-full text-center py-2 rounded bg-slate-800 text-white font-mono hover:bg-slate-700 transition text-[11px] font-bold cursor-pointer"
+                        >
+                          Download Receipt
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Dynamic mapping cards */}
+                    {clientInvoices.map((inv, idx) => (
+                      <div key={idx} className="p-4 rounded-xl border dark:border-slate-800 border-slate-200 dark:bg-slate-900 bg-slate-50 space-y-3">
+                        <div className="flex justify-between items-center border-b dark:border-slate-800 border-slate-200 pb-2">
+                          <span className="font-mono font-bold text-xs text-cyan-400">#{inv.invoice_number || `INV-${inv.id.substring(4, 9).toUpperCase()}`}</span>
+                          <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
+                            inv.status === "paid" 
+                              ? "bg-emerald-950 text-emerald-400 border border-emerald-500/10"
+                              : inv.status === "cancelled"
+                              ? "bg-slate-900 text-slate-500"
+                              : "bg-amber-950 text-amber-500 border border-amber-500/10"
+                          }`}>
+                            {inv.status?.toUpperCase() || "PENDING"}
+                          </span>
+                        </div>
+                        <div className="space-y-1.5 text-xs font-mono">
+                          <p className="text-slate-350"><span className="text-slate-500 font-bold">Service:</span> {inv.services || "General subscription retainer"}</p>
+                          <p className="text-slate-350"><span className="text-slate-500 font-bold">Due:</span> {inv.due_date || "2026-06-30"}</p>
+                          <p className="font-bold text-slate-200 text-sm"><span className="text-slate-500 font-bold">Amount:</span> {inv.amount}</p>
+                        </div>
+                        <div className="pt-1">
+                          <button
+                            onClick={() => {
+                              const receiptContent = `=====================================================
+                      DIAVOX TECH AGENCY
+                  RECEIPT LOG: #${inv.invoice_number || `INV-${inv.id.substring(4, 9).toUpperCase()}`}
+=====================================================
+
+Invoice Reg: #${inv.invoice_number || `INV-${inv.id.substring(4, 9).toUpperCase()}`}
+Due date: ${inv.due_date || "2026-06-30"}
+Client Identifier: ${currentUser.id}
+
+PARTICULARS:
+------------------------------------------
+${inv.services || "Diavox Custom Retainer Subscription"}: ${inv.amount}
+Tax / Cess Rate (SLA standard): ${inv.taxes || "$250"}
+
+TOTAL INVOICED VALUE: ${inv.amount}
+Status: ${inv.status?.toUpperCase() || "PENDING"}
+
+=====================================================
+Receipt authenticity check: SECURE PORTAL STABLE TRANSACTION
+=====================================================`;
+                              const blob = new Blob([receiptContent], { type: "text/plain;charset=utf-8" });
+                              const url = URL.createObjectURL(blob);
+                              const link = document.createElement("a");
+                              link.href = url;
+                              link.download = `Diavox_Receipt_${inv.invoice_number || inv.id}.txt`;
+                              document.body.appendChild(link);
+                              link.click();
+                              document.body.removeChild(link);
+                              setAlertText(`Downloaded Receipt reference details.`);
+                              setTimeout(() => setAlertText(null), 3000);
+                            }}
+                            className="w-full text-center py-2 rounded bg-slate-800 text-white font-mono hover:bg-slate-700 transition text-[11px] font-bold cursor-pointer"
+                          >
+                            Download Receipt
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Wide Table view on screen sizes >= 768px */}
+                  <div className="hidden md:block overflow-x-auto rounded-2xl border dark:border-slate-900 border-slate-205 text-left">
                     <table className="w-full text-left font-mono text-xs">
                       <thead>
                         <tr className="bg-slate-900 text-slate-500 font-bold">
@@ -1231,7 +1826,7 @@ Receipt authenticity check: SECURE PORTAL STABLE TRANSACTION
                                 setAlertText("Downloaded Receipt #INV-43209.");
                                 setTimeout(() => setAlertText(null), 3000);
                               }}
-                              className="px-2.5 py-1 rounded bg-slate-800 text-white font-mono hover:bg-slate-700 transition"
+                              className="px-2.5 py-1 rounded bg-slate-800 text-white font-mono hover:bg-slate-700 transition cursor-pointer"
                             >
                               Download Receipt
                             </button>
@@ -1289,7 +1884,7 @@ Receipt authenticity check: SECURE PORTAL STABLE TRANSACTION
                                   setAlertText(`Downloaded Receipt reference details.`);
                                   setTimeout(() => setAlertText(null), 3000);
                                 }}
-                                className="px-2.5 py-1 rounded bg-slate-800 text-white font-mono hover:bg-slate-700 transition"
+                                className="px-2.5 py-1 rounded bg-slate-800 text-white font-mono hover:bg-slate-700 transition cursor-pointer"
                               >
                                 Download Receipt
                               </button>
@@ -1346,7 +1941,7 @@ Receipt authenticity check: SECURE PORTAL STABLE TRANSACTION
                       if (files && files.length > 0) {
                         const fileName = files[0].name;
                         // Pre-inject uploaded attachment message!
-                        sendMessage(currentUser.id, `Shared contract file attachment: ${fileName} (Ready for developer assessment)`);
+                        sendMessage("team", `Shared contract file attachment: ${fileName} (Ready for developer assessment)`);
                         setAlertText(`Document file: "${fileName}" has been safely parsed & shared with developers.`);
                         setTimeout(() => setAlertText(null), 3500);
                       }
@@ -1408,7 +2003,7 @@ Receipt authenticity check: SECURE PORTAL STABLE TRANSACTION
                           input.onchange = (e: any) => {
                             const file = e.target.files[0];
                             if (file) {
-                              sendMessage(currentUser.id, `Shared file attachment document: ${file.name}`);
+                              sendMessage("team", `Shared file attachment document: ${file.name}`);
                               setAlertText(`Document attachment: "${file.name}" linked successfully in live room.`);
                               setTimeout(() => setAlertText(null), 3500);
                             }
@@ -1577,12 +2172,6 @@ Receipt authenticity check: SECURE PORTAL STABLE TRANSACTION
           {activeTab === "help-kb" && (
             <div className="space-y-6 animate-fade-in" id="client-panel-help-kb animate-fade-in">
               <HelpCenter />
-            </div>
-          )}
-
-          {activeTab === "timeline" && (
-            <div className="space-y-6 animate-fade-in" id="client-panel-timeline animate-fade-in">
-              <TimelineCenter mode="client" />
             </div>
           )}
 

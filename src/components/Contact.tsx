@@ -36,9 +36,10 @@ export default function Contact({ onOpenAuth, onNavigate }: ContactProps) {
     businessHours: "Mon - Fri: 9:00 AM - 6:00 PM (GMT-5)"
   };
   const [successMsg, setSuccessMsg] = useState<boolean>(false);
+  const [errorMsg, setErrorMsg] = useState<string>("");
   
   // React Hook Form
-  const { register, handleSubmit, formState: { errors }, reset } = useForm({
+  const { register, handleSubmit, formState: { errors }, setError, reset } = useForm({
     defaultValues: {
       service_type: "Website Development",
       description: "",
@@ -53,6 +54,7 @@ export default function Contact({ onOpenAuth, onNavigate }: ContactProps) {
     }
 
     try {
+      setErrorMsg("");
       // Validate schema manually to fully leverage Zod's robust parsing
       inquirySchema.parse(data);
 
@@ -74,6 +76,21 @@ export default function Contact({ onOpenAuth, onNavigate }: ContactProps) {
       }, 3500);
     } catch (err: any) {
       console.error("Validation or submission error:", err);
+      if (err instanceof z.ZodError) {
+        // Map zod validation errors to React Hook Form errors so they show up beautifully under each field
+        err.issues.forEach((issue) => {
+          const path = issue.path[0] as "service_type" | "description" | "budget";
+          if (path) {
+            setError(path, {
+              type: "manual",
+              message: issue.message
+            });
+          }
+        });
+        setErrorMsg(err.issues[0]?.message || "Please correct the form errors first.");
+      } else {
+        setErrorMsg(err.message || "Failed to submit quote request. Please try again.");
+      }
     }
   };
 
@@ -229,6 +246,16 @@ export default function Contact({ onOpenAuth, onNavigate }: ContactProps) {
                 </div>
               )}
 
+              {errorMsg && (
+                <div className="mb-6 p-4 rounded-xl bg-rose-950/40 text-rose-400 border border-rose-800/60 flex items-start space-x-3 text-xs font-mono animate-fade-in">
+                  <AlertTriangle className="shrink-0 text-rose-400 mt-1" size={18} />
+                  <div>
+                    <p className="font-bold uppercase tracking-wider">Submission Failed</p>
+                    <p className="opacity-80 mt-1">{errorMsg}</p>
+                  </div>
+                </div>
+              )}
+
               {/* Unauthenticated Security warnings */}
               {!currentUser && (
                 <div className="mb-6 p-4 rounded-xl bg-amber-500/10 text-amber-500 border border-amber-500/20 flex items-start space-x-3 text-xs" id="contact-unauth-warning">
@@ -289,7 +316,11 @@ export default function Contact({ onOpenAuth, onNavigate }: ContactProps) {
                     {...register("description")}
                     placeholder="We require a responsive real estate layout, with maps, and standard PDF contract download states..."
                     rows={5}
-                    className="w-full text-xs p-3.5 rounded-xl border bg-slate-50 border-slate-200 text-slate-900 dark:bg-slate-900 dark:border-slate-850 dark:text-white focus:outline-none focus:border-cyan-500/40"
+                    className={`w-full text-xs p-3.5 rounded-xl border focus:outline-none transition-all ${
+                      errors.description 
+                        ? "border-rose-500/70 bg-rose-500/5 text-slate-900 dark:text-white focus:border-rose-500" 
+                        : "bg-slate-50 border-slate-200 text-slate-900 dark:bg-slate-900 dark:border-slate-850 dark:text-white focus:border-cyan-500/40"
+                    }`}
                   />
                   {errors.description && (
                     <span className="text-[10px] font-mono text-rose-500 mt-1 block">{errors.description.message}</span>

@@ -65,7 +65,29 @@ export default function AdminPayments() {
           Direct Razorpay Transaction History log
         </h4>
 
-        <div className="overflow-x-auto">
+        <div className="block md:hidden space-y-4">
+          {payments.map((pay) => (
+            <div key={pay.id} className="p-4 rounded-xl border dark:border-slate-800 border-slate-200 dark:bg-slate-900 bg-slate-50 space-y-2">
+              <div className="flex justify-between items-center border-b dark:border-slate-800 border-slate-200 pb-2">
+                <span className="font-mono text-[10px] text-slate-450 truncate max-w-[120px]">{pay.id}</span>
+                <span className="font-mono text-xs font-bold text-emerald-400">${pay.amount}</span>
+              </div>
+              <div className="space-y-1 font-mono text-[11px] text-slate-400">
+                <p><span className="text-slate-500">Razorpay ID:</span> <span className="text-cyan-400 break-all">{pay.transaction_id}</span></p>
+                <p><span className="text-slate-500">Invoice:</span> {pay.invoice_id || "Direct Upgrade"}</p>
+                <p><span className="text-slate-500">Date:</span> {new Date(pay.date).toLocaleDateString()}</p>
+                <p><span className="text-slate-500">Method:</span> {pay.method || "Razorpay API Check"}</p>
+              </div>
+            </div>
+          ))}
+          {payments.length === 0 && (
+            <div className="text-center py-6 text-slate-500 font-mono text-xs">
+              Direct telemetry database lists no webhook captures.
+            </div>
+          )}
+        </div>
+
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left font-sans text-xs">
             <thead>
               <tr className="border-b border-slate-850 text-slate-550 font-mono text-[10px] uppercase">

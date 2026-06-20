@@ -18,6 +18,7 @@ export interface UserProfile {
   permissions?: string[]; // e.g. ["view_leads", "manage_projects", "upload_designs", "manage_seo", "view_reports"]
   portfolio?: string;
   description?: string;
+  status?: string;
 }
 
 export interface PricingTierObj {
@@ -143,11 +144,15 @@ export interface Contract {
 export interface ActivePlan {
   id: string;
   client_id: string;
-  plan_name: "Starter" | "Professional" | "Enterprise";
+  plan_name: "Starter" | "Professional" | "Enterprise" | string;
   price: string;
-  status: "Active" | "Expired" | "Cancelled";
-  billing_cycle: "Monthly" | "Annually";
+  status: "Active" | "Expired" | "Cancelled" | string;
+  billing_cycle: "Monthly" | "Annually" | string;
   start_date: string;
+  renewal_date?: string;
+  features?: string[];
+  duration?: string;
+  notes?: string;
 }
 
 export interface ClientReview {
@@ -182,6 +187,8 @@ export interface Message {
   sender_name: string;
   sender_role: UserRole;
   recipient_id: string; // "team" or specific client ID
+  recipient_name: string;
+  recipient_role: string;
   message_text: string;
   created_at: string;
   conversation_id?: string;
@@ -372,6 +379,7 @@ export interface PortfolioItem {
   is_featured: boolean;
   live_url?: string;
   created_at: string;
+  tags?: string[];
 }
 
 export interface PrivateMessage {

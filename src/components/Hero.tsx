@@ -160,40 +160,41 @@ export default function Hero({ onNavigate, onOpenAuth }: HeroProps) {
           
           {/* Hero text panel */}
           <div className="lg:col-span-7 space-y-6 text-left min-h-[400px] flex flex-col justify-center" id="hero-text-panel">
-            <AnimatePresence mode="wait">
-              <motion.div
-                key={currentSlideIndex}
-                initial={variants.initial}
-                animate={variants.animate}
-                exit={variants.exit}
-                transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-                className="space-y-6"
-              >
-                {/* World remote delivery badge */}
-                {cmsContent?.heroBadgeEffect !== "hide" && (
-                  <div className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full text-xs font-mono border transition-all duration-300 bg-cyan-500/10 dark:bg-cyan-950/40 text-cyan-500 border-cyan-400/30">
-                    {cmsContent?.heroBadgeEffect === "ping" ? (
-                      <span className="relative flex h-2 w-2 mr-1">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
-                      </span>
-                    ) : (
-                      <Globe 
-                        size={13} 
-                        className={
-                          cmsContent?.heroBadgeEffect === "spin" || !cmsContent?.heroBadgeEffect
-                            ? "animate-spin-slow" 
-                            : cmsContent?.heroBadgeEffect === "pulse" 
-                            ? "animate-pulse text-cyan-400" 
-                            : ""
-                        } 
-                      />
-                    )}
-                    <span>{cmsContent?.heroBadge || "Serving clients worldwide remotely"}</span>
-                  </div>
-                )}
+            <div className="space-y-6">
+              {/* World remote delivery badge */}
+              {cmsContent?.heroBadgeEffect !== "hide" && (
+                <div className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-full text-xs font-mono border transition-all duration-300 bg-cyan-500/10 dark:bg-cyan-950/40 text-cyan-500 border-cyan-400/30">
+                  {cmsContent?.heroBadgeEffect === "ping" ? (
+                    <span className="relative flex h-2 w-2 mr-1">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500"></span>
+                    </span>
+                  ) : (
+                    <Globe 
+                      size={13} 
+                      className={
+                        cmsContent?.heroBadgeEffect === "spin" || !cmsContent?.heroBadgeEffect
+                          ? "animate-spin-slow" 
+                          : cmsContent?.heroBadgeEffect === "pulse" 
+                          ? "animate-pulse text-cyan-400" 
+                          : ""
+                      } 
+                    />
+                  )}
+                  <span>{cmsContent?.heroBadge || "Serving clients worldwide remotely"}</span>
+                </div>
+              )}
 
-                <h1 className="text-4xl sm:text-5xl md:text-7.5xl font-display font-light tracking-tight leading-tight text-slate-900 dark:text-slate-100" id="hero-core-title">
+              <AnimatePresence mode="wait">
+                <motion.h1
+                  key={currentSlideIndex}
+                  initial={variants.initial}
+                  animate={variants.animate}
+                  exit={variants.exit}
+                  transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+                  className="text-4xl sm:text-5xl md:text-7.5xl font-display font-light tracking-tight leading-tight text-slate-900 dark:text-slate-100"
+                  id="hero-core-title"
+                >
                   {activeEffect === "typewriter" ? (
                     <TypewriterText text={currentSlide.title} />
                   ) : (
@@ -204,50 +205,50 @@ export default function Hero({ onNavigate, onOpenAuth }: HeroProps) {
                       </span>
                     </>
                   )}
-                </h1>
+                </motion.h1>
+              </AnimatePresence>
 
-                <p className="text-base sm:text-lg opacity-80 max-w-2xl font-light leading-relaxed">
-                  {currentSlide.subtitle}
-                </p>
+              <p className="text-base sm:text-lg opacity-80 max-w-2xl font-light leading-relaxed">
+                {currentSlide.subtitle}
+              </p>
 
-                {/* Direct primary workflows */}
-                <div className="flex flex-wrap items-center gap-3 pt-4" id="hero-cta-group">
-                  <button
-                    onClick={handleCtaClick}
-                    className="flex items-center space-x-2 px-8 py-4 bg-gradient-to-r from-cyan-500 to-purple-600 hover:brightness-110 text-white font-semibold rounded-xl text-sm transition-all shadow-xl shadow-cyan-500/10 hover:shadow-cyan-500/20 active:scale-98"
-                  >
-                    <span>{currentSlide.buttonText}</span>
-                    <ArrowRight size={16} />
-                  </button>
+              {/* Direct primary workflows */}
+              <div className="flex flex-wrap items-center gap-3 pt-4" id="hero-cta-group">
+                <button
+                  onClick={handleCtaClick}
+                  className="flex items-center space-x-2 px-8 py-4 bg-gradient-to-r from-cyan-500 to-purple-600 hover:brightness-110 text-white font-semibold rounded-xl text-sm transition-all shadow-xl shadow-cyan-500/10 hover:shadow-cyan-500/20 active:scale-98"
+                >
+                  <span>{currentSlide.buttonText}</span>
+                  <ArrowRight size={16} />
+                </button>
 
-                  <button
-                    onClick={() => onNavigate("portfolio-page")}
-                    className={`flex items-center space-x-1 px-6 py-4 font-medium rounded-xl text-sm transition-colors border glassmorphic ${
-                      theme === "dark"
-                        ? "bg-slate-900/60 border-slate-800 hover:bg-slate-800 text-slate-200"
-                        : "bg-white border-slate-200 hover:bg-slate-50 text-slate-700"
-                    }`}
-                  >
-                    <span>{cmsContent?.heroCtaSecondaryText || "Explore Work"}</span>
-                    <ChevronRight size={15} />
-                  </button>
+                <button
+                  onClick={() => onNavigate("portfolio-page")}
+                  className={`flex items-center space-x-1 px-6 py-4 font-medium rounded-xl text-sm transition-colors border glassmorphic ${
+                    theme === "dark"
+                      ? "bg-slate-900/60 border-slate-800 hover:bg-slate-800 text-slate-200"
+                      : "bg-white border-slate-200 hover:bg-slate-50 text-slate-700"
+                  }`}
+                >
+                  <span>{cmsContent?.heroCtaSecondaryText || "Explore Work"}</span>
+                  <ChevronRight size={15} />
+                </button>
 
-                  {slides.length > 1 && (
-                    <div className="flex items-center space-x-2 ml-4">
-                      {slides.map((_, idx) => (
-                        <button
-                          key={idx}
-                          onClick={() => setCurrentSlideIndex(idx)}
-                          className={`h-1.5 rounded-full transition-all duration-500 ${
-                            currentSlideIndex === idx ? "w-8 bg-cyan-500 shadow-sm shadow-cyan-500/40" : "w-1.5 bg-slate-300 dark:bg-slate-800"
-                          }`}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </motion.div>
-            </AnimatePresence>
+                {slides.length > 1 && (
+                  <div className="flex items-center space-x-2 ml-4">
+                    {slides.map((_, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => setCurrentSlideIndex(idx)}
+                        className={`h-1.5 rounded-full transition-all duration-500 ${
+                          currentSlideIndex === idx ? "w-8 bg-cyan-500 shadow-sm shadow-cyan-500/40" : "w-1.5 bg-slate-300 dark:bg-slate-800"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Premium Tech Demo Visual Mockup Box */}

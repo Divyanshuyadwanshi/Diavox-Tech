@@ -640,6 +640,22 @@ export default function App() {
       {/* Global AI Assistant Floating Popup */}
       <AIAssistantPopup />
 
+      {/* Floating WhatsApp Quick Contact Button */}
+      <a
+        href={`https://wa.me/${cmsContent?.contactSettings?.whatsapp?.replace(/[^0-9]/g, "") || "911234567890"}?text=${encodeURIComponent("Hello Diavox, I'd like to discuss a development project.")}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        id="floating-whatsapp-btn"
+        className="fixed bottom-6 left-6 z-50 p-3.5 rounded-full bg-[#25d366] hover:bg-[#20ba5a] text-white shadow-xl shadow-emerald-500/20 transition-all duration-300 scale-100 hover:scale-110 flex items-center justify-center cursor-pointer group"
+        title="Chat on WhatsApp"
+      >
+        <span className="absolute left-14 bg-slate-900/90 backdrop-blur-sm text-white text-[10px] font-mono px-2 py-1 rounded shadow-md opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none whitespace-nowrap border border-slate-800">
+          Chat on WhatsApp
+        </span>
+        <span className="absolute inset-0 rounded-full bg-[#25d366] opacity-30 animate-pulse pointer-events-none" />
+        <MessageCircle size={20} className="relative z-10 fill-white text-[#25d366]" style={{ strokeWidth: 1.5 }} />
+      </a>
+
       {/* Global Advanced Command Center Modal Overlay */}
       <GlobalCommandCenter 
         isOpen={commandCenterOpen}

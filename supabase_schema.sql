@@ -194,6 +194,7 @@ CREATE TABLE IF NOT EXISTS public.plans (
   price_monthly NUMERIC(10,2) NOT NULL,
   price_yearly NUMERIC(10,2) NOT NULL,
   features TEXT[] NOT NULL,
+  is_popular BOOLEAN DEFAULT false,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -208,6 +209,8 @@ CREATE TABLE IF NOT EXISTS public.active_plans (
   start_date VARCHAR(100) NOT NULL,
   renewal_date VARCHAR(100) NOT NULL,
   features TEXT[],
+  duration VARCHAR(150),
+  notes TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );

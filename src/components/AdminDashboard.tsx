@@ -6,6 +6,7 @@
 import React, { useState, useEffect } from "react";
 import { useStore } from "../store";
 import { uploadFileToBucket } from "../supabase";
+import { motion, AnimatePresence } from "motion/react";
 
 // Import modular backoffice managers
 import AdminBlogs from "./admin/AdminBlogs";
@@ -30,7 +31,7 @@ import {
   MessageSquare, LockKeyhole, Mail, UserPlus, Star, Save, Tag, DollarSign, PlusCircle,
   History, CreditCard, Cpu, Layout, Eye, Download, Search, FileText, Filter,
   ChevronUp, ChevronDown, GripVertical, EyeOff, Globe, Clock,
-  Facebook, Instagram, Linkedin, Twitter, Youtube, Github, HelpCircle
+  Facebook, Instagram, Linkedin, Twitter, Youtube, Github, HelpCircle, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight
 } from "lucide-react";
 import { TeamDepartment, UserRole, RequestStatus, UserProfile, Message, PricingOption, PricingTierObj } from "../types";
 
@@ -89,6 +90,8 @@ export default function AdminDashboard() {
     | "help-kb"
     | "timeline"
   >("profile");
+  const [showMobileSidebar, setShowMobileSidebar] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   // Local state for searching/filtering quote requests
   const [requestSearch, setRequestSearch] = useState<string>("");
@@ -497,12 +500,355 @@ export default function AdminDashboard() {
         )}
       </div>
 
+      {/* Mobile Dashboard Nav Trigger */}
+      <div className="lg:hidden flex items-center justify-between p-3.5 rounded-2xl border dark:bg-slate-900 bg-slate-50 dark:border-slate-800 border-slate-200 mb-6" id="admin-mobile-tab-trigger">
+        <div className="flex items-center space-x-2.5">
+          <span className="text-[10px] font-mono tracking-wider font-bold uppercase opacity-60">Admin Unit:</span>
+          <span className="text-xs font-mono font-bold text-cyan-400 capitalize">{activeTab.replace("_", " ").replace("-", " ")}</span>
+        </div>
+        <button 
+          onClick={() => setShowMobileSidebar(true)}
+          className="px-3.5 py-1.5 rounded-lg text-xs font-mono font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 active:scale-95 transition-all cursor-pointer"
+        >
+          Navigate Section
+        </button>
+      </div>
+
+      {/* Collapsible Mobile Sidebar Overlay Drawer */}
+      <AnimatePresence>
+        {showMobileSidebar && (
+          <>
+            {/* Backdrop overlay */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowMobileSidebar(false)}
+              className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm lg:hidden"
+            />
+            
+            {/* Sliding Drawer */}
+            <motion.div
+              initial={{ x: "-100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+              className={`fixed inset-y-0 left-0 z-50 w-72 max-w-[80vw] p-6 shadow-2xl border-r flex flex-col justify-between lg:hidden overflow-y-auto ${
+                theme === "dark" ? "bg-slate-950 border-slate-900 text-white" : "bg-white border-slate-200 text-slate-800"
+              }`}
+              id="admin-mobile-drawer"
+            >
+              <div className="space-y-6">
+                <div className="flex items-center justify-between border-b pb-4 dark:border-slate-900 border-slate-100">
+                  <div>
+                    <p className="text-[10px] font-mono tracking-widest text-cyan-400 font-bold uppercase">NAVIGATION</p>
+                    <h4 className="text-lg font-display font-bold">Admin Console</h4>
+                  </div>
+                  <button 
+                    onClick={() => setShowMobileSidebar(false)} 
+                    className="p-1.5 rounded-lg dark:bg-slate-900 bg-slate-100 dark:hover:bg-slate-800 hover:bg-slate-200 transition-colors cursor-pointer"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+
+                {/* Operations Menu inside Drawer */}
+                <div className="space-y-1 py-1 flex flex-col overflow-y-auto max-h-[70vh] scrollbar-none" id="admin-mobile-sidebar-navigation">
+                  
+                  <div className="text-[9px] font-mono uppercase tracking-wider text-slate-500 font-bold px-2 pt-1 pb-1 text-left">Internal Ops</div>
+                  
+                  <button
+                    onClick={() => { setActiveTab("profile"); setShowMobileSidebar(false); }}
+                    className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+                      activeTab === "profile" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <Shield size={14} className="text-cyan-500" />
+                    <span>My Profile</span>
+                  </button>
+
+                  <button
+                    onClick={() => { setActiveTab("analytics"); setShowMobileSidebar(false); }}
+                    className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+                      activeTab === "analytics" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <BarChart3 size={14} />
+                    <span>Reports</span>
+                  </button>
+
+                  <div className="text-[9px] font-mono uppercase tracking-wider text-slate-500 font-bold px-2 pt-3 pb-1 text-left">Content & Brand</div>
+
+                  <button
+                    onClick={() => { setActiveTab("blogs"); setShowMobileSidebar(false); }}
+                    className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+                      activeTab === "blogs" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <FileText size={14} />
+                    <span>Blogs</span>
+                  </button>
+
+                  <button
+                    onClick={() => { setActiveTab("portfolio"); setShowMobileSidebar(false); }}
+                    className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+                      activeTab === "portfolio" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <Star size={14} />
+                    <span>Our Work</span>
+                  </button>
+
+                  {["secret_admin", "primary_admin", "secondary_admin", "third_admin"].includes(currentUser.role) && (
+                    <button
+                      onClick={() => { setActiveTab("cms"); setShowMobileSidebar(false); }}
+                      className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+                        activeTab === "cms" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      <Layout size={14} />
+                      <span>Website Content</span>
+                    </button>
+                  )}
+
+                  {["secret_admin", "primary_admin", "secondary_admin", "third_admin"].includes(currentUser.role) && (
+                    <button
+                      onClick={() => { setActiveTab("socials"); setShowMobileSidebar(false); }}
+                      className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+                        activeTab === "socials" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      <Globe size={14} />
+                      <span>Social Links</span>
+                    </button>
+                  )}
+
+                  <div className="text-[9px] font-mono uppercase tracking-wider text-slate-500 font-bold px-2 pt-3 pb-1 text-left">Projects & Work</div>
+
+                  <button
+                    onClick={() => { setActiveTab("work_projects"); setShowMobileSidebar(false); }}
+                    className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+                      activeTab === "work_projects" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <Briefcase size={14} />
+                    <span>My Tasks</span>
+                  </button>
+
+                  <button
+                    onClick={() => { setActiveTab("ongoing_progress"); setShowMobileSidebar(false); }}
+                    className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+                      activeTab === "ongoing_progress" ? "bg-cyan-950/50 border border-cyan-500/10 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <CheckCircle2 size={14} className="text-teal-400" />
+                    <span>Ongoing Orders</span>
+                  </button>
+
+                  <div className="text-[9px] font-mono uppercase tracking-wider text-slate-500 font-bold px-2 pt-3 pb-1 text-left">Staffing & Intelligence</div>
+
+                  <button
+                    onClick={() => { setActiveTab("team_profiles"); setShowMobileSidebar(false); }}
+                    className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+                      activeTab === "team_profiles" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <Users size={14} />
+                    <span>Team</span>
+                  </button>
+
+                  {(["secret_admin", "primary_admin", "secondary_admin"].includes(currentUser.role) || (currentUser.role === "team_member")) && (
+                    <button
+                      onClick={() => { setActiveTab("aitrain"); setShowMobileSidebar(false); }}
+                      className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+                        activeTab === "aitrain" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      <Cpu size={14} className="text-indigo-400" />
+                      <span>AI Assistant</span>
+                    </button>
+                  )}
+
+                  <div className="text-[9px] font-mono uppercase tracking-wider text-slate-500 font-bold px-2 pt-3 pb-1 text-left">Sales & Finance</div>
+
+                  <button
+                    onClick={() => { setActiveTab("quotes"); setShowMobileSidebar(false); }}
+                    className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+                      activeTab === "quotes" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <FileSignature size={14} />
+                    <span>Requests</span>
+                  </button>
+
+                  <button
+                    onClick={() => { setActiveTab("contracts"); setShowMobileSidebar(false); }}
+                    className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+                      activeTab === "contracts" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <FileText size={14} className="text-orange-400" />
+                    <span>Contracts</span>
+                  </button>
+
+                  <button
+                    onClick={() => { setActiveTab("billing"); setShowMobileSidebar(false); }}
+                    className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+                      activeTab === "billing" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <CreditCard size={14} />
+                    <span>Invoices</span>
+                  </button>
+
+                  <button
+                    onClick={() => { setActiveTab("payments"); setShowMobileSidebar(false); }}
+                    className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+                      activeTab === "payments" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <DollarSign size={14} className="text-emerald-400" />
+                    <span>Payments</span>
+                  </button>
+
+                  <button
+                    onClick={() => { setActiveTab("active_plans"); setShowMobileSidebar(false); }}
+                    className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+                      activeTab === "active_plans" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <Tag size={14} className="text-amber-400" />
+                    <span>Active Plans</span>
+                  </button>
+
+                  <button
+                    onClick={() => { setActiveTab("pricing"); setShowMobileSidebar(false); }}
+                    className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+                      activeTab === "pricing" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <Tag size={14} />
+                    <span>Settings</span>
+                  </button>
+
+                  <div className="text-[9px] font-mono uppercase tracking-wider text-slate-500 font-bold px-2 pt-3 pb-1 text-left">Communication & Logs</div>
+
+                  <button
+                    onClick={() => { setActiveTab("team_chats"); setShowMobileSidebar(false); }}
+                    className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+                      activeTab === "team_chats" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <MessageSquare size={14} className="text-indigo-400" />
+                    <span>Messages</span>
+                  </button>
+
+                  <button
+                    onClick={() => { setActiveTab("project_groups"); setShowMobileSidebar(false); }}
+                    className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+                      activeTab === "project_groups" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <Briefcase size={14} className="text-sky-400" />
+                    <span>Groups</span>
+                  </button>
+
+                  {(["secret_admin", "primary_admin", "secondary_admin"].includes(currentUser.role) || 
+                    (currentUser.role === "team_member" && currentUser.permissions?.includes("client_chat_access"))) && (
+                    <button
+                      onClick={() => { setActiveTab("chats"); setShowMobileSidebar(false); }}
+                      className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+                        activeTab === "chats" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      <MessageSquare size={14} className="text-teal-400" />
+                      <span>Customer Chats</span>
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => { setActiveTab("reviews"); setShowMobileSidebar(false); }}
+                    className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+                      activeTab === "reviews" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <Star size={14} />
+                    <span>Reviews</span>
+                  </button>
+
+                  <button
+                    onClick={() => { setActiveTab("audit"); setShowMobileSidebar(false); }}
+                    className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+                      activeTab === "audit" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <History size={14} />
+                    <span>Alerts</span>
+                  </button>
+
+                  <button
+                    onClick={() => { setActiveTab("help-kb"); setShowMobileSidebar(false); }}
+                    className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+                      activeTab === "help-kb" ? "bg-cyan-950/50 border border-cyan-500/20 text-amber-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <HelpCircle size={14} className="text-amber-500" />
+                    <span>Knowledge Desk</span>
+                  </button>
+
+                  <button
+                    onClick={() => { setActiveTab("timeline"); setShowMobileSidebar(false); }}
+                    className={`p-2.5 rounded-xl text-xs font-mono font-bold flex items-center space-x-2.5 transition-colors text-left ${
+                      activeTab === "timeline" ? "bg-cyan-950/50 border border-cyan-500/20 text-cyan-400 font-bold" : "hover:bg-slate-500/5 text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    <Clock size={14} className="text-cyan-400" />
+                    <span>Timeline</span>
+                  </button>
+                </div>
+              </div>
+              
+              <div className="border-t pt-4 dark:border-slate-900 border-slate-100 text-center">
+                <p className="text-[9px] font-mono opacity-50">Diavox Tech Admin Portal © 2026</p>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
       {/* Grid wrapper - Left sidebar nav, Right full workspace */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start" id="admin-workspace-grid">
         
          {/* Navigation panel */}
-        <div className="lg:col-span-3 space-y-1.5 flex flex-col p-4 rounded-2xl bg-slate-900/40 border border-slate-800/60 max-h-[85vh] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-800" id="admin-sidebar-navigation">
+        <div className={`hidden lg:flex ${isSidebarCollapsed ? "lg:col-span-1 items-center px-1.5" : "lg:col-span-3 p-4"} space-y-1.5 flex flex-col rounded-2xl bg-slate-900/40 border border-slate-800/60 max-h-[85vh] overflow-y-auto scrollbar-thin scrollbar-thumb-slate-800 transition-all duration-300`} id="admin-sidebar-navigation">
           
+          {/* Collapse/Expand Toggle Button */}
+          <button
+            onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+            className="flex items-center justify-between p-2.5 rounded-xl w-full text-xs font-mono font-bold dark:bg-slate-950 bg-slate-100 hover:bg-slate-900 border dark:border-slate-800 border-slate-200 text-slate-400 hover:text-white transition-all cursor-pointer mb-2 shrink-0"
+            title={isSidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+          >
+            {!isSidebarCollapsed && <span>Toggle Sidebar</span>}
+            {isSidebarCollapsed ? <ChevronsRight size={14} className="mx-auto" /> : <ChevronsLeft size={14} />}
+          </button>
+
+          {isSidebarCollapsed && (
+            <style>{`
+              #admin-sidebar-navigation button {
+                justify-content: center !important;
+                width: 2.40rem !important;
+                height: 2.40rem !important;
+                padding: 0 !important;
+              }
+              #admin-sidebar-navigation button span {
+                display: none !important;
+              }
+              #admin-sidebar-navigation div {
+                display: none !important;
+              }
+            `}</style>
+          )}
+
           <div className="text-[10px] font-mono uppercase tracking-wider text-slate-500 font-bold px-3 pt-2 pb-1 text-left">Internal Ops</div>
           
           <button
@@ -766,7 +1112,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* Main Work Panels */}
-        <div className="lg:col-span-9" id="admin-workspace-pane">
+        <div className={`${isSidebarCollapsed ? "lg:col-span-11" : "lg:col-span-9"} transition-all duration-300`} id="admin-workspace-pane">
           
           {/* TAB 0: ADMIN PROFILE PORTAL */}
           {activeTab === "profile" && (
@@ -1938,7 +2284,85 @@ export default function AdminDashboard() {
               {/* Members Table */}
               <div className="pt-4" id="team-registry-list">
                 <h3 className="text-sm font-mono tracking-wider opacity-60 mb-4 uppercase">Diavox Registry Logs</h3>
-                <div className="overflow-x-auto rounded-2xl border dark:border-slate-900 border-slate-200 text-xs text-left">
+                
+                {/* Mobile Card View (< 768px) */}
+                <div className="block md:hidden space-y-4">
+                  {allUsers.filter(u => ["secret_admin", "primary_admin", "secondary_admin", "third_admin", "team_member", "developer"].includes(u.role || "")).map((member) => (
+                    <div key={member.id} className="p-4 rounded-xl border dark:border-slate-800 border-slate-200 dark:bg-slate-900 bg-slate-50 space-y-3">
+                      <div className="flex justify-between items-start border-b dark:border-slate-800 border-slate-200 pb-2">
+                        <div>
+                          <span className="block font-bold text-sm text-cyan-400">{member.name} {member.id === currentUser.id && <span className="text-[9px] text-amber-500 font-mono uppercase ml-1">(You)</span>}</span>
+                          <span className="block text-xs font-mono text-slate-400 mt-0.5">{member.email}</span>
+                        </div>
+                        <span className={`px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider ${
+                          member.role === "primary_admin" 
+                            ? "bg-cyan-950 text-cyan-400 border border-cyan-800/30" 
+                            : member.role === "secondary_admin"
+                              ? "bg-purple-950 text-purple-400 border border-purple-800/30"
+                              : member.role === "third_admin"
+                                ? "bg-yellow-950/40 text-yellow-500 border border-yellow-805/30"
+                                : "bg-slate-800 text-slate-300"
+                        }`}>
+                          {member.role.replace("_", " ")}
+                        </span>
+                      </div>
+                      <div className="space-y-1.5 text-xs font-mono">
+                        <p><span className="text-slate-500">Department:</span> {member.department || "Admin Desk"}</p>
+                        <div className="flex flex-col gap-1">
+                          <span className="text-slate-500">Permissions Set:</span>
+                          <div className="flex flex-wrap gap-1">
+                            {member.role === "primary_admin" ? (
+                              <span className="text-[9px] bg-cyan-955/20 text-cyan-400/80 px-1 py-0.5 rounded border border-cyan-900/30">ALL_SYSTEM_KEYS</span>
+                            ) : member.permissions && member.permissions.length > 0 ? (
+                              member.permissions.map(p => (
+                                <span key={p} className="text-[8px] bg-slate-950/40 text-slate-400 px-1 py-0.5 rounded border dark:border-slate-900 border-slate-200">
+                                  {p.replace(/_/g, " ")}
+                                </span>
+                              ))
+                            ) : (
+                              <span className="text-[10px] text-slate-500 italic">No custom keys</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="pt-2 flex justify-end">
+                        {canModifyUser(member) && member.id !== currentUser.id ? (
+                          <div className="flex items-center space-x-2">
+                            <button
+                              onClick={() => {
+                                setEditingMemberId(member.id);
+                                setEditName(member.name);
+                                setEditRole(member.role);
+                                setEditDept(member.department || "general");
+                                setEditPortfolio(member.portfolio || "");
+                                setEditDescription(member.description || "");
+                                setEditPermissions(member.permissions || []);
+                              }}
+                              className="px-3 py-1.5 text-xs rounded bg-slate-800 text-cyan-400 hover:bg-slate-700 transition"
+                            >
+                              Edit Profile
+                            </button>
+                            <button
+                              onClick={() => {
+                                deleteTeamMember(member.id);
+                                setDashAlert(`Decommissioned account: ${member.name}`);
+                                setTimeout(() => setDashAlert(null), 3000);
+                              }}
+                              className="px-3 py-1.5 text-xs rounded bg-rose-950 text-rose-400 hover:bg-rose-900 transition"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="opacity-40 italic text-[10px] select-none text-sans">No action allowed</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Desktop Table View (>= 768px) */}
+                <div className="hidden md:block overflow-x-auto rounded-2xl border dark:border-slate-900 border-slate-200 text-xs text-left">
                   <table className="w-full">
                     <thead>
                       <tr className="bg-slate-900 font-mono text-slate-500 border-b dark:border-slate-900 border-slate-200">
@@ -2562,7 +2986,48 @@ export default function AdminDashboard() {
               </div>
 
               {/* Monospace Logs list */}
-              <div className="overflow-x-auto rounded-xl border dark:border-slate-900 border-slate-200">
+              
+              {/* Mobile Card View (< 768px) */}
+              <div className="block md:hidden space-y-4 text-left font-mono">
+                {activityLogs
+                  .filter(log => {
+                    const term = auditSearch.toLowerCase();
+                    const matchesTerm = (log.action || "").toLowerCase().includes(term) || (log.user_email || "").toLowerCase().includes(term) || (log.ip_address || "").includes(term);
+                    const matchesRole = auditRoleFilter === "all" || log.role === auditRoleFilter;
+                    return matchesTerm && matchesRole;
+                  })
+                  .map(log => (
+                  <div key={log.id} className="p-4 rounded-xl border dark:border-slate-800 border-slate-200 dark:bg-slate-900 bg-slate-50 space-y-3">
+                    <div className="flex justify-between items-start border-b dark:border-slate-800 border-slate-200 pb-2">
+                       <div>
+                         <p className="font-bold text-xs text-slate-200">{log.timestamp}</p>
+                         <p className="text-[10px] opacity-40 mt-0.5">{log.ip_address}</p>
+                       </div>
+                       <span className={`px-1.5 py-0.5 rounded text-[9px] uppercase font-bold text-center ${
+                          log.role === "secret_admin" ? "bg-rose-550/20 text-rose-400 border border-rose-500/10" :
+                          log.role === "primary_admin" ? "bg-cyan-550/20 text-cyan-400 border border-cyan-500/10" :
+                          log.role === "secondary_admin" ? "bg-purple-550/20 text-purple-400 border border-purple-500/10" :
+                          "bg-slate-700/25 text-slate-300 border border-slate-700/50"
+                        }`}>
+                          {log.role.replace("_", " ")}
+                        </span>
+                    </div>
+                    <div className="space-y-1.5 text-xs">
+                       <p className="text-slate-300"><span className="text-slate-500 font-bold">Executor:</span> <span className="font-sans">{log.user_email}</span></p>
+                       <p className="text-slate-300"><span className="text-slate-500 font-bold">Action:</span> <span className="font-sans">{log.action}</span></p>
+                    </div>
+                    {(log.previous_value || log.new_value) && (
+                      <div className="pt-2 border-t dark:border-slate-800 border-slate-200 space-y-1">
+                         {log.previous_value && <p className="text-[10px] opacity-60 w-full truncate"><span className="text-slate-500 font-bold">Prev:</span> {log.previous_value}</p>}
+                         {log.new_value && <p className="text-[10px] opacity-60 w-full truncate"><span className="text-slate-500 font-bold">New:</span> {log.new_value}</p>}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop Table View (>= 768px) */}
+              <div className="hidden md:block overflow-x-auto rounded-xl border dark:border-slate-900 border-slate-200">
                 <table className="w-full text-xs text-left text-slate-300">
                   <thead className="bg-slate-900/70 border-b dark:border-slate-900 border-slate-200 text-[10px] font-mono uppercase tracking-wider text-slate-400">
                     <tr>

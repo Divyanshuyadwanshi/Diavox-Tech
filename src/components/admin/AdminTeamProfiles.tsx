@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useStore } from "../../store";
 import { UserProfile, TeamDepartment, UserRole } from "../../types";
 import { Plus, Edit2, Trash2, Shield, UserPlus, Check, X, KeyRound, Lock, Eye, EyeOff } from "lucide-react";
@@ -8,6 +8,54 @@ export default function AdminTeamProfiles() {
 
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Administrative Deactivation trackers
+  const [subTab, setSubTab] = useState<"roster" | "deactivations">("roster");
+  const [deactivationRequests, setDeactivationRequests] = useState<any[]>([]);
+  const [isFetchingRequests, setIsFetchingRequests] = useState(false);
+
+  const fetchDeactivationRequests = async () => {
+    setIsFetchingRequests(true);
+    try {
+      const response = await fetch("/api/admin/deactivation-requests");
+      const result = await response.json();
+      if (response.ok && result.success) {
+        setDeactivationRequests(result.requests || []);
+      }
+    } catch (err) {
+      console.warn("Failed to fetch admin deactivation requests:", err);
+    } finally {
+      setIsFetchingRequests(false);
+    }
+  };
+
+  const handleUpdateDeactivationStatus = async (requestId: string, targetStatus: string) => {
+    try {
+      const response = await fetch("/api/admin/deactivate-user-confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ requestId, status: targetStatus })
+      });
+      const result = await response.json();
+      if (response.ok && result.success) {
+        fetchDeactivationRequests();
+        const msg = `Request status updated to "${targetStatus}" successfully.`;
+        setFormAlert(msg);
+        setTimeout(() => setFormAlert(null), 3500);
+      } else {
+        setFormAlert(`Error: ${result.error || "Failed to update request status."}`);
+        setTimeout(() => setFormAlert(null), 3500);
+      }
+    } catch (err: any) {
+      console.warn("Failed to update status:", err);
+      setFormAlert(`Error: ${err.message}`);
+      setTimeout(() => setFormAlert(null), 3500);
+    }
+  };
+
+  useEffect(() => {
+    fetchDeactivationRequests();
+  }, []);
 
   // Form states variables
   const [name, setName] = useState("");
@@ -199,7 +247,7 @@ export default function AdminTeamProfiles() {
           <h4 className="text-sm font-mono tracking-widest text-cyan-400 font-bold uppercase">PERSONNEL PROTOCOL</h4>
           <h3 className="text-lg font-display font-bold">Team Profiles & Onboarding</h3>
         </div>
-        {!isAdding && (
+        {!isAdding && subTab === "roster" && (
           <button
             onClick={() => setIsAdding(true)}
             className="px-3.5 py-1.5 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-white font-mono text-xs font-bold inline-flex items-center space-x-1.5 transition-all shadow-md shadow-cyan-500/10"
@@ -210,6 +258,47 @@ export default function AdminTeamProfiles() {
           </button>
         )}
       </div>
+
+      {formAlert && (
+        <div className="p-3.5 rounded-xl border border-cyan-500/25 bg-cyan-950/20 text-cyan-400 text-xs font-mono font-bold">
+          <span>{formAlert}</span>
+        </div>
+      )}
+
+      {/* Tab Selector pills for non-adding states */}
+      {!isAdding && (
+        <div className="flex space-x-2 border-b dark:border-slate-900 border-slate-100 pb-2">
+          <button
+            onClick={() => setSubTab("roster")}
+            className={`px-4 py-2 font-mono text-xs font-bold rounded-lg border transition-all ${
+              subTab === "roster"
+                ? "bg-slate-950 border-cyan-500/25 text-cyan-400"
+                : "border-transparent text-slate-400 hover:text-white hover:bg-slate-500/5"
+            }`}
+          >
+            Staff Roster ({teamList.length})
+          </button>
+          <button
+            onClick={() => setSubTab("deactivations")}
+            className={`px-4 py-2 font-mono text-xs font-bold rounded-lg border transition-all flex items-center space-x-1.5 ${
+              subTab === "deactivations"
+                ? "bg-slate-950 border-cyan-500/25 text-cyan-400"
+                : "border-transparent text-slate-400 hover:text-white hover:bg-slate-500/5"
+            }`}
+          >
+            <span>Deactivation Protocol</span>
+            {deactivationRequests.filter(r => r.status === "Pending Review").length > 0 && (
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-450 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-rose-500"></span>
+              </span>
+            )}
+            <span className="text-[10px] bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded-full font-mono font-normal">
+              {deactivationRequests.length}
+            </span>
+          </button>
+        </div>
+      )}
 
       {isAdding ? (
         <form onSubmit={handleOnboardSubmit} className={`p-6 rounded-2xl border text-left space-y-4 ${
@@ -437,7 +526,7 @@ export default function AdminTeamProfiles() {
             </div>
           </div>
         </form>
-      ) : (
+      ) : subTab === "roster" ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {teamList.map((user) => (
             <div
@@ -527,6 +616,99 @@ export default function AdminTeamProfiles() {
               No staff profiles found. Onboard specialists above.
             </div>
           )}
+        </div>
+      ) : (
+        /* Render Deactivation Requests Queue UI */
+        <div className="space-y-4" id="deactivation-requests-queue">
+          <div className="p-5 rounded-2xl border dark:border-slate-900 border-[#a855f7]/15 dark:bg-slate-950/20 bg-slate-50 text-left space-y-2">
+            <h4 className="text-xs font-mono font-bold text-slate-400 uppercase tracking-widest">Protocol Clearance Hub</h4>
+            <p className="text-xs opacity-75 font-sans leading-relaxed text-slate-400 font-light">
+              Review received client and team deactivation requests below. Under verification state signals active security checks of deliverables, credential handovers, and security audits. 
+              Confirming deactivation will lock out the respective user's credentials immediately.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4">
+            {deactivationRequests.map((req) => (
+              <div
+                key={req.id}
+                className={`p-5 rounded-2xl border flex flex-col md:flex-row md:items-center justify-between gap-4 transition-all ${
+                  theme === "dark" 
+                    ? "bg-slate-950 border-slate-900 hover:border-[#a855f7]/30" 
+                    : "bg-white border-slate-200 shadow-sm"
+                }`}
+              >
+                <div className="space-y-2 text-left">
+                  <div className="flex items-center space-x-2.5">
+                    <div className="w-2.5 h-2.5 rounded-full bg-[#a855f7] shrink-0 animate-pulse" />
+                    <div>
+                      <h4 className="text-sm font-display font-bold text-slate-900 dark:text-white leading-tight">{req.user_name}</h4>
+                      <p className="text-[10px] font-mono text-slate-400">{req.user_email}</p>
+                    </div>
+                  </div>
+                  
+                  <div className="flex flex-wrap items-center gap-3 pt-1 text-[10px] font-mono text-slate-450">
+                    <span>Submitted: {new Date(req.created_at).toLocaleDateString()} {new Date(req.created_at).toLocaleTimeString()}</span>
+                    <span className="hidden md:inline text-slate-750">•</span>
+                    <span>Request ID: {req.id.substring(0, 8)}</span>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-center gap-4 shrink-0">
+                  {/* Status Indicator Badges */}
+                  <div>
+                    {req.status === "Pending Review" && (
+                      <span className="px-2.5 py-1 rounded bg-amber-500/10 border border-amber-500/25 text-amber-400 text-[10px] font-mono font-bold uppercase animate-pulse">
+                        Pending Review
+                      </span>
+                    )}
+                    {req.status === "Under Verification" && (
+                      <span className="px-2.5 py-1 rounded bg-[#a855f7]/10 border border-[#a855f7]/25 text-[#a855f7] text-[10px] font-mono font-bold uppercase">
+                        Under Verification
+                      </span>
+                    )}
+                    {req.status === "Deactivated" && (
+                      <span className="px-2.5 py-1 rounded bg-rose-500/10 border border-rose-500/25 text-rose-400 text-[10px] font-mono font-bold uppercase">
+                        Deactivated
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Actions buttons */}
+                  <div className="flex items-center space-x-2">
+                    {req.status === "Pending Review" && (
+                      <button
+                        onClick={() => handleUpdateDeactivationStatus(req.id, "Under Verification")}
+                        className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-mono text-[10px] font-bold transition-all"
+                      >
+                        Verify Request
+                      </button>
+                    )}
+                    {req.status === "Under Verification" && (
+                      <button
+                        onClick={() => handleUpdateDeactivationStatus(req.id, "Deactivated")}
+                        className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white font-mono text-[10px] font-bold transition-all"
+                      >
+                        Deactivate & Suspend
+                      </button>
+                    )}
+                    {req.status === "Deactivated" && (
+                      <div className="text-[10px] font-mono text-rose-400 font-bold flex items-center space-x-1">
+                        <Check size={12} className="text-rose-400" />
+                        <span>Closed & Blocked</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+
+            {deactivationRequests.length === 0 && (
+              <div className="text-center py-12 text-slate-450 border border-dashed dark:border-slate-900 border-slate-200 rounded-2xl text-xs font-mono">
+                No active or closed deactivation requests found in general database registries.
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

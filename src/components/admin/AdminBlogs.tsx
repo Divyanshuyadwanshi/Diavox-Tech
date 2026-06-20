@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { useStore } from "../../store";
 import { Blog } from "../../types";
-import { Plus, Edit2, Trash2, FileText, X } from "lucide-react";
+import { Plus, Edit2, Trash2, FileText, X, Upload, Loader2 } from "lucide-react";
+import { uploadFileToBucket } from "../../supabase";
 
 export default function AdminBlogs() {
   const { blogs, addBlog, updateBlog, deleteBlog, theme } = useStore();
@@ -9,6 +10,8 @@ export default function AdminBlogs() {
   // Local interface form state
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
 
   // Form states
   const [title, setTitle] = useState("");
@@ -25,6 +28,27 @@ export default function AdminBlogs() {
     setImageUrl("https://images.unsplash.com/photo-1517694712202-14dd9538aa97?q=80&w=800&auto=format&fit=crop");
     setIsAdding(false);
     setEditingId(null);
+    setUploadError("");
+    setIsUploading(false);
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    setUploadError("");
+    try {
+      const extension = file.name.split(".").pop();
+      const filePath = `blog_${Date.now()}_${Math.random().toString(36).substring(4)}.${extension}`;
+      const url = await uploadFileToBucket("blog-images", filePath, file);
+      setImageUrl(url);
+    } catch (err: any) {
+      console.error(err);
+      setUploadError(err.message || "Upload failed. Check bucket permissions.");
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -142,18 +166,43 @@ export default function AdminBlogs() {
             </div>
 
             <div className="space-y-1 md:col-span-2">
-              <label className="text-[10px] font-mono uppercase text-slate-400 font-bold">Cover Image URL</label>
-              <input
-                type="text"
-                value={imageUrl}
-                onChange={(e) => setImageUrl(e.target.value)}
-                placeholder="URL of cover banner photo..."
-                className={`w-full p-2.5 rounded-xl text-xs font-sans border focus:ring-1 outline-none transition-all ${
-                  theme === "dark" 
-                    ? "bg-slate-900 border-slate-800 focus:border-cyan-500 text-white" 
-                    : "bg-white border-slate-200 focus:border-cyan-500 text-slate-900"
-                }`}
-              />
+              <label className="text-[10px] font-mono uppercase text-slate-400 font-bold block">Cover Image / Banner Photo</label>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="text"
+                  value={imageUrl}
+                  onChange={(e) => setImageUrl(e.target.value)}
+                  placeholder="URL of cover banner photo..."
+                  className={`flex-1 p-2.5 rounded-xl text-xs font-sans border focus:ring-1 outline-none transition-all ${
+                    theme === "dark" 
+                      ? "bg-slate-900 border-slate-800 focus:border-cyan-500 text-white" 
+                      : "bg-white border-slate-200 focus:border-cyan-500 text-slate-900"
+                  }`}
+                />
+                <label className="relative flex items-center justify-center p-2.5 rounded-xl border border-dashed border-cyan-500/40 cursor-pointer bg-cyan-950/10 hover:bg-cyan-500/10 text-cyan-400 transition-colors">
+                  {isUploading ? (
+                    <Loader2 size={16} className="animate-spin text-cyan-400" />
+                  ) : (
+                    <Upload size={16} />
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileUpload}
+                    disabled={isUploading}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+              {uploadError && (
+                <p className="text-[10px] text-red-400 font-mono mt-0.5">{uploadError}</p>
+              )}
+              {imageUrl && (
+                <div className="mt-1.5 flex items-center space-x-2">
+                  <img src={imageUrl} alt="Preview" className="w-16 h-10 object-cover rounded-md border border-slate-800" referrerPolicy="no-referrer" />
+                  <span className="text-[10px] font-mono text-emerald-400">Preview Sync Active</span>
+                </div>
+              )}
             </div>
 
             <div className="col-span-1 md:col-span-2 space-y-1">

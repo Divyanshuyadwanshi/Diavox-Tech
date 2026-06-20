@@ -1,13 +1,16 @@
 import React, { useState } from "react";
 import { useStore } from "../../store";
 import { PortfolioItem } from "../../types";
-import { Plus, Edit2, Trash2, Globe, Star, X, Link } from "lucide-react";
+import { Plus, Edit2, Trash2, Globe, Star, X, Link, Upload, Loader2 } from "lucide-react";
+import { uploadFileToBucket } from "../../supabase";
 
 export default function AdminPortfolio() {
   const { portfolioItems, addPortfolioItem, updatePortfolioItem, deletePortfolioItem, theme } = useStore();
 
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
 
   // Form states variables
   const [title, setTitle] = useState("");
@@ -26,6 +29,27 @@ export default function AdminPortfolio() {
     setIsFeatured(true);
     setIsAdding(false);
     setEditingId(null);
+    setUploadError("");
+    setIsUploading(false);
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    setUploadError("");
+    try {
+      const extension = file.name.split(".").pop();
+      const filePath = `portfolio_${Date.now()}_${Math.random().toString(36).substring(4)}.${extension}`;
+      const url = await uploadFileToBucket("portfolio-images", filePath, file);
+      setImageUrl(url);
+    } catch (err: any) {
+      console.error(err);
+      setUploadError(err.message || "Upload failed. Check bucket permissions.");
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -131,18 +155,44 @@ export default function AdminPortfolio() {
             </div>
 
             <div className="space-y-1">
-              <label className="text-[10px] font-mono uppercase text-slate-400 font-bold">Image Asset URL</label>
-              <input
-                type="text"
-                required
-                value={imageUrl}
-                onChange={(e) => setImageUrl(e.target.value)}
-                className={`w-full p-2.5 rounded-xl text-xs font-sans border focus:ring-1 outline-none transition-all ${
-                  theme === "dark" 
-                    ? "bg-slate-900 border-slate-800 focus:border-cyan-50 w-full text-white" 
-                    : "bg-white border-slate-205 focus:border-cyan-500 text-slate-900"
-                }`}
-              />
+              <label className="text-[10px] font-mono uppercase text-slate-400 font-bold block">Image Asset / Cover photo</label>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="text"
+                  required
+                  value={imageUrl}
+                  onChange={(e) => setImageUrl(e.target.value)}
+                  className={`flex-1 p-2.5 rounded-xl text-xs font-sans border focus:ring-1 outline-none transition-all ${
+                    theme === "dark" 
+                      ? "bg-slate-900 border-slate-800 focus:border-cyan-50 text-white" 
+                      : "bg-white border-slate-200 focus:border-cyan-500 text-slate-900"
+                  }`}
+                  placeholder="Paste URL or upload image..."
+                />
+                <label className="relative flex items-center justify-center p-2.5 rounded-xl border border-dashed border-cyan-500/40 cursor-pointer bg-cyan-950/10 hover:bg-cyan-500/10 text-cyan-400 transition-colors">
+                  {isUploading ? (
+                    <Loader2 size={16} className="animate-spin text-cyan-400" />
+                  ) : (
+                    <Upload size={16} />
+                  )}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileUpload}
+                    disabled={isUploading}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+              {uploadError && (
+                <p className="text-[10px] text-red-400 font-mono mt-0.5">{uploadError}</p>
+              )}
+              {imageUrl && (
+                <div className="mt-1.5 flex items-center space-x-2">
+                  <img src={imageUrl} alt="Preview" className="w-10 h-10 object-cover rounded-md border border-slate-800" referrerPolicy="no-referrer" />
+                  <span className="text-[10px] font-mono text-emerald-400">Preview Sync Active</span>
+                </div>
+              )}
             </div>
 
             <div className="space-y-1">

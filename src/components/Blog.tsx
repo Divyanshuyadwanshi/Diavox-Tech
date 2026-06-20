@@ -148,48 +148,53 @@ export default function Blog() {
         {/* Full Readable BlogPost Modal */}
         {readableBlog && (
           <div id="blog-reader-modal" className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm">
-            <div className={`w-full max-w-2xl rounded-2xl overflow-hidden border shadow-2xl relative max-h-[85vh] overflow-y-auto ${
+            <div className={`w-full max-w-lg md:max-w-2xl rounded-2xl overflow-hidden border shadow-2xl relative max-h-[90vh] flex flex-col ${
               theme === "dark" ? "bg-slate-900 border-slate-800 text-white" : "bg-white border-slate-200 text-slate-900"
             }`}>
               
-              {/* Close Button top-right */}
+              {/* Close Button top-right - stays fixed in place above the scrolling zone */}
               <button
                 onClick={() => setReadableBlog(null)}
-                className="absolute top-4 right-4 z-10 p-2 rounded-xl bg-slate-955 dark:bg-slate-800 hover:bg-slate-700/80 transition-colors text-white shadow"
+                className="absolute top-4 right-4 z-30 p-2 rounded-xl bg-slate-950/60 hover:bg-slate-950/80 dark:bg-slate-800 dark:hover:bg-slate-700/80 transition-colors text-white active:scale-95 shadow-md flex items-center justify-center cursor-pointer"
+                title="Close article"
               >
                 <X size={15} />
               </button>
 
-              <div className="aspect-video relative bg-slate-950">
-                <img src={readableBlog.image_url} alt={readableBlog.title} className="w-full h-full object-cover" />
-                <span className="absolute bottom-4 left-4 px-3 py-1 font-mono text-[10px] uppercase font-bold rounded-lg bg-cyan-950/90 text-cyan-400 border border-cyan-500/20 tracking-wider">
-                  {readableBlog.category}
-                </span>
-              </div>
-
-              {/* Modal Body */}
-              <div className="p-6 sm:p-8 space-y-6">
-                <div className="flex flex-wrap items-center justify-between gap-3 text-xs font-mono opacity-50 border-b dark:border-slate-800 border-slate-100 pb-4">
-                  <span className="inline-flex items-center space-x-1.5">
-                    <User size={13} />
-                    <span>Author: {readableBlog.author_name}</span>
-                  </span>
-                  <span className="inline-flex items-center space-x-1.5">
-                    <Clock size={13} />
-                    <span>Read latency: {readableBlog.read_time}</span>
+              {/* Securely Scrollable Content Body */}
+              <div className="overflow-y-auto flex-1">
+                <div className="aspect-video relative bg-slate-950">
+                  <img src={readableBlog.image_url} alt={readableBlog.title} className="w-full h-full object-cover" />
+                  <span className="absolute bottom-4 left-4 px-3 py-1 font-mono text-[10px] uppercase font-bold rounded-lg bg-cyan-950/90 text-cyan-400 border border-cyan-500/20 tracking-wider">
+                    {readableBlog.category}
                   </span>
                 </div>
 
-                <h3 className="text-xl sm:text-2xl font-display font-extrabold leading-tight">{readableBlog.title}</h3>
-                
-                <div className="text-sm opacity-85 leading-relaxed font-light space-y-4">
-                  {readableBlog.content.split("\n\n").map((para: string, idx: number) => (
-                    <p key={idx}>{para}</p>
-                  ))}
-                  <p>In addition, our Diavox remote team is constantly experimenting with server caching mechanics, automated indexing procedures, and state-of-the-art layout layouts. We deploy directly through continuous systems, reducing friction and delivering immediate metrics on day one.</p>
-                  <p className="font-medium text-cyan-500">Diavox Tech — Crafting Digital Experiences Worldwide.</p>
+                {/* Modal Body */}
+                <div className="p-6 sm:p-8 space-y-6">
+                  <div className="flex flex-wrap items-center justify-between gap-3 text-xs font-mono opacity-50 border-b dark:border-slate-800 border-slate-100 pb-4">
+                    <span className="inline-flex items-center space-x-1.5">
+                      <User size={13} />
+                      <span>Author: {readableBlog.author_name}</span>
+                    </span>
+                    <span className="inline-flex items-center space-x-1.5">
+                      <Clock size={13} />
+                      <span>Read latency: {readableBlog.read_time}</span>
+                    </span>
+                  </div>
+
+                  <h3 className="text-xl sm:text-2xl font-display font-extrabold leading-tight">{readableBlog.title}</h3>
+                  
+                  <div className="text-sm opacity-85 leading-relaxed font-light space-y-4">
+                    {readableBlog.content.split("\n\n").map((para: string, idx: number) => (
+                      <p key={idx}>{para}</p>
+                    ))}
+                    <p>In addition, our Diavox remote team is constantly experimenting with server caching mechanics, automated indexing procedures, and state-of-the-art layout layouts. We deploy directly through continuous systems, reducing friction and delivering immediate metrics on day one.</p>
+                    <p className="font-medium text-cyan-500">Diavox Tech — Crafting Digital Experiences Worldwide.</p>
+                  </div>
                 </div>
               </div>
+
             </div>
           </div>
         )}
