@@ -1085,21 +1085,22 @@ export const useStore = create<AgencyState>((set, get) => {
           set({ reviews: mappedReviews });
         }
 
-        // Fetch Blogs securely via API
+        // Fetch Blogs directly from the database first
         try {
-          const blogsRes = await secureFetch("/api/blogs");
-          if (blogsRes.ok) {
-            const blogsData = await blogsRes.json();
-            if (blogsData.blogs) {
-              set({ blogs: blogsData.blogs as Blog[] });
+          const { data: blogsList, error: blogsErr } = await supabase.from("blogs").select("*");
+          if (!blogsErr && blogsList) {
+            set({ blogs: blogsList as Blog[] });
+          } else {
+            const blogsRes = await secureFetch("/api/blogs");
+            if (blogsRes.ok) {
+              const blogsData = await blogsRes.json().catch(() => null);
+              if (blogsData && blogsData.blogs) {
+                set({ blogs: blogsData.blogs as Blog[] });
+              }
             }
           }
         } catch (e) {
-          console.warn("Failed to fetch blogs securely, fetching direct fallback:", e);
-          const { data: blogsList } = await supabase.from("blogs").select("*");
-          if (blogsList) {
-            set({ blogs: blogsList as Blog[] });
-          }
+          console.warn("Failed to fetch blogs:", e);
         }
 
         // Fetch Messages with Zero-Trust permission checks
@@ -1146,13 +1147,13 @@ export const useStore = create<AgencyState>((set, get) => {
           set({ planApprovals: planApprovalsList as PlanApproval[] });
         }
 
-        // Social links and CMS config
+        // Social links and CMS config fallback (direct table row is primary)
         try {
-          // Fetch CMS securely first
+          // Fetch CMS securely first, with silent JSON parse error resilience
           const cmsRes = await secureFetch("/api/cms");
           if (cmsRes.ok) {
-            const cmsData = await cmsRes.json();
-            if (cmsData.cms) {
+            const cmsData = await cmsRes.json().catch(() => null);
+            if (cmsData && cmsData.cms) {
               set(state => ({
                 cmsContent: {
                   ...state.cmsContent,
@@ -1222,17 +1223,22 @@ export const useStore = create<AgencyState>((set, get) => {
           set({ aiKnowledge: aiKnowledgeList as AiKnowledgeItem[] });
         }
 
-        // Fetch Pricing Options securely from Backend
+        // Fetch Pricing Options directly from database first, with secure legacy fallback
         try {
-          const prRes = await secureFetch("/api/pricing");
-          if (prRes.ok) {
-            const prData = await prRes.json();
-            if (prData.pricing && prData.pricing.length > 0) {
-              set({ pricingOptions: prData.pricing });
+          const { data: pricingList, error: pricingErr } = await supabase.from("pricing_options").select("*");
+          if (!pricingErr && pricingList && pricingList.length > 0) {
+            set({ pricingOptions: pricingList as PricingOption[] });
+          } else {
+            const prRes = await secureFetch("/api/pricing");
+            if (prRes.ok) {
+              const prData = await prRes.json().catch(() => null);
+              if (prData && prData.pricing && prData.pricing.length > 0) {
+                set({ pricingOptions: prData.pricing });
+              }
             }
           }
         } catch (e) {
-          console.warn("[ZERO TRUST] Failed to sync pricing via API:", e);
+          console.warn("[ZERO TRUST] Failed to sync pricing:", e);
         }
 
         // Fetch Help Center Articles
@@ -1341,12 +1347,9 @@ export const useStore = create<AgencyState>((set, get) => {
             .channel("pricing-options-sync")
             .on("postgres_changes", { event: "*", schema: "public", table: "pricing_options" }, async () => {
               try {
-                const prRes = await secureFetch("/api/pricing");
-                if (prRes.ok) {
-                  const prData = await prRes.json();
-                  if (prData.pricing && prData.pricing.length > 0) {
-                    set({ pricingOptions: prData.pricing });
-                  }
+                const { data, error } = await supabase.from("pricing_options").select("*");
+                if (!error && data) {
+                  set({ pricingOptions: data as PricingOption[] });
                 }
               } catch (err) {}
             })
@@ -1385,12 +1388,9 @@ export const useStore = create<AgencyState>((set, get) => {
             .channel("blogs-sync")
             .on("postgres_changes", { event: "*", schema: "public", table: "blogs" }, async () => {
               try {
-                const bRes = await secureFetch("/api/blogs");
-                if (bRes.ok) {
-                  const bData = await bRes.json();
-                  if (bData.blogs) {
-                    set({ blogs: bData.blogs as Blog[] });
-                  }
+                const { data, error } = await supabase.from("blogs").select("*");
+                if (!error && data) {
+                  set({ blogs: data as Blog[] });
                 }
               } catch (err) {}
             })
@@ -1741,7 +1741,7 @@ export const useStore = create<AgencyState>((set, get) => {
       saveStateToCache({ currentUser: null });
     },
     
-    // Reviews & Testimonials operations (Synced securely via server APIs)
+    // Reviews & Testimonials operations (Database-First via Supabase)
     addReview: async (review) => {
       const id = "rev-" + Math.random().toString(36).substring(4);
       const newReview: ClientReview = {
@@ -1753,14 +1753,25 @@ export const useStore = create<AgencyState>((set, get) => {
       };
       
       try {
-        const res = await secureFetch("/api/admin/reviews", {
-          method: "POST",
-          body: JSON.stringify({ review: newReview })
-        });
-        if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.error || "Failed to submit testimonial");
+        const { error } = await supabase.from("reviews").insert([{
+          id: newReview.id,
+          client_id: newReview.client_id || null,
+          name: newReview.client_name,
+          company: "",
+          role: newReview.service_used || "",
+          rating: newReview.rating,
+          review_text: newReview.review_text,
+          avatar_url: newReview.client_avatar || "",
+          date: newReview.date || new Date().toISOString().split("T")[0],
+          status: newReview.status,
+          featured: newReview.is_featured,
+          admin_reply: newReview.reply_text || ""
+        }]);
+
+        if (error) {
+          throw new Error(error.message || "Failed to save testimonial in database");
         }
+
         const updatedReviews = [newReview, ...get().reviews];
         set({ reviews: updatedReviews });
         saveStateToCache({ ...get(), reviews: updatedReviews });
@@ -1772,14 +1783,12 @@ export const useStore = create<AgencyState>((set, get) => {
     
     updateReviewStatus: async (reviewId, status) => {
       try {
-        const res = await secureFetch("/api/admin/reviews/update", {
-          method: "POST",
-          body: JSON.stringify({ id: reviewId, updates: { status } })
-        });
-        if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.error || "Failed to update review status");
+        const { error } = await supabase.from("reviews").update({ status }).eq("id", reviewId);
+
+        if (error) {
+          throw new Error(error.message || "Failed to update review status in database");
         }
+
         const updated = get().reviews.map(r => r.id === reviewId ? { ...r, status } : r);
         set({ reviews: updated });
         saveStateToCache({ ...get(), reviews: updated });
@@ -1794,14 +1803,12 @@ export const useStore = create<AgencyState>((set, get) => {
       if (!target) return;
       const nextFeatured = !target.is_featured;
       try {
-        const res = await secureFetch("/api/admin/reviews/update", {
-          method: "POST",
-          body: JSON.stringify({ id: reviewId, updates: { is_featured: nextFeatured } })
-        });
-        if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.error || "Failed to toggle review feature");
+        const { error } = await supabase.from("reviews").update({ featured: nextFeatured }).eq("id", reviewId);
+
+        if (error) {
+          throw new Error(error.message || "Failed to toggle review feature status in database");
         }
+
         const updated = get().reviews.map(r => r.id === reviewId ? { ...r, is_featured: nextFeatured } : r);
         set({ reviews: updated });
         saveStateToCache({ ...get(), reviews: updated });
@@ -1813,14 +1820,12 @@ export const useStore = create<AgencyState>((set, get) => {
     
     replyToReview: async (reviewId, text) => {
       try {
-        const res = await secureFetch("/api/admin/reviews/update", {
-          method: "POST",
-          body: JSON.stringify({ id: reviewId, updates: { reply_text: text } })
-        });
-        if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.error || "Failed to reply to review");
+        const { error } = await supabase.from("reviews").update({ admin_reply: text }).eq("id", reviewId);
+
+        if (error) {
+          throw new Error(error.message || "Failed to reply to testimonial in database");
         }
+
         const updated = get().reviews.map(r => r.id === reviewId ? { ...r, reply_text: text } : r);
         set({ reviews: updated });
         saveStateToCache({ ...get(), reviews: updated });
@@ -1832,14 +1837,12 @@ export const useStore = create<AgencyState>((set, get) => {
     
     deleteReview: async (reviewId) => {
       try {
-        const res = await secureFetch("/api/admin/reviews/delete", {
-          method: "POST",
-          body: JSON.stringify({ id: reviewId })
-        });
-        if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.error || "Failed to delete review");
+        const { error } = await supabase.from("reviews").delete().eq("id", reviewId);
+
+        if (error) {
+          throw new Error(error.message || "Failed to delete testimonial from database");
         }
+
         const updated = get().reviews.filter(r => r.id !== reviewId);
         set({ reviews: updated });
         saveStateToCache({ ...get(), reviews: updated });
@@ -1849,7 +1852,7 @@ export const useStore = create<AgencyState>((set, get) => {
       }
     },
     
-    // Service submissions (Synced directly to quote_requests table)
+    // Service submissions (Database-First to quote_requests table)
     submitRequest: async (request) => {
       const id = "req-" + Math.random().toString(36).substring(4);
       const newRequest: ServiceRequest = {
@@ -1860,13 +1863,20 @@ export const useStore = create<AgencyState>((set, get) => {
       };
 
       try {
-        const res = await secureFetch("/api/quote-requests", {
-          method: "POST",
-          body: JSON.stringify({ request: newRequest })
-        });
-        if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.error || "Failed to submit quote request.");
+        const { error } = await supabase.from("quote_requests").insert([{
+          id: newRequest.id,
+          client_id: newRequest.client_id || null,
+          client_name: newRequest.client_name,
+          client_email: newRequest.client_email,
+          service_type: newRequest.service_type,
+          description: newRequest.description,
+          budget: newRequest.budget || "",
+          status: newRequest.status,
+          created_at: newRequest.created_at
+        }]);
+
+        if (error) {
+          throw new Error(error.message || "Failed to save quote request in database");
         }
 
         const infoNotif: Notification = {
@@ -1901,13 +1911,10 @@ export const useStore = create<AgencyState>((set, get) => {
     
     updateRequestStatus: async (id, status) => {
       try {
-        const res = await secureFetch("/api/quote-requests/update", {
-          method: "POST",
-          body: JSON.stringify({ id, updates: { status } })
-        });
-        if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.error || "Failed to update quote request status.");
+        const { error } = await supabase.from("quote_requests").update({ status }).eq("id", id);
+        
+        if (error) {
+          throw new Error(error.message || "Failed to update quote request status in database");
         }
 
         let updatedPlans = [...get().activePlans];
@@ -2645,19 +2652,15 @@ export const useStore = create<AgencyState>((set, get) => {
 
     updatePricingOption: async (optionId, updates) => {
       try {
-        const res = await secureFetch("/api/admin/pricing/update", {
-          method: "POST",
-          body: JSON.stringify({ id: optionId, updates })
-        });
-        if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.error || "Failed to update pricing option");
+        const { error } = await supabase.from("pricing_options").update(updates).eq("id", optionId);
+        if (error) {
+          throw new Error(error.message || "Failed to update pricing option in database");
         }
         const updated = get().pricingOptions.map(opt => opt.id === optionId ? { ...opt, ...updates } : opt);
         set({ pricingOptions: updated });
         saveStateToCache({ ...get(), pricingOptions: updated });
       } catch (err: any) {
-        console.error("[ZERO TRUST ERROR] Error syncing pricing update:", err.message);
+        console.error("Error syncing pricing update directly:", err.message);
         throw err;
       }
     },
@@ -2668,19 +2671,15 @@ export const useStore = create<AgencyState>((set, get) => {
       const updatedTiers = optTarget.tiers.map(t => t.id === tierId ? { ...t, ...updates } as any : t);
       
       try {
-        const res = await secureFetch("/api/admin/pricing/update", {
-          method: "POST",
-          body: JSON.stringify({ id: optionId, updates: { tiers: updatedTiers } })
-        });
-        if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.error || "Failed to update pricing tier");
+        const { error } = await supabase.from("pricing_options").update({ tiers: updatedTiers }).eq("id", optionId);
+        if (error) {
+          throw new Error(error.message || "Failed to update pricing tier in database");
         }
         const updated = get().pricingOptions.map(opt => opt.id === optionId ? { ...opt, tiers: updatedTiers } : opt);
         set({ pricingOptions: updated });
         saveStateToCache({ ...get(), pricingOptions: updated });
       } catch (err: any) {
-        console.error("[ZERO TRUST ERROR] Error syncing tier update:", err.message);
+        console.error("Error syncing tier update directly:", err.message);
         throw err;
       }
     },
@@ -2723,38 +2722,37 @@ export const useStore = create<AgencyState>((set, get) => {
       };
 
       try {
-        const res = await secureFetch("/api/admin/pricing", {
-          method: "POST",
-          body: JSON.stringify(newOption)
-        });
-        if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.error || "Failed to create pricing package");
+        const { error } = await supabase.from("pricing_options").insert([{
+          id: newOption.id,
+          title: newOption.title,
+          type: newOption.type,
+          tiers: newOption.tiers
+        }]);
+
+        if (error) {
+          throw new Error(error.message || "Failed to insert pricing package in database");
         }
+
         const updated = [...get().pricingOptions, newOption];
         set({ pricingOptions: updated });
         saveStateToCache({ ...get(), pricingOptions: updated });
       } catch (err: any) {
-        console.error("[ZERO TRUST ERROR] Error adding pricing:", err.message);
+        console.error("Error adding pricing directly:", err.message);
         throw err;
       }
     },
 
     deletePricingOption: async (optionId) => {
       try {
-        const res = await secureFetch("/api/admin/pricing/delete", {
-          method: "POST",
-          body: JSON.stringify({ id: optionId })
-        });
-        if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.error || "Failed to delete pricing package");
+        const { error } = await supabase.from("pricing_options").delete().eq("id", optionId);
+        if (error) {
+          throw new Error(error.message || "Failed to delete pricing package in database");
         }
         const updated = get().pricingOptions.filter(opt => opt.id !== optionId);
         set({ pricingOptions: updated });
         saveStateToCache({ ...get(), pricingOptions: updated });
       } catch (err: any) {
-        console.error("[ZERO TRUST ERROR] Error deleting pricing:", err.message);
+        console.error("Error deleting pricing directly:", err.message);
         throw err;
       }
     },
@@ -2849,18 +2847,23 @@ export const useStore = create<AgencyState>((set, get) => {
     updateCmsContent: async (content) => {
       const updated = { ...get().cmsContent, ...content };
       try {
-        const res = await secureFetch("/api/admin/cms", {
-          method: "POST",
-          body: JSON.stringify({ content: updated })
-        });
-        if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.error || "Failed to update CMS config");
+        const { error } = await supabase.from("social_media_links").upsert({
+          id: "cms_app_state",
+          platform: "CMS_CONFIG",
+          url: JSON.stringify(updated),
+          icon: "settings",
+          display_order: -999,
+          visible: false
+        }, { onConflict: "id" });
+
+        if (error) {
+          throw new Error(error.message || "Failed to save CMS config in database");
         }
+
         set({ cmsContent: updated });
         saveStateToCache({ ...get(), cmsContent: updated });
       } catch (err: any) {
-        console.error("Failed to save CMS config to Supabase securely:", err.message);
+        console.error("Failed to save CMS config to Supabase directly:", err.message);
         throw err;
       }
     },
@@ -2898,39 +2901,58 @@ export const useStore = create<AgencyState>((set, get) => {
         ...blog,
         created_at: new Date().toISOString()
       };
+      
+      const slug = blog.slug || blog.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "");
+
       try {
-        const res = await secureFetch("/api/admin/blogs", {
-          method: "POST",
-          body: JSON.stringify({ blog: newBlog })
-        });
-        if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.error || "Failed to create blog post");
+        const { error } = await supabase.from("blogs").insert([{
+          id: newBlog.id,
+          title: newBlog.title,
+          slug: slug,
+          content: newBlog.content,
+          category: newBlog.category,
+          image_url: newBlog.image_url || "",
+          author_name: newBlog.author_name || "Primary Admin",
+          read_time: newBlog.read_time || "5 min read",
+          created_at: newBlog.created_at
+        }]);
+
+        if (error) {
+          throw new Error(error.message || "Failed to create blog post in database");
         }
+
         const updated = [newBlog, ...get().blogs];
         set({ blogs: updated });
         saveStateToCache({ ...get(), blogs: updated });
       } catch (err: any) {
-        console.error("Failed to insert blog to Supabase securely:", err.message);
+        console.error("Failed to insert blog to Supabase directly:", err.message);
         throw err;
       }
     },
 
     updateBlog: async (id, updates) => {
       try {
-        const res = await secureFetch("/api/admin/blogs/update", {
-          method: "POST",
-          body: JSON.stringify({ id, updates })
-        });
-        if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.error || "Failed to update blog post");
+        const dbUpdates: any = {};
+        if (updates.title !== undefined) {
+          dbUpdates.title = updates.title;
+          dbUpdates.slug = updates.slug || updates.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "");
         }
+        if (updates.content !== undefined) dbUpdates.content = updates.content;
+        if (updates.category !== undefined) dbUpdates.category = updates.category;
+        if (updates.image_url !== undefined) dbUpdates.image_url = updates.image_url;
+        if (updates.author_name !== undefined) dbUpdates.author_name = updates.author_name;
+        if (updates.read_time !== undefined) dbUpdates.read_time = updates.read_time;
+
+        const { error } = await supabase.from("blogs").update(dbUpdates).eq("id", id);
+        if (error) {
+          throw new Error(error.message || "Failed to update blog post in database");
+        }
+
         const updated = get().blogs.map(item => item.id === id ? { ...item, ...updates } : item);
         set({ blogs: updated });
         saveStateToCache({ ...get(), blogs: updated });
       } catch (err: any) {
-        console.error("Failed to update blog in Supabase securely:", err.message);
+        console.error("Failed to update blog in Supabase directly:", err.message);
         throw err;
       }
     },
@@ -2966,23 +2988,8 @@ export const useStore = create<AgencyState>((set, get) => {
         const { error: dbErr } = await supabase.from("blogs").delete().eq("id", id);
         
         if (dbErr) {
-          console.warn("[STORE DB DELETION WARNING] Direct Supabase delete failed or restricted by RLS rules. Attempting secure API proxy deletion:", dbErr.message);
-          
-          // Secure route fallback for authorized admins (bypasses direct client RLS limitations)
-          const res = await secureFetch("/api/admin/blogs/delete", {
-            method: "POST",
-            body: JSON.stringify({ id })
-          });
-          
-          if (!res.ok) {
-            const errData = await res.json();
-            const errorMessage = errData.error || "Failed to delete blog post via secure API route";
-            console.error(`[STORE DB DELETION ERROR] Secure API deletion fallback failed: ${errorMessage}`);
-            throw new Error(errorMessage);
-          }
-          console.log("[STORE DB DELETION SUCCESS] Successfully deleted blog record via secure API route.");
-        } else {
-          console.log(`[STORE DB DELETION SUCCESS] Directly deleted blog ID: ${id} from Supabase blogs table.`);
+          console.error(`[STORE DB DELETION ERROR] Direct Supabase delete failed: ${dbErr.message}`);
+          throw new Error(dbErr.message);
         }
 
         // Perform UI state updates ONLY after database & storage deletion are successfully completed and awaited
@@ -3017,19 +3024,15 @@ export const useStore = create<AgencyState>((set, get) => {
       };
 
       try {
-        const res = await secureFetch("/api/admin/portfolio", {
-          method: "POST",
-          body: JSON.stringify({ item: dbPayload })
-        });
-        if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.error || "Failed to create portfolio item");
+        const { error } = await supabase.from("portfolio_items").insert([dbPayload]);
+        if (error) {
+          throw new Error(error.message || "Failed to insert portfolio item in database");
         }
         const updated = [newItem, ...get().portfolioItems];
         set({ portfolioItems: updated });
         saveStateToCache({ ...get(), portfolioItems: updated });
       } catch (err: any) {
-        console.error("Failed to insert portfolio item to Supabase securely:", err.message);
+        console.error("Failed to insert portfolio item to Supabase directly:", err.message);
         throw err;
       }
     },
@@ -3050,65 +3053,55 @@ export const useStore = create<AgencyState>((set, get) => {
       }
 
       try {
-        const res = await secureFetch("/api/admin/portfolio/update", {
-          method: "POST",
-          body: JSON.stringify({ id, updates: dbUpdates })
-        });
-        if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.error || "Failed to update portfolio item");
+        const { error } = await supabase.from("portfolio_items").update(dbUpdates).eq("id", id);
+        if (error) {
+          throw new Error(error.message || "Failed to update portfolio item in database");
         }
         const updated = get().portfolioItems.map(item => item.id === id ? { ...item, ...updates } : item);
         set({ portfolioItems: updated });
         saveStateToCache({ ...get(), portfolioItems: updated });
       } catch (err: any) {
-        console.error("Failed to update portfolio item in Supabase securely:", err.message);
+        console.error("Failed to update portfolio item in Supabase directly:", err.message);
         throw err;
       }
     },
 
     deletePortfolioItem: async (id) => {
       try {
-        const res = await secureFetch("/api/admin/portfolio/delete", {
-          method: "POST",
-          body: JSON.stringify({ id })
-        });
-        if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.error || "Failed to delete portfolio item");
+        const { error } = await supabase.from("portfolio_items").delete().eq("id", id);
+        if (error) {
+          throw new Error(error.message || "Failed to delete portfolio item from database");
         }
         const updated = get().portfolioItems.filter(item => item.id !== id);
         set({ portfolioItems: updated });
         saveStateToCache({ ...get(), portfolioItems: updated });
       } catch (err: any) {
-        console.error("Failed to delete portfolio item from Supabase securely:", err.message);
+        console.error("Failed to delete portfolio item from Supabase directly:", err.message);
         throw err;
       }
     },
 
     fetchPortfolio: async () => {
       try {
-        const res = await secureFetch("/api/portfolio");
-        if (res.ok) {
-          const data = await res.json();
-          if (data.portfolio) {
-            const mapped = data.portfolio.map((item: any) => ({
-              id: item.id,
-              title: item.title,
-              description: item.description,
-              category: item.category,
-              image_url: item.image_url || item.cover_image || "https://images.unsplash.com/photo-1547082299-de196ea013d6?q=80&w=800",
-              is_featured: item.is_featured !== undefined ? item.is_featured : (item.featured ?? true),
-              live_url: item.live_url || item.demo_url || "",
-              created_at: item.created_at || new Date().toISOString(),
-              tags: item.tags || []
-            }));
-            set({ portfolioItems: mapped as PortfolioItem[] });
-            saveStateToCache({ ...get(), portfolioItems: mapped as PortfolioItem[] });
-          }
+        const { data, error } = await supabase.from("portfolio_items").select("*");
+        if (error) throw error;
+        if (data) {
+          const mapped = data.map((item: any) => ({
+            id: item.id,
+            title: item.title,
+            description: item.description,
+            category: item.category,
+            image_url: item.image_url || item.cover_image || "https://images.unsplash.com/photo-1547082299-de196ea013d6?q=80&w=800",
+            is_featured: item.is_featured !== undefined ? item.is_featured : (item.featured ?? true),
+            live_url: item.live_url || item.demo_url || "",
+            created_at: item.created_at || new Date().toISOString(),
+            tags: item.tags || []
+          }));
+          set({ portfolioItems: mapped as PortfolioItem[] });
+          saveStateToCache({ ...get(), portfolioItems: mapped as PortfolioItem[] });
         }
       } catch (err: any) {
-        console.error("Failed to fetch portfolio securely:", err.message);
+        console.error("Failed to fetch portfolio directly:", err.message);
       }
     },
 
