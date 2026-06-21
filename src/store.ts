@@ -2905,6 +2905,7 @@ export const useStore = create<AgencyState>((set, get) => {
       const slug = blog.slug || blog.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)+/g, "");
 
       try {
+        console.log("[STORE BLOG CREATE] Attempting direct insert to Supabase 'blogs' table:", newBlog);
         const { error } = await supabase.from("blogs").insert([{
           id: newBlog.id,
           title: newBlog.title,
@@ -2918,9 +2919,11 @@ export const useStore = create<AgencyState>((set, get) => {
         }]);
 
         if (error) {
+          console.error("[STORE BLOG CREATE ERROR] Supabase insert failed:", error);
           throw new Error(error.message || "Failed to create blog post in database");
         }
 
+        console.log("[STORE BLOG CREATE SUCCESS] Insert successful! Updating UI state with new blog ID:", newBlog.id);
         const updated = [newBlog, ...get().blogs];
         set({ blogs: updated });
         saveStateToCache({ ...get(), blogs: updated });
@@ -2943,11 +2946,14 @@ export const useStore = create<AgencyState>((set, get) => {
         if (updates.author_name !== undefined) dbUpdates.author_name = updates.author_name;
         if (updates.read_time !== undefined) dbUpdates.read_time = updates.read_time;
 
+        console.log(`[STORE BLOG UPDATE] Attempting Supabase update for blog ID: ${id}. DB Updates payload:`, dbUpdates);
         const { error } = await supabase.from("blogs").update(dbUpdates).eq("id", id);
         if (error) {
+          console.error(`[STORE BLOG UPDATE ERROR] Supabase update failed for blog ID: ${id}:`, error);
           throw new Error(error.message || "Failed to update blog post in database");
         }
 
+        console.log(`[STORE BLOG UPDATE SUCCESS] Successfully updated blog ID: ${id} in Supabase.`);
         const updated = get().blogs.map(item => item.id === id ? { ...item, ...updates } : item);
         set({ blogs: updated });
         saveStateToCache({ ...get(), blogs: updated });
@@ -3024,10 +3030,13 @@ export const useStore = create<AgencyState>((set, get) => {
       };
 
       try {
+        console.log("[STORE PORTFOLIO CREATE] Attempting direct insert to 'portfolio_items' table with payload:", dbPayload);
         const { error } = await supabase.from("portfolio_items").insert([dbPayload]);
         if (error) {
+          console.error("[STORE PORTFOLIO CREATE ERROR] Supabase insert failed:", error);
           throw new Error(error.message || "Failed to insert portfolio item in database");
         }
+        console.log("[STORE PORTFOLIO CREATE SUCCESS] Insert successful! ID:", id);
         const updated = [newItem, ...get().portfolioItems];
         set({ portfolioItems: updated });
         saveStateToCache({ ...get(), portfolioItems: updated });
@@ -3053,10 +3062,13 @@ export const useStore = create<AgencyState>((set, get) => {
       }
 
       try {
+        console.log(`[STORE PORTFOLIO UPDATE] Attempting Supabase update for portfolio ID: ${id} with:`, dbUpdates);
         const { error } = await supabase.from("portfolio_items").update(dbUpdates).eq("id", id);
         if (error) {
+          console.error(`[STORE PORTFOLIO UPDATE ERROR] Supabase update failed for portfolio ID: ${id}:`, error);
           throw new Error(error.message || "Failed to update portfolio item in database");
         }
+        console.log(`[STORE PORTFOLIO UPDATE SUCCESS] Successfully updated portfolio ID: ${id} in Supabase.`);
         const updated = get().portfolioItems.map(item => item.id === id ? { ...item, ...updates } : item);
         set({ portfolioItems: updated });
         saveStateToCache({ ...get(), portfolioItems: updated });
@@ -3068,10 +3080,13 @@ export const useStore = create<AgencyState>((set, get) => {
 
     deletePortfolioItem: async (id) => {
       try {
+        console.log(`[STORE PORTFOLIO DELETE] Attempting Supabase delete for portfolio ID: ${id}`);
         const { error } = await supabase.from("portfolio_items").delete().eq("id", id);
         if (error) {
+          console.error(`[STORE PORTFOLIO DELETE ERROR] Supabase delete failed for portfolio ID: ${id}:`, error);
           throw new Error(error.message || "Failed to delete portfolio item from database");
         }
+        console.log(`[STORE PORTFOLIO DELETE SUCCESS] Successfully deleted portfolio ID: ${id} in Supabase.`);
         const updated = get().portfolioItems.filter(item => item.id !== id);
         set({ portfolioItems: updated });
         saveStateToCache({ ...get(), portfolioItems: updated });

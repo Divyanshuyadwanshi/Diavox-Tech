@@ -66,12 +66,20 @@ export default function AdminBlogs() {
       read_time,
     };
 
-    if (editingId) {
-      updateBlog(editingId, blogData);
-    } else {
-      addBlog(blogData);
-    }
-    resetForm();
+    const saveBlog = async () => {
+      try {
+        if (editingId) {
+          await updateBlog(editingId, blogData);
+        } else {
+          await addBlog(blogData);
+        }
+        resetForm();
+      } catch (err: any) {
+        console.error("[ADMIN BLOG] Submission failed:", err);
+        alert("Failed to save blog post: " + (err.message || err));
+      }
+    };
+    saveBlog();
   };
 
   const handleEdit = (blog: Blog) => {
@@ -319,9 +327,14 @@ export default function AdminBlogs() {
                         <Edit2 size={12} />
                       </button>
                       <button
-                        onClick={() => {
+                        onClick={async () => {
                           if (confirm("Are you sure you want to delete this post?")) {
-                            deleteBlog(blog.id);
+                            try {
+                              await deleteBlog(blog.id);
+                            } catch (err: any) {
+                              console.error("[ADMIN BLOG] Deletion failed:", err);
+                              alert("Failed to delete blog post: " + (err.message || err));
+                            }
                           }
                         }}
                         className="p-1.5 rounded-lg text-rose-500 hover:bg-rose-500/10 bg-slate-500/5 transition-all cursor-pointer"

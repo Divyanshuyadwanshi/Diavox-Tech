@@ -63,12 +63,20 @@ export default function AdminPortfolio() {
       is_featured: isFeatured
     };
 
-    if (editingId) {
-      updatePortfolioItem(editingId, itemData);
-    } else {
-      addPortfolioItem(itemData);
-    }
-    resetForm();
+    const savePortfolioItem = async () => {
+      try {
+        if (editingId) {
+          await updatePortfolioItem(editingId, itemData);
+        } else {
+          await addPortfolioItem(itemData);
+        }
+        resetForm();
+      } catch (err: any) {
+        console.error("[ADMIN PORTFOLIO] Submission failed:", err);
+        alert("Failed to save portfolio item: " + (err.message || err));
+      }
+    };
+    savePortfolioItem();
   };
 
   const handleEdit = (item: PortfolioItem) => {
@@ -316,7 +324,16 @@ export default function AdminPortfolio() {
                     <Edit2 size={11} />
                   </button>
                   <button
-                    onClick={() => deletePortfolioItem(item.id)}
+                    onClick={async () => {
+                      if (confirm("Are you sure you want to delete this portfolio item?")) {
+                        try {
+                          await deletePortfolioItem(item.id);
+                        } catch (err: any) {
+                          console.error("[ADMIN PORTFOLIO] Deletion failed:", err);
+                          alert("Failed to delete portfolio item: " + (err.message || err));
+                        }
+                      }
+                    }}
                     className="p-1.5 rounded bg-slate-500/5 hover:bg-slate-550/15 text-rose-500"
                   >
                     <Trash2 size={11} />
