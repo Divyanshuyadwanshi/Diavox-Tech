@@ -962,11 +962,13 @@ export const useStore = create<AgencyState>((set, get) => {
             const { data: profiles } = await supabase.from("profiles").select("*");
             const { data: teamMembers } = await supabase.from("team_members").select("*");
             if (profiles) {
-              const teamMap = new Map((teamMembers || []).map(t => [t.profile_id, t]));
-              profilesList = profiles.map(p => ({
-                ...p,
-                ...(teamMap.get(p.id) || {})
-              }));
+              profilesList = profiles.map(p => {
+                const matchedTeamMember = (teamMembers || []).find(t => String(p.id).trim().toLowerCase() === String(t.profile_id).trim().toLowerCase());
+                return {
+                  ...p,
+                  ...(matchedTeamMember || {})
+                };
+              });
             } else {
               profilesList = [];
             }
@@ -975,11 +977,13 @@ export const useStore = create<AgencyState>((set, get) => {
           const { data: profiles } = await supabase.from("profiles").select("*");
           const { data: teamMembers } = await supabase.from("team_members").select("*");
           if (profiles) {
-            const teamMap = new Map((teamMembers || []).map(t => [t.profile_id, t]));
-            profilesList = profiles.map(p => ({
-              ...p,
-              ...(teamMap.get(p.id) || {})
-            }));
+            profilesList = profiles.map(p => {
+              const matchedTeamMember = (teamMembers || []).find(t => String(p.id).trim().toLowerCase() === String(t.profile_id).trim().toLowerCase());
+              return {
+                ...p,
+                ...(matchedTeamMember || {})
+              };
+            });
           } else {
             profilesList = [];
           }

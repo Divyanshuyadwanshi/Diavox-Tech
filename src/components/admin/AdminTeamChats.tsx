@@ -13,7 +13,15 @@ export default function AdminTeamChats() {
   const [selectedTargetId, setSelectedTargetId] = useState<string>("global");
   const [msgInput, setMsgInput] = useState("");
 
-  const staffList = allUsers.filter(u => u.id !== currentUser.id && ["secret_admin", "primary_admin", "secondary_admin", "third_admin", "team_member", "developer"].includes(u.role));
+  const staffList = allUsers.filter(u => {
+    if (u.id === currentUser.id) return false;
+    const isStaff = ["secret_admin", "primary_admin", "secondary_admin", "third_admin", "team_member", "developer"].includes(u.role);
+    if (!isStaff) return false;
+    if (u.role === "secret_admin") {
+      return currentUser?.role === "secret_admin" || currentUser?.role === "primary_admin";
+    }
+    return true;
+  });
 
   // Subsections filters
   const activePrivateTarget = staffList.find(s => s.id === selectedTargetId);

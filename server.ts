@@ -307,11 +307,13 @@ app.get("/api/admin/profiles", async (req, res) => {
     if (pErr) throw pErr;
     
     // Merge team member data
-    const teamMap = new Map((teamMembers || []).map(t => [t.profile_id, t]));
-    const merged = (profiles || []).map(p => ({
-      ...p,
-      ...(teamMap.get(p.id) || {})
-    }));
+    const merged = (profiles || []).map(p => {
+      const matchedTeamMember = (teamMembers || []).find(t => String(p.id).trim().toLowerCase() === String(t.profile_id).trim().toLowerCase());
+      return {
+        ...p,
+        ...(matchedTeamMember || {})
+      };
+    });
 
     res.json({ profiles: merged });
   } catch (err: any) {

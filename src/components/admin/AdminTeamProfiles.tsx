@@ -219,13 +219,11 @@ export default function AdminTeamProfiles() {
     const isStaff = (r: string) => ["secret_admin", "primary_admin", "secondary_admin", "third_admin", "team_member", "developer"].includes(r);
     
     return users.filter(u => {
-      // Show all staff to other staff for visibility
-      if (isStaff(currentUserRole) && isStaff(u.role)) return true;
-      
-      const maxVal = roleValues[currentUserRole] || 0;
-      const uVal = roleValues[u.role] || 0;
-      // Only return team/staff accounts
-      return uVal > 0 && uVal <= maxVal;
+      if (!isStaff(u.role)) return false;
+      if (u.role === "secret_admin") {
+        return currentUserRole === "secret_admin" || currentUserRole === "primary_admin";
+      }
+      return true;
     });
   };
 
