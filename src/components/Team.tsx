@@ -3,9 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React from "react";
+import React, { useEffect } from "react";
 import { useStore } from "../store";
 import { ExternalLink, ShieldCheck, Mail, Briefcase } from "lucide-react";
+import { SUPABASE_URL } from "../supabase";
 
 interface TeamProps {
   preview?: boolean;
@@ -14,6 +15,20 @@ interface TeamProps {
 
 export default function Team({ preview, onNavigate }: TeamProps) {
   const { theme, allUsers } = useStore();
+
+  useEffect(() => {
+    const rolesDist = allUsers.reduce((acc: Record<string, number>, u) => {
+      const r = u.role || "undefined/null";
+      acc[r] = (acc[r] || 0) + 1;
+      return acc;
+    }, {});
+
+    console.log("[DIAGNOSTIC] Vercel/Runtime Environment Check:");
+    console.log("- VITE_SUPABASE_URL / Running URL:", SUPABASE_URL);
+    console.log("- allUsers Count:", allUsers.length);
+    console.log("- allUsers Role Distribution:", JSON.stringify(rolesDist));
+    console.log("- Filtered Team Members Count:", teamMembers.length);
+  }, [allUsers]);
 
   // Filter team members and admins to showcase
   const teamMembers = allUsers.filter(u => 
