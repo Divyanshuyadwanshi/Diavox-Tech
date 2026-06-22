@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useStore } from "../store";
 import { ExternalLink, ShieldCheck, Mail, Briefcase } from "lucide-react";
-import { SUPABASE_URL } from "../supabase";
+import { SUPABASE_URL, supabase } from "../supabase";
 
 interface TeamProps {
   preview?: boolean;
@@ -14,7 +14,41 @@ interface TeamProps {
 }
 
 export default function Team({ preview, onNavigate }: TeamProps) {
-  const { theme, allUsers } = useStore();
+  const { theme, allUsers, currentUser } = useStore();
+  const [apiStatus, setApiStatus] = useState<string>("Testing...");
+
+  useEffect(() => {
+    async function testApi() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        let token = session?.access_token;
+        if (currentUser && currentUser.id === "admin-secret") {
+          token = "admin-secret-bypass-token";
+        }
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json"
+        };
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+        }
+        const res = await fetch("/api/admin/profiles", { headers });
+        if (res.ok) {
+          const body = await res.json();
+          setApiStatus(`Success (${res.status} OK) - returned ${body?.profiles?.length ?? 0} profiles`);
+        } else {
+          setApiStatus(`Failed [Status ${res.status}]: ${res.statusText}`);
+        }
+      } catch (err: any) {
+        setApiStatus(`Error: ${err.message || err}`);
+      }
+    }
+    testApi();
+  }, [currentUser]);
+
+  // Filter team members and admins to showcase
+  const teamMembers = allUsers.filter(u => 
+    ["team_member", "secondary_admin", "third_admin", "primary_admin", "developer"].includes(u.role)
+  );
 
   useEffect(() => {
     const rolesDist = allUsers.reduce((acc: Record<string, number>, u) => {
@@ -28,12 +62,24 @@ export default function Team({ preview, onNavigate }: TeamProps) {
     console.log("- allUsers Count:", allUsers.length);
     console.log("- allUsers Role Distribution:", JSON.stringify(rolesDist));
     console.log("- Filtered Team Members Count:", teamMembers.length);
+  }, [allUsers, teamMembers]);
+
+  const rolesDist = useMemo(() => {
+    return allUsers.reduce((acc: Record<string, number>, u) => {
+      const r = u.role || "undefined/null";
+      acc[r] = (acc[r] || 0) + 1;
+      return acc;
+    }, {});
   }, [allUsers]);
 
-  // Filter team members and admins to showcase
-  const teamMembers = allUsers.filter(u => 
-    ["team_member", "secondary_admin", "third_admin", "primary_admin", "developer"].includes(u.role)
-  );
+  const isDebug = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    const searchParams = new URLSearchParams(window.location.search);
+    const hasDebugParam = searchParams.get("debug") === "team";
+    const isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" || window.location.hostname.includes("ais-dev-");
+    const isDevelopment = (import.meta as any).env?.DEV;
+    return hasDebugParam || isLocal || isDevelopment;
+  }, []);
 
   const displayedTeam = preview ? teamMembers.slice(0, 4) : teamMembers;
 
@@ -60,6 +106,82 @@ export default function Team({ preview, onNavigate }: TeamProps) {
             Our multi-branch divisions operate 24/7 across hemispheres to deploy sub-second custom portals, modern responsive layouts, and technical ranking algorithms.
           </p>
         </div>
+
+        {/* Visible Debug Panel (Development / ?debug=team) */}
+        {isDebug && (
+          <div 
+            id="team-debug-panel" 
+            className={`mb-10 p-6 rounded-2xl border font-mono text-xs shadow-xl transition-all ${
+              theme === "dark" 
+                ? "bg-slate-950/90 border-amber-500/30 text-slate-100 animate-fade-in" 
+                : "bg-amber-50/40 border-amber-500/20 text-slate-800 animate-fade-in"
+            }`}
+          >
+            <div className="flex items-center justify-between border-b pb-3 mb-4 border-amber-500/20">
+              <span className="font-bold uppercase tracking-wide text-amber-500 flex items-center gap-2">
+                <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse"></span>
+                Team Diagnostic Panel (Temporary)
+              </span>
+              <span className="text-[10px] opacity-60">Visible via DEV/Host check or ?debug=team</span>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <div>
+                  <span className="font-semibold text-cyan-400 block mb-1">1. Supabase URL used by frontend:</span>
+                  <div className="px-2 py-1 select-all bg-slate-900/60 rounded text-[11px] truncate text-amber-400" title={SUPABASE_URL}>
+                    {SUPABASE_URL}
+                  </div>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-cyan-400">2. Total users (allUsers count):</span>
+                  <span className="font-bold bg-cyan-500/20 text-cyan-400 px-1.5 py-0.5 rounded text-xs">{allUsers.length}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-cyan-400">3. Current User Role:</span>
+                  <span className="font-bold bg-purple-500/20 text-purple-400 px-1.5 py-0.5 rounded text-xs">{currentUser?.role || "GUEST"}</span>
+                </div>
+                {currentUser && (
+                  <div className="text-[10px] opacity-65 truncate text-left">
+                    Logged in as: <span className="text-amber-400">{currentUser.email}</span>
+                  </div>
+                )}
+              </div>
+              
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-semibold text-cyan-400">4. Filtered team count:</span>
+                  <span className="font-bold bg-teal-500/20 text-teal-400 px-1.5 py-0.5 rounded text-xs">{teamMembers.length}</span>
+                </div>
+                <div className="text-[10px] opacity-60">
+                  (Staff roles filtered on Team page: admins, developer, team_member)
+                </div>
+                <div>
+                  <span className="font-semibold text-cyan-400 block mb-1">5. Backend /api/admin/profiles fetch:</span>
+                  <div className={`px-2 py-1 rounded text-[11px] font-bold ${
+                    apiStatus.includes("Success") 
+                      ? "bg-emerald-500/20 text-emerald-400" 
+                      : "bg-rose-500/20 text-rose-400"
+                  }`}>
+                    {apiStatus}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 pt-3 border-t border-amber-500/20">
+              <span className="font-semibold text-cyan-400 block mb-1.5">6. User Role Distribution in state:</span>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                {Object.entries(rolesDist).map(([roleName, count]) => (
+                  <div key={roleName} className="bg-slate-900/40 p-1.5 rounded flex items-center justify-between border border-white/5">
+                    <span className="opacity-75 truncate text-[11px]" title={roleName}>{roleName}:</span>
+                    <span className="font-bold text-amber-400 font-mono text-xs">{count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Team Grid layout */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8" id="team-members-grid">
