@@ -982,28 +982,47 @@ export const useStore = create<AgencyState>((set, get) => {
           
           let filtered = profilesList;
           const currentId = get().currentUser?.id;
+          
+          const isStaffAndNotSecretAdmin = (r: string) => ["primary_admin", "secondary_admin", "third_admin", "team_member", "developer"].includes(r);
           const isStaff = (r: string) => ["secret_admin", "primary_admin", "secondary_admin", "third_admin", "team_member", "developer"].includes(r);
           const isAdmin = (r: string) => ["secret_admin", "primary_admin", "secondary_admin", "third_admin"].includes(r);
 
           filtered = profilesList.filter(p => {
             const pRole = p.role || "client";
-            const pVal = roleValues[pRole] || 0;
 
             // Anyone can view their own profile
-            if (p.id === currentId) return true;
+            if (currentId && p.id === currentId) return true;
 
-            // Secret Admin seen by themselves and primary_admin
+            // Secret Admin is visible ONLY to Secret Admin and Primary Admin
             if (pRole === "secret_admin") {
               return currentRole === "secret_admin" || currentRole === "primary_admin";
             }
 
-            // Staff members are publicly visible to all staff
-            if (isStaff(currentRole) && isStaff(pRole)) return true;
+            // Public visitors (no currentId or no currentRole) can see public team profiles (staff except secret_admin)
+            if (!currentId || !currentRole) {
+              return isStaffAndNotSecretAdmin(pRole);
+            }
 
-            // Admins see everyone (clients/leads)
-            if (isAdmin(currentRole)) return true;
-            
-            // Otherwise, only see self (already handled)
+            // Clients can see team members and admins (staff except secret_admin), but not other clients
+            if (currentRole === "client") {
+              return isStaffAndNotSecretAdmin(pRole);
+            }
+
+            // Team members / developers can see admins and team members (staff profiles, except secret_admin)
+            if (["team_member", "developer"].includes(currentRole)) {
+              return isStaffAndNotSecretAdmin(pRole);
+            }
+
+            // Primary Admins and Secret Admins can see everyone
+            if (currentRole === "primary_admin" || currentRole === "secret_admin") {
+              return true;
+            }
+
+            // Other admin roles (secondary_admin, third_admin) can see staff & clients
+            if (["secondary_admin", "third_admin"].includes(currentRole)) {
+              return pRole !== "secret_admin";
+            }
+
             return false;
           });
           
@@ -1126,7 +1145,11 @@ export const useStore = create<AgencyState>((set, get) => {
         // Fetch Team Messages
         const { data: teamMessagesList } = await supabase.from("team_messages").select("*").order("created_at", { ascending: true });
         if (teamMessagesList) {
-          set({ teamMessages: teamMessagesList as TeamMessage[] });
+          const mappedTeamMessages = teamMessagesList.map((m: any) => ({
+            ...m,
+            message_text: m.text // map 'text' database column to 'message_text' frontend property
+          }));
+          set({ teamMessages: mappedTeamMessages as TeamMessage[] });
         }
 
         // Fetch Private Messages
@@ -3120,7 +3143,7 @@ export const useStore = create<AgencyState>((set, get) => {
       }
     },
 
-    sendPrivateMessage: (senderId, senderName, recipientId, text) => {
+    sendPrivateMessage: async (senderId, senderName, recipientId, text) => {
       const newMsg: PrivateMessage = {
         id: "pm-" + Math.random().toString(36).substring(4),
         sender_id: senderId,
@@ -3129,12 +3152,29 @@ export const useStore = create<AgencyState>((set, get) => {
         message_text: text,
         created_at: new Date().toISOString()
       };
+      // Optimistic update
       const updated = [...get().privateMessages, newMsg];
       set({ privateMessages: updated });
       saveStateToCache({ ...get(), privateMessages: updated });
+
+      try {
+        const { error } = await supabase.from("private_messages").insert({
+          id: newMsg.id,
+          sender_id: newMsg.sender_id,
+          sender_name: newMsg.sender_name,
+          recipient_id: newMsg.recipient_id,
+          message_text: newMsg.message_text,
+          created_at: newMsg.created_at
+        });
+        if (error) {
+          console.error("[STORE] Failed to persist private message to Supabase DB:", error);
+        }
+      } catch (err) {
+        console.error("[STORE] Exception during private message Supabase write:", err);
+      }
     },
 
-    sendTeamMessage: (groupId, senderId, senderName, senderRole, text, file_url, file_name, is_image) => {
+    sendTeamMessage: async (groupId, senderId, senderName, senderRole, text, file_url, file_name, is_image) => {
       const newMsg: TeamMessage = {
         id: "tm-" + Math.random().toString(36).substring(4),
         group_id: groupId,
@@ -3147,9 +3187,31 @@ export const useStore = create<AgencyState>((set, get) => {
         is_image,
         created_at: new Date().toISOString()
       };
+      // Optimistic update
       const updated = [...get().teamMessages, newMsg];
       set({ teamMessages: updated });
       saveStateToCache({ ...get(), teamMessages: updated });
+
+      try {
+        // Map message_text to 'text' for database column compatibility
+        const { error } = await supabase.from("team_messages").insert({
+          id: newMsg.id,
+          group_id: newMsg.group_id,
+          sender_id: newMsg.sender_id,
+          sender_name: newMsg.sender_name,
+          sender_role: newMsg.sender_role,
+          text: text, // DB column is 'text'
+          file_url: newMsg.file_url || null,
+          file_name: newMsg.file_name || null,
+          is_image: newMsg.is_image || false,
+          created_at: newMsg.created_at
+        });
+        if (error) {
+          console.error("[STORE] Failed to persist team message to Supabase DB:", error);
+        }
+      } catch (err) {
+        console.error("[STORE] Exception during team message Supabase write:", err);
+      }
     },
 
     createTeamGroup: (name, description) => {
