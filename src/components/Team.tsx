@@ -17,7 +17,7 @@ export default function Team({ preview, onNavigate }: TeamProps) {
 
   // Filter team members and admins to showcase
   const teamMembers = allUsers.filter(u => 
-    ["team_member", "secondary_admin", "third_admin", "primary_admin"].includes(u.role)
+    ["team_member", "secondary_admin", "third_admin", "primary_admin", "developer"].includes(u.role)
   );
 
   const displayedTeam = preview ? teamMembers.slice(0, 4) : teamMembers;

@@ -23,7 +23,7 @@ export default function AdminWorkProjects() {
   const [assignedTo, setAssignedTo] = useState<string[]>([]);
 
   // Helpers
-  const teamMembersList = allUsers.filter(u => u.role === "team_member" || u.role === "secondary_admin");
+  const teamMembersList = allUsers.filter(u => ["primary_admin", "secondary_admin", "third_admin", "team_member", "developer"].includes(u.role));
   const clientsList = allUsers.filter(u => u.role === "client");
 
   const resetForm = () => {

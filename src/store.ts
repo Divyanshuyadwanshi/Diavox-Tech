@@ -959,12 +959,30 @@ export const useStore = create<AgencyState>((set, get) => {
             profilesList = data.profiles;
           } else {
             // Fallback to direct supabase if API fails
-            const { data } = await supabase.from("profiles").select("*");
-            profilesList = data || [];
+            const { data: profiles } = await supabase.from("profiles").select("*");
+            const { data: teamMembers } = await supabase.from("team_members").select("*");
+            if (profiles) {
+              const teamMap = new Map((teamMembers || []).map(t => [t.profile_id, t]));
+              profilesList = profiles.map(p => ({
+                ...p,
+                ...(teamMap.get(p.id) || {})
+              }));
+            } else {
+              profilesList = [];
+            }
           }
         } catch (fetchErr) {
-          const { data } = await supabase.from("profiles").select("*");
-          profilesList = data || [];
+          const { data: profiles } = await supabase.from("profiles").select("*");
+          const { data: teamMembers } = await supabase.from("team_members").select("*");
+          if (profiles) {
+            const teamMap = new Map((teamMembers || []).map(t => [t.profile_id, t]));
+            profilesList = profiles.map(p => ({
+              ...p,
+              ...(teamMap.get(p.id) || {})
+            }));
+          } else {
+            profilesList = [];
+          }
         }
 
         if (profilesList.length > 0) {
