@@ -1416,7 +1416,7 @@ Platform Integration Code: Diavox Remote Sync Engine
                 <div>
                   <h4 className="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider mb-3">Your Current Active Subscription</h4>
                   
-                  {clientPlans.filter(p => p.status === "Active").map((pl) => {
+                  {clientPlans.filter(p => ["Active", "On Hold", "Expired"].includes(p.status)).map((pl) => {
                     const daysRemaining = (() => {
                       if (!pl.renewal_date) return null;
                       const renewal = new Date(pl.renewal_date);
@@ -1425,11 +1425,27 @@ Platform Integration Code: Diavox Remote Sync Engine
                       return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
                     })();
 
+                    const isPlanActive = pl.status === "Active";
+                    const isPlanOnHold = pl.status === "On Hold";
+                    const isPlanExpired = pl.status === "Expired";
+
                     return (
-                      <div key={pl.id} className="p-6 rounded-2xl bg-gradient-to-br from-slate-900 to-slate-950 border border-teal-500/20 text-left space-y-4 mb-4 shadow-lg shadow-teal-500/5">
+                      <div key={pl.id} className={`p-6 rounded-2xl border text-left space-y-4 mb-4 shadow-lg ${
+                        isPlanActive 
+                          ? "bg-gradient-to-br from-slate-900 to-slate-950 border-teal-500/20 shadow-teal-500/5"
+                          : isPlanOnHold
+                            ? "bg-gradient-to-br from-slate-900 to-slate-950 border-amber-500/20 shadow-amber-500/5"
+                            : "bg-slate-950/40 border-slate-800 opacity-70"
+                      }`}>
                         <div className="flex justify-between items-start flex-wrap gap-4">
                           <div>
-                            <span className="px-2.5 py-1 rounded text-[9px] font-mono bg-teal-950 text-teal-400 border border-teal-500/20 uppercase font-black tracking-wider">
+                            <span className={`px-2.5 py-1 rounded text-[9px] font-mono border uppercase font-black tracking-wider ${
+                              isPlanActive
+                                ? "bg-teal-950 text-teal-400 border-teal-500/20"
+                                : isPlanOnHold
+                                  ? "bg-amber-950 text-amber-400 border-amber-500/20"
+                                  : "bg-slate-900 text-slate-400 border-slate-700"
+                            }`}>
                               {pl.billing_cycle} CYCLE
                             </span>
                             <h4 className="text-xl font-display font-extrabold mt-2 text-white">Diavox {pl.plan_name}</h4>
@@ -1438,12 +1454,24 @@ Platform Integration Code: Diavox Remote Sync Engine
                             </p>
                           </div>
 
-                          <div className="text-left font-mono text-xs text-teal-400 bg-teal-500/10 px-4 py-2 rounded-xl border border-teal-500/25">
+                          <div className={`text-left font-mono text-xs px-4 py-2 rounded-xl border ${
+                            isPlanActive
+                              ? "text-teal-400 bg-teal-500/10 border-teal-500/25"
+                              : isPlanOnHold
+                                ? "text-amber-400 bg-amber-500/10 border-amber-500/25"
+                                : "text-slate-400 bg-slate-500/5 border-slate-700"
+                          }`}>
                             <span className="flex items-center space-x-2 font-extrabold justify-end">
-                              <span className="w-2.5 h-2.5 rounded-full bg-teal-400 animate-pulse" />
-                              <span>ACTIVE TERM</span>
+                              <span className={`w-2.5 h-2.5 rounded-full ${
+                                isPlanActive
+                                  ? "bg-teal-400 animate-pulse"
+                                  : isPlanOnHold
+                                    ? "bg-amber-400 animate-pulse"
+                                    : "bg-slate-500"
+                              }`} />
+                              <span>{pl.status.toUpperCase()} TERM</span>
                             </span>
-                            {daysRemaining !== null && (
+                            {isPlanActive && daysRemaining !== null && (
                               <p className="text-[10px] text-right text-slate-400 mt-1 uppercase font-bold">
                                 {daysRemaining > 0 ? `${daysRemaining} Days Left` : "Renews Today"}
                               </p>
@@ -1477,7 +1505,7 @@ Platform Integration Code: Diavox Remote Sync Engine
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-300 font-sans">
                               {pl.features.map((feat, i) => (
                                 <div key={i} className="flex items-start space-x-2">
-                                  <span className="text-teal-450 mt-0.5">✔</span>
+                                  <span className={isPlanActive ? "text-teal-450 mt-0.5" : isPlanOnHold ? "text-amber-450 mt-0.5" : "text-slate-500 mt-0.5"}>✔</span>
                                   <span>{feat}</span>
                                 </div>
                               ))}
@@ -1488,9 +1516,9 @@ Platform Integration Code: Diavox Remote Sync Engine
                     );
                   })}
 
-                  {clientPlans.filter(p => p.status === "Active").length === 0 && (
+                  {clientPlans.filter(p => ["Active", "On Hold", "Expired"].includes(p.status)).length === 0 && (
                     <div className="p-6 rounded-2xl border dark:border-slate-850 border-slate-150 text-left font-mono text-xs text-slate-400 bg-slate-500/5">
-                      <p className="font-bold text-slate-300">No active subscription approved for this cycle.</p>
+                      <p className="font-bold text-slate-300">No active, on-hold, or expired subscription approved for this cycle.</p>
                       <p className="opacity-70 mt-1 text-[11px]">Select a recommended tier upgrade below to compose an activation proposal for account administrators.</p>
                     </div>
                   )}

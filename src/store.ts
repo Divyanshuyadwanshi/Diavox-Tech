@@ -3448,11 +3448,26 @@ export const useStore = create<AgencyState>((set, get) => {
             notes: "Approved automatically via Client Elevations panel."
           };
 
-          // 3. Insert new active plan directly in Supabase
+          // 3. Insert new active plan directly in Supabase with safe duration column fallback check
           const { error: planErr } = await supabase
             .from("active_plans")
             .insert([nextActivePlanObj]);
-          if (planErr) throw planErr;
+          
+          if (planErr) {
+            if (planErr.message && (planErr.message.includes("duration") || planErr.message.includes("column"))) {
+              console.warn("duration column missing on active_plans, retrying approval plan insert with duration mapped to notes");
+              const fallbackPlanObj = { ...nextActivePlanObj };
+              delete fallbackPlanObj.duration;
+              fallbackPlanObj.notes = `[Duration: ${nextActivePlanObj.duration}] ${fallbackPlanObj.notes}`;
+              
+              const { error: fallbackErr } = await supabase
+                .from("active_plans")
+                .insert([fallbackPlanObj]);
+              if (fallbackErr) throw fallbackErr;
+            } else {
+              throw planErr;
+            }
+          }
         }
 
         // 4. Update Zustand state immediately for seamless UX
@@ -3493,7 +3508,25 @@ export const useStore = create<AgencyState>((set, get) => {
         const { error } = await supabase
           .from("active_plans")
           .insert([fullPlan]);
-        if (error) throw error;
+        
+        if (error) {
+          if (error.message && (error.message.includes("duration") || error.message.includes("column"))) {
+            console.warn("duration column missing on active_plans, retrying insert with duration mapped to notes");
+            const fallbackPlan = { ...fullPlan };
+            delete fallbackPlan.duration;
+            if (fallbackPlan.notes) {
+              fallbackPlan.notes = `[Duration: ${fullPlan.duration}] ${fallbackPlan.notes}`;
+            } else {
+              fallbackPlan.notes = `[Duration: ${fullPlan.duration}]`;
+            }
+            const { error: fallbackErr } = await supabase
+              .from("active_plans")
+              .insert([fallbackPlan]);
+            if (fallbackErr) throw fallbackErr;
+          } else {
+            throw error;
+          }
+        }
 
         // Immediately update Zustand state locally
         const updatedPlans = [fullPlan, ...get().activePlans];
@@ -3513,7 +3546,30 @@ export const useStore = create<AgencyState>((set, get) => {
           .from("active_plans")
           .update(updates)
           .eq("id", id);
-        if (error) throw error;
+        
+        if (error) {
+          if (error.message && (error.message.includes("duration") || error.message.includes("column"))) {
+            console.warn("duration column missing on active_plans, retrying update with duration mapped to notes");
+            const fallbackUpdates = { ...updates };
+            delete fallbackUpdates.duration;
+            if (updates.duration !== undefined) {
+              const currentPlan = get().activePlans.find(p => p.id === id);
+              const originalNotes = fallbackUpdates.notes !== undefined ? fallbackUpdates.notes : (currentPlan?.notes || "");
+              if (originalNotes) {
+                fallbackUpdates.notes = `[Duration: ${updates.duration}] ${originalNotes}`;
+              } else {
+                fallbackUpdates.notes = `[Duration: ${updates.duration}]`;
+              }
+            }
+            const { error: fallbackErr } = await supabase
+              .from("active_plans")
+              .update(fallbackUpdates)
+              .eq("id", id);
+            if (fallbackErr) throw fallbackErr;
+          } else {
+            throw error;
+          }
+        }
 
         // Immediately update Zustand state locally
         const updatedPlans = get().activePlans.map(p => p.id === id ? { ...p, ...updates } : p);

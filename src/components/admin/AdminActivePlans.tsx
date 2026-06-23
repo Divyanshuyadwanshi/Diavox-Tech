@@ -333,6 +333,7 @@ export default function AdminActivePlans() {
                     required
                   >
                     <option value="Active">Operational / Active</option>
+                    <option value="On Hold">On Hold</option>
                     <option value="Expired">Dormant / Expired</option>
                     <option value="Cancelled">Terminated / Cancelled</option>
                   </select>
@@ -473,7 +474,9 @@ export default function AdminActivePlans() {
                     <span className={`px-2.5 py-1 rounded-lg text-[9px] font-mono uppercase font-bold leading-none ${
                       plan.status === "Active" 
                         ? "bg-teal-500/10 text-teal-400 border border-teal-550/20" 
-                        : "bg-slate-500/10 text-slate-450"
+                        : plan.status === "On Hold"
+                          ? "bg-amber-500/10 text-amber-400 border border-amber-500/20"
+                          : "bg-slate-500/10 text-slate-450"
                     }`}>
                       {plan.status}
                     </span>
@@ -498,7 +501,39 @@ export default function AdminActivePlans() {
                   </div>
                 </div>
 
-                <div className="flex justify-end space-x-2 pt-3 border-t dark:border-slate-900 border-slate-100">
+                <div className="flex justify-end items-center space-x-2 pt-3 border-t dark:border-slate-900 border-slate-100 flex-wrap gap-y-2">
+                  {plan.status === "Active" && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          await updateActivePlan(plan.id, { status: "On Hold" });
+                          alert("Subscription has been put on hold.");
+                        } catch (err: any) {
+                          alert("Error putting plan on hold: " + err.message);
+                        }
+                      }}
+                      className="p-1.5 px-3 rounded-xl border border-amber-500/10 hover:border-amber-500/30 text-amber-500 hover:bg-amber-500/15 text-[11px] font-mono transition-all"
+                      title="Put on Hold"
+                    >
+                      Hold
+                    </button>
+                  )}
+                  {(plan.status === "On Hold" || plan.status === "Expired" || plan.status === "Cancelled") && (
+                    <button
+                      onClick={async () => {
+                        try {
+                          await updateActivePlan(plan.id, { status: "Active" });
+                          alert("Subscription reactivated successfully!");
+                        } catch (err: any) {
+                          alert("Error reactivating plan: " + err.message);
+                        }
+                      }}
+                      className="p-1.5 px-3 rounded-xl border border-teal-500/10 hover:border-teal-500/30 text-teal-400 hover:bg-teal-500/15 text-[11px] font-mono transition-all"
+                      title="Reactivate"
+                    >
+                      Reactivate
+                    </button>
+                  )}
                   <button
                     onClick={() => openEditForm(plan)}
                     className="p-2 rounded-xl border dark:border-slate-800 border-slate-200 hover:bg-slate-100 dark:hover:bg-slate-900 text-slate-400 hover:text-white transition-colors"
