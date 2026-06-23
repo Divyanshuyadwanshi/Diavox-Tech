@@ -98,7 +98,7 @@ export default function AIAssistantPopup() {
       } else if (lower.includes("services") || lower.includes("offer") || lower.includes("what you do")) {
         aiResponseText = "At Diavox Tech, we specialize in high-performance digital solutions: Custom Website Development (React/Vite/Next.js), Creative Design, Technical SEO audit optimization, AI & Automation pipelines, and custom maintenance services.";
       } else if (lower.includes("price") || lower.includes("pricing") || lower.includes("plan") || lower.includes("cost")) {
-        aiResponseText = "We offer flexible retainer plans for every stage: our Starter package begins at ₹1,65,000/mo covering 1 developer, our Professional package at ₹3,20,000/mo with dedicated designers and managers, and our Enterprise package at ₹6,50,000/mo for full-scale custom systems.";
+        aiResponseText = "To view our custom plans and active retainer rates, please visit our Pricing page or consult directly with our development specialists on our secure Enterprise Chat!";
       } else if (lower.includes("seo")) {
         aiResponseText = "Our Technical SEO campaigns include complete competitor backlink analyses, core web vitals optimization, tracking up to unlimited strategic keywords, and monthly copywriting releases to index your operations on top search results.";
       } else if (lower.includes("automation") || lower.includes("ai")) {
@@ -286,30 +286,50 @@ export default function AIAssistantPopup() {
 
           {/* Quick Actions Panel */}
           <div className="p-2 border-t border-slate-200/30 dark:border-slate-800 flex flex-wrap gap-1.5 justify-start bg-slate-900/5 dark:bg-slate-950/20">
-            <button
-              onClick={() => {
-                setTypingInput("What retainer plans are available?");
-              }}
-              className="px-2.5 py-1 text-[9px] font-mono rounded bg-slate-900/10 dark:bg-slate-900 text-slate-500 dark:text-slate-400 border border-slate-200/20"
-            >
-              Plans & Pricing
-            </button>
-            <button
-              onClick={() => {
-                setTypingInput("Explain your Web Development expertise.");
-              }}
-              className="px-2.5 py-1 text-[9px] font-mono rounded bg-slate-900/10 dark:bg-slate-900 text-slate-500 dark:text-slate-400 border border-slate-200/20"
-            >
-              Web Dev
-            </button>
-            <button
-              onClick={() => {
-                setTypingInput("Tell me about SEO audit optimization.");
-              }}
-              className="px-2.5 py-1 text-[9px] font-mono rounded bg-slate-900/10 dark:bg-slate-900 text-slate-500 dark:text-slate-400 border border-slate-200/20"
-            >
-              SEO Campaigns
-            </button>
+            {aiKnowledge.filter(k => k.category === "Recommended Question").length > 0 ? (
+              aiKnowledge.filter(k => k.category === "Recommended Question").map((reqQ) => (
+                <button
+                  key={reqQ.id}
+                  type="button"
+                  onClick={() => {
+                    setTypingInput(reqQ.question);
+                  }}
+                  className="px-2.5 py-1 text-[9px] font-mono rounded bg-slate-900/10 dark:bg-slate-900 text-slate-500 dark:text-slate-400 border border-slate-200/20 hover:bg-slate-500/10 cursor-pointer transition-all"
+                >
+                  {reqQ.question}
+                </button>
+              ))
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTypingInput("What services do you offer?");
+                  }}
+                  className="px-2.5 py-1 text-[9px] font-mono rounded bg-slate-900/10 dark:bg-slate-900 text-slate-500 dark:text-slate-400 border border-slate-200/20 hover:bg-slate-500/10 cursor-pointer transition-all"
+                >
+                  Our Services
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTypingInput("How can I get a custom quote?");
+                  }}
+                  className="px-2.5 py-1 text-[9px] font-mono rounded bg-slate-900/10 dark:bg-slate-900 text-slate-500 dark:text-slate-400 border border-slate-200/20 hover:bg-slate-500/10 cursor-pointer transition-all"
+                >
+                  Custom Quote
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTypingInput("Can I talk to a human expert?");
+                  }}
+                  className="px-2.5 py-1 text-[9px] font-mono rounded bg-slate-900/10 dark:bg-slate-900 text-slate-500 dark:text-slate-400 border border-slate-200/20 hover:bg-slate-500/10 cursor-pointer transition-all"
+                >
+                  Talk to Team
+                </button>
+              </>
+            )}
           </div>
 
           {/* Interaction composer form */}

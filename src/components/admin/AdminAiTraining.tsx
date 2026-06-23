@@ -78,7 +78,7 @@ export default function AdminAiTraining() {
     );
   }
 
-  const categories = ["General Pricing", "Turnaround Time", "AutoPay Subscription", "Milestones Security", "Visual parameters", "Bespoke technology"];
+  const categories = ["Recommended Question", "General Pricing", "Turnaround Time", "AutoPay Subscription", "Milestones Security", "Visual parameters", "Bespoke technology"];
 
   return (
     <div className="space-y-6 text-left" id="admin-aitraining-panel">
