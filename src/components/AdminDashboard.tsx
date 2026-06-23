@@ -3148,25 +3148,30 @@ export default function AdminDashboard() {
                 {/* Provision Invoice Form */}
                 <div className="lg:col-span-5 bg-slate-900/30 p-5 rounded-2xl border dark:border-slate-900 border-slate-200 space-y-4">
                   <h4 className="text-xs font-mono font-bold tracking-widest uppercase border-b dark:border-slate-900 pb-2 text-slate-200">Generate Invoice</h4>
-                  <form onSubmit={(e) => {
+                  <form onSubmit={async (e) => {
                     e.preventDefault();
                     if (!invAmount || !invServices) return;
                     const taxVal = Math.round(parseInt(invAmount) * 0.18).toString();
-                    addInvoice({
-                      invoice_number: invNum,
-                      client_id: invClientId,
-                      client_name: invClientName,
-                      client_email: invClientEmail,
-                      services: invServices,
-                      amount: invAmount,
-                      taxes: taxVal,
-                      due_date: invDueDate,
-                      status: "unpaid"
-                    });
-                    addActivityLog(currentUser.id, `Created dynamic client invoice ${invNum}`, "", `Amount: $${invAmount}, Tax: $${taxVal}`);
-                    setDashAlert(`Invoice ${invNum} generated successfully and synced.`);
-                    setInvNum("DX-2026-" + Math.floor(Math.random() * 900 + 100));
-                    setTimeout(() => setDashAlert(null), 3000);
+                    try {
+                      await addInvoice({
+                        invoice_number: invNum,
+                        client_id: invClientId,
+                        client_name: invClientName,
+                        client_email: invClientEmail,
+                        services: invServices,
+                        amount: invAmount,
+                        taxes: taxVal,
+                        due_date: invDueDate,
+                        status: "unpaid"
+                      });
+                      addActivityLog(currentUser.id, `Created dynamic client invoice ${invNum}`, "", `Amount: $${invAmount}, Tax: $${taxVal}`);
+                      setDashAlert(`Invoice ${invNum} generated successfully and synced.`);
+                      setInvNum("DX-2026-" + Math.floor(Math.random() * 900 + 100));
+                    } catch (err: any) {
+                      console.error("Failed to generate invoice:", err);
+                      setDashAlert(`Error generating invoice: ${err.message || err}`);
+                    }
+                    setTimeout(() => setDashAlert(null), 5000);
                   }} className="space-y-3 font-sans text-xs">
                     <div>
                       <label className="text-[10px] font-mono opacity-50 block mb-1">Invoice Number</label>
@@ -3221,23 +3226,28 @@ export default function AdminDashboard() {
                           <div className="flex gap-1.5 justify-end">
                             <select
                               value={inv.status}
-                              onChange={(e) => {
+                              onChange={async (e) => {
                                 const newStat = e.target.value as "paid" | "unpaid" | "cancelled";
-                                updateInvoiceStatus(inv.id, newStat);
-                                addActivityLog(currentUser.id, `Status update on invoice ${inv.invoice_number}`, inv.status, newStat);
-                                if (newStat === "paid") {
-                                  addPayment({
-                                    payment_id: "pay_manual_" + Math.random().toString(36).substring(4),
-                                    transaction_id: "txn_man_" + Math.random().toString(36).substring(4),
-                                    amount: inv.amount,
-                                    method: "Admin Direct Ledger Clear",
-                                    date: new Date().toISOString().split("T")[0],
-                                    invoice_id: inv.id,
-                                    client_id: inv.client_id
-                                  });
+                                try {
+                                  await updateInvoiceStatus(inv.id, newStat);
+                                  addActivityLog(currentUser.id, `Status update on invoice ${inv.invoice_number}`, inv.status, newStat);
+                                  if (newStat === "paid") {
+                                    addPayment({
+                                      payment_id: "pay_manual_" + Math.random().toString(36).substring(4),
+                                      transaction_id: "txn_man_" + Math.random().toString(36).substring(4),
+                                      amount: inv.amount,
+                                      method: "Admin Direct Ledger Clear",
+                                      date: new Date().toISOString().split("T")[0],
+                                      invoice_id: inv.id,
+                                      client_id: inv.client_id
+                                    });
+                                  }
+                                  setDashAlert(`Invoice ${inv.invoice_number} changed to ${newStat}`);
+                                } catch (err: any) {
+                                  console.error("Failed to update invoice status:", err);
+                                  setDashAlert(`Error updating invoice: ${err.message || err}`);
                                 }
-                                setDashAlert(`Invoice ${inv.invoice_number} changed to ${newStat}`);
-                                setTimeout(() => setDashAlert(null), 3000);
+                                setTimeout(() => setDashAlert(null), 5000);
                               }}
                               className="text-[10px] bg-slate-950 border dark:border-slate-800 p-1.5 rounded font-mono text-white focus:outline-none"
                             >

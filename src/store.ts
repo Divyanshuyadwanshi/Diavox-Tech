@@ -114,8 +114,8 @@ interface AgencyState {
   webhookLogs: any[];
 
   addActivityLog: (userId: string, action: string, prev?: string, next?: string) => void;
-  addInvoice: (invoice: Omit<Invoice, "id" | "created_at">) => void;
-  updateInvoiceStatus: (id: string, status: "paid" | "unpaid" | "cancelled") => void;
+  addInvoice: (invoice: Omit<Invoice, "id" | "created_at">) => Promise<void>;
+  updateInvoiceStatus: (id: string, status: "paid" | "unpaid" | "cancelled") => Promise<void>;
   addPayment: (payment: Omit<PaymentHistoryItem, "id">) => void;
   addAiKnowledge: (category: string, question: string, answer: string) => void;
   updateAiKnowledge: (id: string, updates: Partial<AiKnowledgeItem>) => void;
@@ -177,7 +177,7 @@ interface AgencyState {
   addAiTrainingFile: (title: string, file_type: "pdf" | "faq" | "pricing" | "blog" | "service_info" | "project_info", content: string, uploaded_by_id: string, uploaded_by_name: string) => void;
   deleteAiTrainingFile: (id: string) => void;
 
-  submitPlanApproval: (clientId: string, clientName: string, planName: "Starter" | "Professional" | "Enterprise", price: string, billingCycle: "Monthly" | "Annually") => void;
+  submitPlanApproval: (clientId: string, clientName: string, planName: "Starter" | "Professional" | "Enterprise", price: string, billingCycle: "Monthly" | "Annually") => Promise<void>;
   updatePlanApprovalStatus: (id: string, status: "Approved" | "Rejected") => Promise<void>;
   addActivePlan: (plan: Omit<ActivePlan, "id">) => Promise<void>;
   updateActivePlan: (id: string, updates: Partial<ActivePlan>) => Promise<void>;
@@ -2875,7 +2875,7 @@ export const useStore = create<AgencyState>((set, get) => {
       saveStateToCache({ ...get(), activityLogs: updated });
     },
 
-    addInvoice: (invoice) => {
+    addInvoice: async (invoice) => {
       const newInvoice: Invoice = {
         id: "inv-" + Math.random().toString(36).substring(4),
         invoice_number: invoice.invoice_number,
@@ -2887,17 +2887,35 @@ export const useStore = create<AgencyState>((set, get) => {
         taxes: invoice.taxes,
         due_date: invoice.due_date,
         status: invoice.status,
-        created_at: new Date().toISOString().split("T")[0]
+        created_at: new Date().toISOString()
       };
-      const updated = [newInvoice, ...get().invoices];
-      set({ invoices: updated });
-      saveStateToCache({ ...get(), invoices: updated });
+      try {
+        const { error } = await supabase.from("invoices").insert([newInvoice]);
+        if (error) {
+          throw new Error(error.message || "Failed to save invoice in Supabase.");
+        }
+        const updated = [newInvoice, ...get().invoices];
+        set({ invoices: updated });
+        saveStateToCache({ ...get(), invoices: updated });
+      } catch (err: any) {
+        console.error("[SUPABASE ERROR] Failed to insert invoice:", err.message);
+        throw err;
+      }
     },
 
-    updateInvoiceStatus: (id, status) => {
-      const updated = get().invoices.map(inv => inv.id === id ? { ...inv, status } : inv);
-      set({ invoices: updated });
-      saveStateToCache({ ...get(), invoices: updated });
+    updateInvoiceStatus: async (id, status) => {
+      try {
+        const { error } = await supabase.from("invoices").update({ status }).eq("id", id);
+        if (error) {
+          throw new Error(error.message || "Failed to update invoice status in Supabase.");
+        }
+        const updated = get().invoices.map(inv => inv.id === id ? { ...inv, status } : inv);
+        set({ invoices: updated });
+        saveStateToCache({ ...get(), invoices: updated });
+      } catch (err: any) {
+        console.error("[SUPABASE ERROR] Failed to update invoice status:", err.message);
+        throw err;
+      }
     },
 
     addPayment: (payment) => {
@@ -3347,7 +3365,7 @@ export const useStore = create<AgencyState>((set, get) => {
       saveStateToCache({ ...get(), aiTrainingFiles: updated });
     },
 
-    submitPlanApproval: (clientId, clientName, planName, price, billingCycle) => {
+    submitPlanApproval: async (clientId, clientName, planName, price, billingCycle) => {
       const newApproval: PlanApproval = {
         id: "pa-" + Math.random().toString(36).substring(4),
         client_id: clientId,
@@ -3358,9 +3376,18 @@ export const useStore = create<AgencyState>((set, get) => {
         status: "Pending Approval",
         created_at: new Date().toISOString()
       };
-      const updated = [newApproval, ...get().planApprovals];
-      set({ planApprovals: updated });
-      saveStateToCache({ ...get(), planApprovals: updated });
+      try {
+        const { error } = await supabase.from("plan_approvals").insert([newApproval]);
+        if (error) {
+          throw new Error(error.message || "Failed to submit plan request to Supabase");
+        }
+        const updated = [newApproval, ...get().planApprovals];
+        set({ planApprovals: updated });
+        saveStateToCache({ ...get(), planApprovals: updated });
+      } catch (err: any) {
+        console.error("[SUPABASE ERROR] Failed to submit plan request:", err.message);
+        throw err;
+      }
     },
 
     updatePlanApprovalStatus: async (id, status) => {

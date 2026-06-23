@@ -1540,10 +1540,14 @@ Platform Integration Code: Diavox Remote Sync Engine
                         </ul>
                       </div>
                       <button
-                        onClick={() => {
-                          submitPlanApproval(currentUser.id, currentUser.name, "Starter", "$5,000", "Monthly");
-                          setAlertText("Starter Activation Request issued to Diavox Administrations!");
-                          setTimeout(() => setAlertText(null), 3500);
+                        onClick={async () => {
+                          try {
+                            await submitPlanApproval(currentUser.id, currentUser.name, "Starter", "$5,000", "Monthly");
+                            setAlertText("Starter Activation Request issued to Diavox Administrations!");
+                          } catch (err: any) {
+                            setAlertText(`Error requesting Starter: ${err.message || err}`);
+                          }
+                          setTimeout(() => setAlertText(null), 5000);
                         }}
                         className="w-full py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-mono text-[10.5px] font-bold transition-colors"
                       >
@@ -1570,10 +1574,14 @@ Platform Integration Code: Diavox Remote Sync Engine
                         </ul>
                       </div>
                       <button
-                        onClick={() => {
-                          submitPlanApproval(currentUser.id, currentUser.name, "Professional", "$12,050", "Monthly");
-                          setAlertText("Professional Activation Request issued to Diavox Administrations!");
-                          setTimeout(() => setAlertText(null), 3500);
+                        onClick={async () => {
+                          try {
+                            await submitPlanApproval(currentUser.id, currentUser.name, "Professional", "$12,050", "Monthly");
+                            setAlertText("Professional Activation Request issued to Diavox Administrations!");
+                          } catch (err: any) {
+                            setAlertText(`Error requesting Professional: ${err.message || err}`);
+                          }
+                          setTimeout(() => setAlertText(null), 5000);
                         }}
                         className="w-full py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-sky-600 hover:from-cyan-400 hover:to-sky-500 text-white font-mono text-[10.5px] font-black transition-colors shadow shadow-cyan-500/10"
                       >
@@ -1599,10 +1607,14 @@ Platform Integration Code: Diavox Remote Sync Engine
                         </ul>
                       </div>
                       <button
-                        onClick={() => {
-                          submitPlanApproval(currentUser.id, currentUser.name, "Enterprise", "$24,950", "Monthly");
-                          setAlertText("Enterprise Activation Request issued to Diavox Administrations!");
-                          setTimeout(() => setAlertText(null), 3500);
+                        onClick={async () => {
+                          try {
+                            await submitPlanApproval(currentUser.id, currentUser.name, "Enterprise", "$24,950", "Monthly");
+                            setAlertText("Enterprise Activation Request issued to Diavox Administrations!");
+                          } catch (err: any) {
+                            setAlertText(`Error requesting Enterprise: ${err.message || err}`);
+                          }
+                          setTimeout(() => setAlertText(null), 5000);
                         }}
                         className="w-full py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-mono text-[10.5px] font-bold transition-colors"
                       >
