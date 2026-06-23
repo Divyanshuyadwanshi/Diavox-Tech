@@ -86,7 +86,7 @@ interface AgencyState {
   deleteProject: (projectId: string) => void;
   
   // Contracts and Plans
-  addContract: (contract: Omit<Contract, "id" | "created_at">) => void;
+  addContract: (contract: Omit<Contract, "id" | "created_at">) => Promise<void>;
   signContract: (contractId: string) => void;
   purchasePlan: (planName: "Starter" | "Professional" | "Enterprise", isAnnual: boolean) => void;
   
@@ -2445,26 +2445,27 @@ export const useStore = create<AgencyState>((set, get) => {
         status: "Pending Signature",
         created_at: new Date().toISOString()
       };
+
+      const { error } = await supabase.from("contracts").insert([{
+        id: newContract.id,
+        client_id: (newContract.client_id === "client-guest" || !newContract.client_id) ? null : newContract.client_id,
+        client_name: newContract.client_name,
+        project_title: newContract.project_title,
+        details: newContract.details,
+        terms: newContract.terms,
+        status: newContract.status,
+        price: newContract.price,
+        created_at: newContract.created_at
+      }]);
+
+      if (error) {
+        console.error("Failed to save contract definition in Supabase:", error);
+        throw new Error(error.message || "Failed to save contract in database.");
+      }
+
       const updatedContracts = [newContract, ...get().contracts];
-      
       set({ contracts: updatedContracts });
       saveStateToCache({ contracts: updatedContracts });
-
-      try {
-        await supabase.from("contracts").insert([{
-          id: newContract.id,
-          client_id: newContract.client_id,
-          client_name: newContract.client_name,
-          project_title: newContract.project_title,
-          details: newContract.details,
-          terms: newContract.terms,
-          status: newContract.status,
-          price: newContract.price,
-          created_at: newContract.created_at
-        }]);
-      } catch (err) {
-        console.warn("Failed to save contract definition in Supabase:", err);
-      }
     },
     
     signContract: async (contractId) => {

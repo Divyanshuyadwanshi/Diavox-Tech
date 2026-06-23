@@ -4,7 +4,7 @@ import { Plus, Check, X, FileText, Clipboard, DollarSign, UserCheck } from "luci
 import { Contract } from "../../types";
 
 export default function AdminContracts() {
-  const { contracts, allUsers, theme } = useStore();
+  const { contracts, allUsers, theme, addContract } = useStore();
 
   const [isAdding, setIsAdding] = useState(false);
   const [clientName, setClientName] = useState("");
@@ -13,37 +13,41 @@ export default function AdminContracts() {
   const [price, setPrice] = useState("");
   const [details, setDetails] = useState("");
   const [terms, setTerms] = useState("");
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [errMessage, setErrMessage] = useState("");
 
   const clientsList = allUsers.filter(u => u.role === "client");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const newContract: Contract = {
-      id: "con-" + Math.random().toString(36).substring(4),
-      client_id: clientId || "client-guest",
-      client_name: clientName,
-      project_title: projectTitle,
-      details,
-      terms,
-      status: "Draft",
-      price,
-      created_at: new Date().toISOString()
-    };
+    setIsPublishing(true);
+    setErrMessage("");
 
-    // Save contract in cache directly
-    const currentContracts = useStore.getState().contracts || [];
-    const updatedContracts = [newContract, ...currentContracts];
-    useStore.setState({ contracts: updatedContracts });
-    localStorage.setItem("diavox_cache_state", JSON.stringify({ ...useStore.getState(), contracts: updatedContracts }));
+    try {
+      await addContract({
+        client_id: clientId || "client-guest",
+        client_name: clientName,
+        project_title: projectTitle,
+        details,
+        terms,
+        status: "Pending Signature",
+        price,
+      });
 
-    // Reset
-    setIsAdding(false);
-    setClientId("");
-    setClientName("");
-    setProjectTitle("");
-    setPrice("");
-    setDetails("");
-    setTerms("");
+      // Reset
+      setIsAdding(false);
+      setClientId("");
+      setClientName("");
+      setProjectTitle("");
+      setPrice("");
+      setDetails("");
+      setTerms("");
+    } catch (err: any) {
+      console.error("Failed to create contract:", err);
+      setErrMessage(err?.message || "Failed to publish contract draft. Please try again.");
+    } finally {
+      setIsPublishing(false);
+    }
   };
 
   return (
@@ -182,19 +186,27 @@ export default function AdminContracts() {
               />
             </div>
 
+            {errMessage && (
+              <div className="col-span-1 md:col-span-2 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-mono">
+                {errMessage}
+              </div>
+            )}
+
             <div className="col-span-1 md:col-span-2 pt-3 flex justify-end space-x-2 border-t border-slate-850">
               <button
                 type="button"
+                disabled={isPublishing}
                 onClick={() => setIsAdding(false)}
-                className="px-4 py-2 rounded-xl border dark:border-slate-800 border-slate-205 hover:bg-slate-500/10 font-mono text-xs transition-colors"
+                className="px-4 py-2 rounded-xl border dark:border-slate-800 border-slate-205 hover:bg-slate-500/10 disabled:opacity-50 font-mono text-xs transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-mono text-xs font-bold transition-all"
+                disabled={isPublishing}
+                className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-mono text-xs font-bold transition-all"
               >
-                Publish Covenant draft
+                {isPublishing ? "Publishing..." : "Publish Covenant draft"}
               </button>
             </div>
           </div>
