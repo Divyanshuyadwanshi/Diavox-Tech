@@ -1550,6 +1550,9 @@ export const useStore = create<AgencyState>((set, get) => {
     },
 
     addSocialMediaLink: async (platform, url, icon) => {
+      if (platform === "CMS_CONFIG") {
+        throw new Error("Cannot add a link with platform CMS_CONFIG");
+      }
       const newLink: SocialMediaLink = {
         id: "sml-" + Math.random().toString(36).substring(4),
         platform,
@@ -1560,57 +1563,51 @@ export const useStore = create<AgencyState>((set, get) => {
         created_at: new Date().toISOString()
       };
       try {
-        const res = await secureFetch("/api/admin/social-links", {
-          method: "POST",
-          body: JSON.stringify({ link: newLink })
-        });
-        if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.error || "Failed to create social link");
+        const { error } = await supabase.from("social_media_links").insert([newLink]);
+        if (error) {
+          throw new Error(error.message || "Failed to save social link to Supabase.");
         }
         const updated = [...get().socialMediaLinks, newLink];
         set({ socialMediaLinks: updated });
         saveStateToCache({ ...get(), socialMediaLinks: updated });
       } catch (err: any) {
-        console.error("[ZERO TRUST ERROR] Failed to insert to Supabase social_media_links securely:", err.message);
+        console.error("[SUPABASE ERROR] Failed to insert to Supabase social_media_links:", err.message);
         throw err;
       }
     },
 
     updateSocialMediaLink: async (id, updates) => {
+      if (id === "cms_app_state") {
+        throw new Error("Cannot modify CMS configuration through social media editor");
+      }
       try {
-        const res = await secureFetch("/api/admin/social-links/update", {
-          method: "POST",
-          body: JSON.stringify({ id, updates })
-        });
-        if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.error || "Failed to update social link");
+        const { error } = await supabase.from("social_media_links").update(updates).eq("id", id);
+        if (error) {
+          throw new Error(error.message || "Failed to update social link in Supabase.");
         }
         const updated = get().socialMediaLinks.map(l => l.id === id ? { ...l, ...updates } : l);
         set({ socialMediaLinks: updated });
         saveStateToCache({ ...get(), socialMediaLinks: updated });
       } catch (err: any) {
-        console.error("[ZERO TRUST ERROR] Failed to update Supabase social_media_links securely:", err.message);
+        console.error("[SUPABASE ERROR] Failed to update Supabase social_media_links:", err.message);
         throw err;
       }
     },
 
     deleteSocialMediaLink: async (id) => {
+      if (id === "cms_app_state") {
+        throw new Error("Cannot delete CMS configuration row");
+      }
       try {
-        const res = await secureFetch("/api/admin/social-links/delete", {
-          method: "POST",
-          body: JSON.stringify({ id })
-        });
-        if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.error || "Failed to delete social link");
+        const { error } = await supabase.from("social_media_links").delete().eq("id", id);
+        if (error) {
+          throw new Error(error.message || "Failed to delete social link from Supabase.");
         }
         const updated = get().socialMediaLinks.filter(l => l.id !== id);
         set({ socialMediaLinks: updated });
         saveStateToCache({ ...get(), socialMediaLinks: updated });
       } catch (err: any) {
-        console.error("[ZERO TRUST ERROR] Failed to delete from Supabase social_media_links securely:", err.message);
+        console.error("[SUPABASE ERROR] Failed to delete from Supabase social_media_links:", err.message);
         throw err;
       }
     },
@@ -1618,18 +1615,14 @@ export const useStore = create<AgencyState>((set, get) => {
     reorderSocialMediaLinks: async (newOrderList) => {
       const updated = newOrderList.map((link, idx) => ({ ...link, display_order: idx + 1 }));
       try {
-        const res = await secureFetch("/api/admin/social-links/reorder", {
-          method: "POST",
-          body: JSON.stringify({ updatedLinks: updated })
-        });
-        if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.error || "Failed to reorder social links");
+        const { error } = await supabase.from("social_media_links").upsert(updated);
+        if (error) {
+          throw new Error(error.message || "Failed to reorder social links in Supabase.");
         }
         set({ socialMediaLinks: updated });
         saveStateToCache({ ...get(), socialMediaLinks: updated });
       } catch (err: any) {
-        console.error("[ZERO TRUST ERROR] Failed to reorder Supabase social_media_links securely:", err.message);
+        console.error("[SUPABASE ERROR] Failed to reorder Supabase social_media_links:", err.message);
         throw err;
       }
     },
