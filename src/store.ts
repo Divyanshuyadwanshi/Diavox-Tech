@@ -1211,7 +1211,7 @@ export const useStore = create<AgencyState>((set, get) => {
           console.warn("[ZERO TRUST] CMS secure API fetch warning:", err);
         }
 
-        const { data: linksList } = await supabase.from("social_media_links").select("*").order("display_order", { ascending: true });
+        const { data: linksList, error: fetchError } = await supabase.from("social_media_links").select("*").order("display_order", { ascending: true });
         if (linksList && linksList.length > 0) {
           const cmsConfigRow = linksList.find(l => l.id === "cms_app_state");
           if (cmsConfigRow && cmsConfigRow.url) {
@@ -1230,7 +1230,25 @@ export const useStore = create<AgencyState>((set, get) => {
             }
           }
           const actualSocialLinks = linksList.filter(l => l.id !== "cms_app_state");
-          set({ socialMediaLinks: actualSocialLinks as SocialMediaLink[] });
+          if (actualSocialLinks.length === 0) {
+            try {
+              await supabase.from("social_media_links").insert(DEFAULT_SOCIAL_MEDIA_LINKS);
+              set({ socialMediaLinks: DEFAULT_SOCIAL_MEDIA_LINKS });
+            } catch (e) {
+              console.error("Failed to seed default social media links on startup:", e);
+              set({ socialMediaLinks: DEFAULT_SOCIAL_MEDIA_LINKS });
+            }
+          } else {
+            set({ socialMediaLinks: actualSocialLinks as SocialMediaLink[] });
+          }
+        } else if (!fetchError) {
+          try {
+            await supabase.from("social_media_links").insert(DEFAULT_SOCIAL_MEDIA_LINKS);
+            set({ socialMediaLinks: DEFAULT_SOCIAL_MEDIA_LINKS });
+          } catch (e) {
+            console.error("Failed to seed default social media links on startup:", e);
+            set({ socialMediaLinks: DEFAULT_SOCIAL_MEDIA_LINKS });
+          }
         }
 
         // Portfolio items with enterprise schema field mapping

@@ -3416,16 +3416,22 @@ export default function AdminDashboard() {
                         {editingSmlId ? (
                           <>
                             <button
-                              onClick={() => {
-                                updateSocialMediaLink(editingSmlId, {
-                                  platform: editSmlPlat,
-                                  url: editSmlUrl,
-                                  icon: editSmlIcon
-                                });
-                                addActivityLog(currentUser.id, `Modified social platform connection details for ${editSmlPlat}`, "Saved updates", editSmlUrl);
-                                setEditingSmlId(null);
-                                setDashAlert("Social link updated successfully.");
-                                setTimeout(() => setDashAlert(null), 3000);
+                              onClick={async () => {
+                                try {
+                                  await updateSocialMediaLink(editingSmlId, {
+                                    platform: editSmlPlat,
+                                    url: editSmlUrl,
+                                    icon: editSmlIcon
+                                  });
+                                  addActivityLog(currentUser.id, `Modified social platform connection details for ${editSmlPlat}`, "Saved updates", editSmlUrl);
+                                  setEditingSmlId(null);
+                                  setDashAlert("Social link updated successfully.");
+                                  setTimeout(() => setDashAlert(null), 3000);
+                                } catch (err: any) {
+                                  console.error("Failed to update social media link:", err);
+                                  setDashAlert(`Error: ${err.message || "Failed to update social link"}`);
+                                  setTimeout(() => setDashAlert(null), 6000);
+                                }
                               }}
                               className="flex-1 py-1.5 bg-gradient-to-r from-cyan-600 to-teal-600 rounded-xl text-white text-xs font-mono font-bold hover:brightness-110 flex items-center justify-center space-x-1"
                             >
@@ -3441,13 +3447,19 @@ export default function AdminDashboard() {
                           </>
                         ) : (
                           <button
-                            onClick={() => {
+                            onClick={async () => {
                               if (!newSmlUrl.trim()) return;
-                              addSocialMediaLink(newSmlPlat, newSmlUrl, newSmlIcon);
-                              addActivityLog(currentUser.id, `Created dynamic social platform connection to ${newSmlPlat}`, "Saved brand links", newSmlUrl);
-                              setNewSmlUrl("");
-                              setDashAlert("Social link connected.");
-                              setTimeout(() => setDashAlert(null), 3000);
+                              try {
+                                await addSocialMediaLink(newSmlPlat, newSmlUrl, newSmlIcon);
+                                addActivityLog(currentUser.id, `Created dynamic social platform connection to ${newSmlPlat}`, "Saved brand links", newSmlUrl);
+                                setNewSmlUrl("");
+                                setDashAlert("Social link connected.");
+                                setTimeout(() => setDashAlert(null), 3000);
+                              } catch (err: any) {
+                                console.error("Failed to add social media link:", err);
+                                setDashAlert(`Error: ${err.message || "Failed to add social link"}`);
+                                setTimeout(() => setDashAlert(null), 6000);
+                              }
                             }}
                             className="w-full py-1.5 bg-gradient-to-r from-cyan-600 to-indigo-600 rounded-xl text-white text-xs font-mono font-bold hover:brightness-110 flex items-center justify-center space-x-1"
                           >
@@ -3514,13 +3526,19 @@ export default function AdminDashboard() {
                                 {/* Up button */}
                                 <button
                                   disabled={index === 0}
-                                  onClick={() => {
+                                  onClick={async () => {
                                     if (index === 0) return;
                                     const nextOrder = [...socialMediaLinks];
                                     const temp = nextOrder[index - 1];
                                     nextOrder[index - 1] = nextOrder[index];
                                     nextOrder[index] = temp;
-                                    reorderSocialMediaLinks(nextOrder);
+                                    try {
+                                      await reorderSocialMediaLinks(nextOrder);
+                                    } catch (err: any) {
+                                      console.error("Failed to reorder social media links:", err);
+                                      setDashAlert(`Error reordering: ${err.message || err}`);
+                                      setTimeout(() => setDashAlert(null), 5000);
+                                    }
                                   }}
                                   className="p-1 rounded bg-slate-500/5 hover:bg-slate-500/15 text-slate-400 hover:text-white transition-all disabled:opacity-30 disabled:pointer-events-none"
                                 >
@@ -3530,13 +3548,19 @@ export default function AdminDashboard() {
                                 {/* Down button */}
                                 <button
                                   disabled={index === socialMediaLinks.length - 1}
-                                  onClick={() => {
+                                  onClick={async () => {
                                     if (index === socialMediaLinks.length - 1) return;
                                     const nextOrder = [...socialMediaLinks];
                                     const temp = nextOrder[index + 1];
                                     nextOrder[index + 1] = nextOrder[index];
                                     nextOrder[index] = temp;
-                                    reorderSocialMediaLinks(nextOrder);
+                                    try {
+                                      await reorderSocialMediaLinks(nextOrder);
+                                    } catch (err: any) {
+                                      console.error("Failed to reorder social media links:", err);
+                                      setDashAlert(`Error reordering: ${err.message || err}`);
+                                      setTimeout(() => setDashAlert(null), 5000);
+                                    }
                                   }}
                                   className="p-1 rounded bg-slate-500/5 hover:bg-slate-500/15 text-slate-400 hover:text-white transition-all disabled:opacity-30 disabled:pointer-events-none"
                                 >
@@ -3545,8 +3569,14 @@ export default function AdminDashboard() {
 
                                 {/* Hide/show Toggle */}
                                 <button
-                                  onClick={() => {
-                                    updateSocialMediaLink(link.id, { visible: !link.visible });
+                                  onClick={async () => {
+                                    try {
+                                      await updateSocialMediaLink(link.id, { visible: !link.visible });
+                                    } catch (err: any) {
+                                      console.error("Failed to toggle visibility of social media link:", err);
+                                      setDashAlert(`Error: ${err.message || err}`);
+                                      setTimeout(() => setDashAlert(null), 5000);
+                                    }
                                   }}
                                   className={`p-1.5 rounded-lg text-slate-400 hover:text-white bg-slate-500/5 hover:bg-slate-500/15`}
                                   title={link.visible ? "Hide Link" : "Show Link"}
@@ -3575,12 +3605,19 @@ export default function AdminDashboard() {
                                       isOpen: true,
                                       title: "Confirm brand channel dissociation?",
                                       message: `Are you absolute certain you want to permanently delete and disconnect your ${link.platform} channel option? This will instantly remove it from the footer.`,
-                                      onConfirm: () => {
-                                        deleteSocialMediaLink(link.id);
-                                        addActivityLog(currentUser.id, `Removed branding channel connection to ${link.platform}`, "Dissociated option", link.url);
-                                        setConfirmDialog(null);
-                                        setDashAlert("Connected channel disconnected.");
-                                        setTimeout(() => setDashAlert(null), 3000);
+                                      onConfirm: async () => {
+                                        try {
+                                          await deleteSocialMediaLink(link.id);
+                                          addActivityLog(currentUser.id, `Removed branding channel connection to ${link.platform}`, "Dissociated option", link.url);
+                                          setConfirmDialog(null);
+                                          setDashAlert("Connected channel disconnected.");
+                                          setTimeout(() => setDashAlert(null), 3000);
+                                        } catch (err: any) {
+                                          console.error("Failed to delete social media link:", err);
+                                          setConfirmDialog(null);
+                                          setDashAlert(`Error: ${err.message || "Failed to delete social link"}`);
+                                          setTimeout(() => setDashAlert(null), 6000);
+                                        }
                                       }
                                     });
                                   }}
