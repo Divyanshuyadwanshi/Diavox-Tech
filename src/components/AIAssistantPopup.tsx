@@ -62,11 +62,36 @@ export default function AIAssistantPopup() {
       let aiResponseText = "";
 
       // Match Knowledge Base questions or keyword match
-      const matched = aiKnowledge.find(k => 
-        lower.includes(k.question.toLowerCase()) || 
-        k.question.toLowerCase().includes(lower) ||
-        lower.split(" ").some(word => word.length > 4 && k.question.toLowerCase().includes(word))
-      );
+      let matched = aiKnowledge.find(k => k.question.toLowerCase().trim() === lower.trim());
+
+      if (!matched) {
+        matched = aiKnowledge.find(k => {
+          const q = k.question.toLowerCase().trim();
+          const l = lower.trim();
+          return q.includes(l) || l.includes(q);
+        });
+      }
+
+      if (!matched) {
+        const stopWords = new Set(["the", "what", "is", "a", "for", "in", "on", "to", "of", "and", "how", "with", "this", "that", "your", "does", "have", "you", "are", "can", "should", "will", "i", "we", "me", "my", "our", "us"]);
+        const queryWords = lower.trim().split(/\s+/).map(w => w.replace(/[?,.!]/g, "")).filter(w => w.length > 3 && !stopWords.has(w));
+        
+        if (queryWords.length > 0) {
+          let maxOverlap = 0;
+          let selected = null;
+          for (const k of aiKnowledge) {
+            const kWords = k.question.toLowerCase().split(/\s+/).map(w => w.replace(/[?,.!]/g, "")).filter(w => w.length > 3 && !stopWords.has(w));
+            const overlap = queryWords.filter(w => kWords.includes(w)).length;
+            if (overlap > maxOverlap && overlap >= 1) {
+              maxOverlap = overlap;
+              selected = k;
+            }
+          }
+          if (selected) {
+            matched = selected;
+          }
+        }
+      }
 
       if (matched) {
         aiResponseText = matched.answer;

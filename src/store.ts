@@ -117,9 +117,9 @@ interface AgencyState {
   addInvoice: (invoice: Omit<Invoice, "id" | "created_at">) => Promise<void>;
   updateInvoiceStatus: (id: string, status: "paid" | "unpaid" | "cancelled") => Promise<void>;
   addPayment: (payment: Omit<PaymentHistoryItem, "id">) => void;
-  addAiKnowledge: (category: string, question: string, answer: string) => void;
-  updateAiKnowledge: (id: string, updates: Partial<AiKnowledgeItem>) => void;
-  deleteAiKnowledge: (id: string) => void;
+  addAiKnowledge: (category: string, question: string, answer: string) => Promise<void>;
+  updateAiKnowledge: (id: string, updates: Partial<AiKnowledgeItem>) => Promise<void>;
+  deleteAiKnowledge: (id: string) => Promise<void>;
   updateCmsContent: (content: Partial<CmsContent>) => Promise<void>;
   addMilestone: (milestone: Omit<MilestonePayment, "id">) => void;
   payMilestone: (milestoneId: string, type: "advance" | "midway" | "final") => void;
@@ -174,8 +174,8 @@ interface AgencyState {
   createProjectGroup: (projectId: string, name: string, assignedMembers: string[]) => void;
   deleteProjectGroup: (id: string) => void;
 
-  addAiTrainingFile: (title: string, file_type: "pdf" | "faq" | "pricing" | "blog" | "service_info" | "project_info", content: string, uploaded_by_id: string, uploaded_by_name: string) => void;
-  deleteAiTrainingFile: (id: string) => void;
+  addAiTrainingFile: (title: string, file_type: "pdf" | "faq" | "pricing" | "blog" | "service_info" | "project_info", content: string, uploaded_by_id: string, uploaded_by_name: string) => Promise<void>;
+  deleteAiTrainingFile: (id: string) => Promise<void>;
 
   submitPlanApproval: (clientId: string, clientName: string, planName: string, price: string, billingCycle: "Monthly" | "Annually") => Promise<void>;
   updatePlanApprovalStatus: (id: string, status: "Approved" | "Rejected") => Promise<void>;
@@ -2644,23 +2644,46 @@ export const useStore = create<AgencyState>((set, get) => {
           }
 
           // B. AI conversational assistance based on trained knowledge base
-          const query = text.toLowerCase();
+          const query = text.toLowerCase().trim();
           let aiReplyText = "";
 
           const knowledge = get().aiKnowledge || [];
-          const matched = knowledge.find(k => 
-            query.includes(k.question.toLowerCase()) || 
-            k.question.toLowerCase().split(" ").filter(w => w.length > 4).some(w => query.includes(w))
-          );
+          
+          // 1. Exact match (case-insensitive)
+          let matched = knowledge.find(k => k.question.toLowerCase().trim() === query);
+
+          // 2. Contains match (case-insensitive)
+          if (!matched) {
+            matched = knowledge.find(k => {
+              const q = k.question.toLowerCase().trim();
+              return q.includes(query) || query.includes(q);
+            });
+          }
+
+          // 3. Keyword overlap match
+          if (!matched) {
+            const stopWords = new Set(["the", "what", "is", "a", "for", "in", "on", "to", "of", "and", "how", "with", "this", "that", "your", "does", "have", "you", "are", "can", "should", "will", "i", "we", "me", "my", "our", "us"]);
+            const queryWords = query.split(/\s+/).map(w => w.replace(/[?,.!]/g, "")).filter(w => w.length > 3 && !stopWords.has(w));
+            
+            if (queryWords.length > 0) {
+              let maxOverlap = 0;
+              let selected = null;
+              for (const k of knowledge) {
+                const kWords = k.question.toLowerCase().split(/\s+/).map(w => w.replace(/[?,.!]/g, "")).filter(w => w.length > 3 && !stopWords.has(w));
+                const overlap = queryWords.filter(w => kWords.includes(w)).length;
+                if (overlap > maxOverlap && overlap >= 1) {
+                  maxOverlap = overlap;
+                  selected = k;
+                }
+              }
+              if (selected) {
+                matched = selected;
+              }
+            }
+          }
 
           if (matched) {
             aiReplyText = matched.answer;
-          } else if (query.includes("price") || query.includes("cost") || query.includes("pricing") || query.includes("plan") || query.includes("subscription")) {
-            aiReplyText = "Diavox provides three main plans:\n1. Website Maintenance (basic $199/mo, standard $499/mo, expert $999/mo)\n2. SEO campaigns (starts at $399/mo)\n3. Custom Project Design & Development (on-demand starting at $1,999 one-time payment). Feel free to toggle the Currency converter on our website to see real-time price updates in INR or GBP!";
-          } else if (query.includes("recommend") || query.includes("which one") || query.includes("suggest") || query.includes("need")) {
-            aiReplyText = "For most new businesses looking to launch a SaaS, platform, or showcase layout, we recommend our 'Project Design & Development (Standard Tier)' at $4,999 (₹415,000) as it includes complete custom React & Supabase backend architecture, priority support cover, and full-stack responsiveness.";
-          } else if (query.includes("service") || query.includes("what do you do") || query.includes("capabilities")) {
-            aiReplyText = "Our core disciplines include high-speed React web app development, custom Supabase cloud database architectures, Search Engine Optimization (SEO) subscription growth, daily backups and maintenance helpdesk support, and workflow automation.";
           }
 
           if (aiReplyText) {
@@ -2945,29 +2968,59 @@ export const useStore = create<AgencyState>((set, get) => {
       saveStateToCache({ ...get(), payments: updated, metrics: updatedMetrics });
     },
 
-    addAiKnowledge: (category, question, answer) => {
+    addAiKnowledge: async (category, question, answer) => {
       const newItem: AiKnowledgeItem = {
         id: "know-" + Math.random().toString(36).substring(4),
         category,
         question,
         answer,
-        created_at: new Date().toISOString().split("T")[0]
+        created_at: new Date().toISOString()
       };
-      const updated = [newItem, ...get().aiKnowledge];
-      set({ aiKnowledge: updated });
-      saveStateToCache({ ...get(), aiKnowledge: updated });
+      try {
+        const { error } = await supabase.from("ai_knowledge").insert([newItem]);
+        if (error) {
+          console.error("Failed to insert AI knowledge to Supabase:", error.message);
+          throw error;
+        }
+        const updated = [newItem, ...get().aiKnowledge];
+        set({ aiKnowledge: updated });
+        saveStateToCache({ ...get(), aiKnowledge: updated });
+      } catch (err: any) {
+        console.error("Error in addAiKnowledge:", err);
+        throw err;
+      }
     },
 
-    updateAiKnowledge: (id, updates) => {
-      const updated = get().aiKnowledge.map(item => item.id === id ? { ...item, ...updates } : item);
-      set({ aiKnowledge: updated });
-      saveStateToCache({ ...get(), aiKnowledge: updated });
+    updateAiKnowledge: async (id, updates) => {
+      try {
+        const { error } = await supabase.from("ai_knowledge").update(updates).eq("id", id);
+        if (error) {
+          console.error("Failed to update AI knowledge in Supabase:", error.message);
+          throw error;
+        }
+        const updated = get().aiKnowledge.map(item => item.id === id ? { ...item, ...updates } : item);
+        set({ aiKnowledge: updated });
+        saveStateToCache({ ...get(), aiKnowledge: updated });
+      } catch (err: any) {
+        console.error("Error in updateAiKnowledge:", err);
+        throw err;
+      }
     },
 
-    deleteAiKnowledge: (id) => {
-      const updated = get().aiKnowledge.filter(item => item.id !== id);
-      set({ aiKnowledge: updated });
-      saveStateToCache({ ...get(), aiKnowledge: updated });
+    deleteAiKnowledge: async (id) => {
+      try {
+        const { error } = await supabase.from("ai_knowledge").delete().eq("id", id);
+        if (error) {
+          console.error("Failed to delete AI knowledge from Supabase:", error.message);
+          throw error;
+        }
+        const updated = get().aiKnowledge.filter(item => item.id !== id);
+        set({ aiKnowledge: updated });
+        saveStateToCache({ ...get(), aiKnowledge: updated });
+      } catch (err: any) {
+        console.error("Error in deleteAiKnowledge:", err);
+        throw err;
+      }
     },
 
     updateCmsContent: async (content) => {
@@ -3354,7 +3407,7 @@ export const useStore = create<AgencyState>((set, get) => {
       saveStateToCache({ ...get(), projectGroups: updated });
     },
 
-    addAiTrainingFile: (title, file_type, content, uploaded_by_id, uploaded_by_name) => {
+    addAiTrainingFile: async (title, file_type, content, uploaded_by_id, uploaded_by_name) => {
       const newFile: AiTrainingFile = {
         id: "aif-" + Math.random().toString(36).substring(4),
         title,
@@ -3364,15 +3417,35 @@ export const useStore = create<AgencyState>((set, get) => {
         uploaded_by_name,
         created_at: new Date().toISOString()
       };
-      const updated = [newFile, ...get().aiTrainingFiles];
-      set({ aiTrainingFiles: updated });
-      saveStateToCache({ ...get(), aiTrainingFiles: updated });
+      try {
+        const { error } = await supabase.from("ai_training_files").insert([newFile]);
+        if (error) {
+          console.error("Failed to insert AI training file in Supabase:", error.message);
+          throw error;
+        }
+        const updated = [newFile, ...get().aiTrainingFiles];
+        set({ aiTrainingFiles: updated });
+        saveStateToCache({ ...get(), aiTrainingFiles: updated });
+      } catch (err: any) {
+        console.error("Error in addAiTrainingFile:", err);
+        throw err;
+      }
     },
 
-    deleteAiTrainingFile: (id) => {
-      const updated = get().aiTrainingFiles.filter(item => item.id !== id);
-      set({ aiTrainingFiles: updated });
-      saveStateToCache({ ...get(), aiTrainingFiles: updated });
+    deleteAiTrainingFile: async (id) => {
+      try {
+        const { error } = await supabase.from("ai_training_files").delete().eq("id", id);
+        if (error) {
+          console.error("Failed to delete AI training file from Supabase:", error.message);
+          throw error;
+        }
+        const updated = get().aiTrainingFiles.filter(item => item.id !== id);
+        set({ aiTrainingFiles: updated });
+        saveStateToCache({ ...get(), aiTrainingFiles: updated });
+      } catch (err: any) {
+        console.error("Error in deleteAiTrainingFile:", err);
+        throw err;
+      }
     },
 
     submitPlanApproval: async (clientId, clientName, planName, price, billingCycle) => {

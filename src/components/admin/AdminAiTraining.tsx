@@ -8,6 +8,7 @@ export default function AdminAiTraining() {
 
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Form states variables
   const [category, setCategory] = useState("General Pricing");
@@ -20,16 +21,37 @@ export default function AdminAiTraining() {
     setAnswer("");
     setIsAdding(false);
     setEditingId(null);
+    setIsSubmitting(false);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingId) {
-      updateAiKnowledge(editingId, { category, question, answer });
-    } else {
-      addAiKnowledge(category, question, answer);
+    if (!question.trim() || !answer.trim()) return;
+    setIsSubmitting(true);
+    try {
+      if (editingId) {
+        await updateAiKnowledge(editingId, { category, question, answer });
+        alert("Training record updated successfully in Supabase!");
+      } else {
+        await addAiKnowledge(category, question, answer);
+        alert("New training record injected successfully into Supabase!");
+      }
+      resetForm();
+    } catch (err: any) {
+      alert("Failed to save training record: " + (err.message || err));
+    } finally {
+      setIsSubmitting(false);
     }
-    resetForm();
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this training record?")) return;
+    try {
+      await deleteAiKnowledge(id);
+      alert("Training record deleted successfully from Supabase.");
+    } catch (err: any) {
+      alert("Failed to delete training record: " + (err.message || err));
+    }
   };
 
   const handleEdit = (item: AiKnowledgeItem) => {
@@ -154,9 +176,10 @@ export default function AdminAiTraining() {
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-mono text-xs font-bold transition-all shadow-md"
+                disabled={isSubmitting}
+                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-mono text-xs font-bold transition-all shadow-md disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Inject database
+                {isSubmitting ? "Injecting..." : "Inject database"}
               </button>
             </div>
           </div>
@@ -184,7 +207,7 @@ export default function AdminAiTraining() {
                     <Edit2 size={11} />
                   </button>
                   <button
-                    onClick={() => deleteAiKnowledge(item.id)}
+                    onClick={() => handleDelete(item.id)}
                     className="p-1 rounded hover:bg-slate-500/10 text-rose-500"
                     title="Delete Record"
                   >
