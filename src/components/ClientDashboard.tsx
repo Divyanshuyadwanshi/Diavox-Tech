@@ -20,7 +20,7 @@ export default function ClientDashboard() {
   const { 
     theme, currentUser, requests, projects, contracts, activePlans, planApprovals, submitPlanApproval, invoices,
     notifications, messages, reviews, sendMessage, signContract, addReview, deleteReview, markNotificationsRead,
-    quoteReplies, quoteAttachments, quoteStatusHistory, submitQuoteReply
+    quoteReplies, quoteAttachments, quoteStatusHistory, submitQuoteReply, pricingOptions
   } = useStore();
 
   const [activeTab, setActiveTab] = useState<"profile" | "projects" | "contracts" | "plans" | "requests" | "chat" | "reviews" | "help-kb">("profile");
@@ -1516,111 +1516,95 @@ Platform Integration Code: Diavox Remote Sync Engine
 
                 {/* Plan Details & Recommended Tiers Sections */}
                 <div className="pt-4 border-t dark:border-slate-900 border-slate-100">
-                  <div className="text-left mb-4">
+                  <div className="text-left mb-6">
                     <h4 className="text-xs font-mono font-bold text-cyan-400 uppercase tracking-wider">Recommended Service Elevations</h4>
                     <p className="text-xs opacity-65 font-sans mt-0.5">Upgrade or swap packages to fit evolving architectural SLA demands.</p>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {/* STARTER */}
-                    <div className={`p-5 rounded-2xl border flex flex-col justify-between space-y-4 ${
-                      theme === "dark" ? "bg-slate-950 border-slate-850" : "bg-slate-50 border-slate-200"
-                    }`}>
-                      <div className="space-y-3">
-                        <div>
-                          <span className="text-[8px] font-mono text-cyan-400 bg-cyan-950 px-1.5 py-0.5 rounded uppercase font-bold">Starter Unit</span>
-                          <h4 className="text-sm font-display font-black mt-1">Diavox Starter</h4>
+                  <div className="space-y-10">
+                    {pricingOptions.map((option) => (
+                      <div key={option.id} className="space-y-4">
+                        <div className="text-left border-b border-slate-200 dark:border-slate-900 pb-2">
+                          <h5 className="text-sm font-display font-bold text-cyan-400 tracking-tight">
+                            {option.title}
+                          </h5>
+                          <span className="text-[9px] font-mono opacity-60 uppercase">
+                            {option.type === "monthly-subscription" ? "Retainer Subscription (Monthly)" : "One-Time Capital Investment"}
+                          </span>
                         </div>
-                        <p className="text-lg font-mono font-black text-white">$5,000<span className="text-[10px] opacity-50 font-normal"> / mo</span></p>
-                        <ul className="space-y-1.5 text-[11px] font-mono text-slate-405 text-left pt-2 border-t dark:border-slate-900 border-slate-150">
-                          <li className="flex items-center space-x-1.5"><Check size={11} className="text-cyan-400" /><span>Core Web Platform</span></li>
-                          <li className="flex items-center space-x-1.5"><Check size={11} className="text-cyan-400" /><span>Diavox Chat Desk Access</span></li>
-                          <li className="flex items-center space-x-1.5"><Check size={11} className="text-cyan-400" /><span>Standard VPS hosting</span></li>
-                          <li className="flex items-center space-x-1.5"><Check size={11} className="text-cyan-400" /><span>1 API Integration tunnel</span></li>
-                        </ul>
-                      </div>
-                      <button
-                        onClick={async () => {
-                          try {
-                            await submitPlanApproval(currentUser.id, currentUser.name, "Starter", "$5,000", "Monthly");
-                            setAlertText("Starter Activation Request issued to Diavox Administrations!");
-                          } catch (err: any) {
-                            setAlertText(`Error requesting Starter: ${err.message || err}`);
-                          }
-                          setTimeout(() => setAlertText(null), 5000);
-                        }}
-                        className="w-full py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-mono text-[10.5px] font-bold transition-colors"
-                      >
-                        Request Starter Unit
-                      </button>
-                    </div>
-
-                    {/* PROFESSIONAL */}
-                    <div className={`p-5 rounded-2xl border-2 border-cyan-500/40 relative flex flex-col justify-between space-y-4 ${
-                      theme === "dark" ? "bg-slate-900/40" : "bg-white shadow-md border-cyan-500"
-                    }`}>
-                      <span className="absolute -top-2.5 right-6 text-[8px] font-black font-mono tracking-widest bg-cyan-500 text-black px-2 py-0.5 rounded-full uppercase">RECOMMENDED</span>
-                      <div className="space-y-3">
-                        <div>
-                          <span className="text-[8px] font-mono text-cyan-400 bg-cyan-950 px-1.5 py-0.5 rounded uppercase font-bold">Pro Systems</span>
-                          <h4 className="text-sm font-display font-black mt-1 text-cyan-400">Diavox Professional</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          {option.tiers.map((tier) => {
+                            const isRecommended = tier.name.toLowerCase() === "standard" || tier.name.toLowerCase() === "expert" || tier.name.toLowerCase() === "professional" || tier.name.toLowerCase() === "pro";
+                            return (
+                              <div
+                                key={tier.name}
+                                className={`p-5 rounded-2xl border flex flex-col justify-between space-y-4 relative ${
+                                  isRecommended
+                                    ? "border-2 border-cyan-500/40 bg-slate-900/10"
+                                    : theme === "dark" ? "bg-slate-950 border-slate-850" : "bg-slate-50 border-slate-200"
+                                }`}
+                              >
+                                {isRecommended && (
+                                  <span className="absolute -top-2.5 right-6 text-[8px] font-black font-mono tracking-widest bg-cyan-500 text-black px-2 py-0.5 rounded-full uppercase">
+                                    RECOMMENDED
+                                  </span>
+                                )}
+                                <div className="space-y-3">
+                                  <div>
+                                    <span className="text-[8px] font-mono text-cyan-400 bg-cyan-950/40 px-1.5 py-0.5 rounded uppercase font-bold">
+                                      {tier.name} Tier
+                                    </span>
+                                    <h4 className="text-sm font-display font-black mt-1">
+                                      {option.title} - {tier.name}
+                                    </h4>
+                                  </div>
+                                  <p className="text-lg font-mono font-black text-white">
+                                    ${parseFloat(tier.priceUSD.replace(/,/g, "")).toLocaleString("en-US")}
+                                    <span className="text-[10px] opacity-50 font-normal">
+                                      {option.type === "monthly-subscription" ? " / mo" : " one-time"}
+                                    </span>
+                                  </p>
+                                  <ul className="space-y-1.5 text-[11px] font-mono text-slate-400 text-left pt-2 border-t dark:border-slate-900 border-slate-150">
+                                    {tier.features.map((feat: string, i: number) => (
+                                      <li key={i} className="flex items-center space-x-1.5">
+                                        <Check size={11} className="text-cyan-400 shrink-0" />
+                                        <span className="line-clamp-2">{feat}</span>
+                                      </li>
+                                    ))}
+                                  </ul>
+                                </div>
+                                <button
+                                  onClick={async () => {
+                                    try {
+                                      const billingCycle = option.type === "monthly-subscription" ? "Monthly" : "Annually";
+                                      const formattedPrice = "$" + parseFloat(tier.priceUSD.replace(/,/g, "")).toLocaleString("en-US");
+                                      await submitPlanApproval(
+                                        currentUser.id,
+                                        currentUser.name,
+                                        `${option.title} (${tier.name})`,
+                                        formattedPrice,
+                                        billingCycle as any
+                                      );
+                                      setAlertText(`Activation Proposal for ${option.title} (${tier.name}) submitted successfully!`);
+                                    } catch (err: any) {
+                                      setAlertText(`Error requesting upgrade: ${err.message || err}`);
+                                    }
+                                    setTimeout(() => setAlertText(null), 5000);
+                                  }}
+                                  className={`w-full py-2 rounded-xl font-mono text-[10px] font-bold transition-all ${
+                                    isRecommended
+                                      ? "bg-gradient-to-r from-cyan-500 to-sky-600 hover:from-cyan-400 hover:to-sky-500 text-white shadow shadow-cyan-500/10"
+                                      : "bg-slate-800 hover:bg-slate-700 text-white"
+                                  }`}
+                                >
+                                  Request {tier.name} Upgrade
+                                </button>
+                              </div>
+                            );
+                          })}
                         </div>
-                        <p className="text-lg font-mono font-black text-white">$12,050<span className="text-[10px] opacity-50 font-normal"> / mo</span></p>
-                        <ul className="space-y-1.5 text-[11px] font-mono text-slate-405 text-left pt-2 border-t dark:border-slate-850 border-slate-150">
-                          <li className="flex items-center space-x-1.5"><Check size={11} className="text-cyan-400" /><span>Custom LLM AI Agent</span></li>
-                          <li className="flex items-center space-x-1.5"><Check size={11} className="text-cyan-400" /><span>Pro automated DevOps pipeline</span></li>
-                          <li className="flex items-center space-x-1.5"><Check size={11} className="text-cyan-400" /><span>24/7 Priority Responses</span></li>
-                          <li className="flex items-center space-x-1.5"><Check size={11} className="text-cyan-400" /><span>Unlimited Gateway Tunnels</span></li>
-                        </ul>
                       </div>
-                      <button
-                        onClick={async () => {
-                          try {
-                            await submitPlanApproval(currentUser.id, currentUser.name, "Professional", "$12,050", "Monthly");
-                            setAlertText("Professional Activation Request issued to Diavox Administrations!");
-                          } catch (err: any) {
-                            setAlertText(`Error requesting Professional: ${err.message || err}`);
-                          }
-                          setTimeout(() => setAlertText(null), 5000);
-                        }}
-                        className="w-full py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-sky-600 hover:from-cyan-400 hover:to-sky-500 text-white font-mono text-[10.5px] font-black transition-colors shadow shadow-cyan-500/10"
-                      >
-                        Request Pro Upgrade
-                      </button>
-                    </div>
-
-                    {/* ENTERPRISE */}
-                    <div className={`p-5 rounded-2xl border flex flex-col justify-between space-y-4 ${
-                      theme === "dark" ? "bg-slate-950 border-slate-850" : "bg-slate-50 border-slate-200"
-                    }`}>
-                      <div className="space-y-3">
-                        <div>
-                          <span className="text-[8px] font-mono text-cyan-400 bg-cyan-950 px-1.5 py-0.5 rounded uppercase font-bold">Enterprise Orchestration</span>
-                          <h4 className="text-sm font-display font-black mt-1">Diavox Enterprise</h4>
-                        </div>
-                        <p className="text-lg font-mono font-black text-white">$24,950<span className="text-[10px] opacity-50 font-normal"> / mo</span></p>
-                        <ul className="space-y-1.5 text-[11px] font-mono text-slate-405 text-left pt-2 border-t dark:border-slate-900 border-slate-150">
-                          <li className="flex items-center space-x-1.5"><Check size={11} className="text-cyan-400" /><span>Private Dedicated Host clusters</span></li>
-                          <li className="flex items-center space-x-1.5"><Check size={11} className="text-cyan-400" /><span>GPU fine-tuning cycles</span></li>
-                          <li className="flex items-center space-x-1.5"><Check size={11} className="text-cyan-400" /><span>Dedicated Tech Architect lead</span></li>
-                          <li className="flex items-center space-x-1.5"><Check size={11} className="text-cyan-400" /><span>Custom Legal Service covenants</span></li>
-                        </ul>
-                      </div>
-                      <button
-                        onClick={async () => {
-                          try {
-                            await submitPlanApproval(currentUser.id, currentUser.name, "Enterprise", "$24,950", "Monthly");
-                            setAlertText("Enterprise Activation Request issued to Diavox Administrations!");
-                          } catch (err: any) {
-                            setAlertText(`Error requesting Enterprise: ${err.message || err}`);
-                          }
-                          setTimeout(() => setAlertText(null), 5000);
-                        }}
-                        className="w-full py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-mono text-[10.5px] font-bold transition-colors"
-                      >
-                        Request Enterprise Host
-                      </button>
-                    </div>
+                    ))}
                   </div>
                 </div>
 

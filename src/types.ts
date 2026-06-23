@@ -433,7 +433,7 @@ export interface PlanApproval {
   id: string;
   client_id: string;
   client_name: string;
-  plan_name: "Starter" | "Professional" | "Enterprise";
+  plan_name: string;
   price: string;
   billing_cycle: "Monthly" | "Annually";
   status: "Pending Approval" | "Approved" | "Rejected";

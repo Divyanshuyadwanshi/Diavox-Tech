@@ -177,7 +177,7 @@ interface AgencyState {
   addAiTrainingFile: (title: string, file_type: "pdf" | "faq" | "pricing" | "blog" | "service_info" | "project_info", content: string, uploaded_by_id: string, uploaded_by_name: string) => void;
   deleteAiTrainingFile: (id: string) => void;
 
-  submitPlanApproval: (clientId: string, clientName: string, planName: "Starter" | "Professional" | "Enterprise", price: string, billingCycle: "Monthly" | "Annually") => Promise<void>;
+  submitPlanApproval: (clientId: string, clientName: string, planName: string, price: string, billingCycle: "Monthly" | "Annually") => Promise<void>;
   updatePlanApprovalStatus: (id: string, status: "Approved" | "Rejected") => Promise<void>;
   addActivePlan: (plan: Omit<ActivePlan, "id">) => Promise<void>;
   updateActivePlan: (id: string, updates: Partial<ActivePlan>) => Promise<void>;
@@ -2890,30 +2890,40 @@ export const useStore = create<AgencyState>((set, get) => {
         created_at: new Date().toISOString()
       };
       try {
-        const { error } = await supabase.from("invoices").insert([newInvoice]);
-        if (error) {
-          throw new Error(error.message || "Failed to save invoice in Supabase.");
+        const res = await secureFetch("/api/admin/invoices", {
+          method: "POST",
+          body: JSON.stringify({ invoice: newInvoice })
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || "Failed to save invoice securely.");
         }
         const updated = [newInvoice, ...get().invoices];
         set({ invoices: updated });
         saveStateToCache({ ...get(), invoices: updated });
+        await get().syncSupabase();
       } catch (err: any) {
-        console.error("[SUPABASE ERROR] Failed to insert invoice:", err.message);
+        console.error("[SECURE API ERROR] Failed to insert invoice:", err.message);
         throw err;
       }
     },
 
     updateInvoiceStatus: async (id, status) => {
       try {
-        const { error } = await supabase.from("invoices").update({ status }).eq("id", id);
-        if (error) {
-          throw new Error(error.message || "Failed to update invoice status in Supabase.");
+        const res = await secureFetch("/api/admin/invoices/update", {
+          method: "POST",
+          body: JSON.stringify({ id, updates: { status } })
+        });
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || "Failed to update invoice status securely.");
         }
         const updated = get().invoices.map(inv => inv.id === id ? { ...inv, status } : inv);
         set({ invoices: updated });
         saveStateToCache({ ...get(), invoices: updated });
+        await get().syncSupabase();
       } catch (err: any) {
-        console.error("[SUPABASE ERROR] Failed to update invoice status:", err.message);
+        console.error("[SECURE API ERROR] Failed to update invoice status:", err.message);
         throw err;
       }
     },
@@ -3395,41 +3405,14 @@ export const useStore = create<AgencyState>((set, get) => {
       if (!target) return;
 
       try {
-        const { error: appErr } = await supabase.from("plan_approvals").update({ status }).eq("id", id);
-        if (appErr) throw appErr;
+        const res = await secureFetch("/api/admin/plan-approvals/update", {
+          method: "POST",
+          body: JSON.stringify({ id, status })
+        });
 
-        if (status === "Approved") {
-          const start = new Date();
-          const renewal = new Date();
-          renewal.setMonth(renewal.getMonth() + (target.billing_cycle === "Annually" ? 12 : 1));
-
-          const { error: expErr } = await supabase.from("active_plans").update({ status: "Expired" }).eq("client_id", target.client_id);
-          if (expErr) {
-            console.warn("Failed to expire old active plans, proceeding:", expErr.message);
-          }
-
-          const planId = "plan-" + Math.random().toString(36).substring(4);
-          const nextActivePlan = {
-            id: planId,
-            client_id: target.client_id,
-            plan_name: target.plan_name,
-            price: target.price,
-            status: "Active",
-            billing_cycle: target.billing_cycle,
-            start_date: start.toISOString().split("T")[0],
-            renewal_date: renewal.toISOString().split("T")[0],
-            features: [
-              "Standard customer support queue priority access",
-              "Sub-second loading times custom cache configs",
-              "Bi-weekly system updates audits",
-              "Visual activity logging"
-            ],
-            duration: target.billing_cycle === "Annually" ? "12 Months" : "1 Month",
-            notes: "Approved automatically via Client Elevations panel."
-          };
-
-          const { error: planErr } = await supabase.from("active_plans").insert([nextActivePlan]);
-          if (planErr) throw planErr;
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.error || "Failed to update plan approval status securely.");
         }
 
         const updatedApprovals = get().planApprovals.map(pa => pa.id === id ? { ...pa, status } : pa);
@@ -3437,6 +3420,7 @@ export const useStore = create<AgencyState>((set, get) => {
         await get().syncSupabase();
       } catch (err: any) {
         console.error("Failed to update plan approval status securely:", err.message);
+        throw err;
       }
     },
 

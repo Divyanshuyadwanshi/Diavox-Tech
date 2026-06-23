@@ -931,6 +931,128 @@ app.post("/api/admin/active-plans/delete", async (req, res) => {
   }
 });
 
+// API Route: Securely insert invoice
+app.post("/api/admin/invoices", async (req, res) => {
+  const claimant = await getSessionUser(req);
+  if (!claimant) return res.status(401).json({ error: "Access Denied: Unauthenticated." });
+
+  const claimantRole = await getUserRoleFromDb(claimant.id, claimant.user_metadata?.role);
+  if (!ADMIN_ROLES.includes(claimantRole)) {
+    return res.status(403).json({ error: "Access Denied: Insufficient authorization." });
+  }
+
+  const { invoice } = req.body;
+  if (!invoice) return res.status(400).json({ error: "Invoice payload is required." });
+
+  try {
+    console.log("[ADMIN WRITE] Managing/Inserting Invoice:", invoice);
+    const { data, error } = await supabaseAdmin.from("invoices").insert([invoice]).select();
+    if (error) {
+      console.error("[SUPABASE ERROR] Insert invoice failed:", error);
+      throw error;
+    }
+    return res.status(200).json({ success: true, invoice: data?.[0] });
+  } catch (err: any) {
+    console.error("[API EXCEPTION] /api/admin/invoices:", err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// API Route: Securely update invoice status
+app.post("/api/admin/invoices/update", async (req, res) => {
+  const claimant = await getSessionUser(req);
+  if (!claimant) return res.status(401).json({ error: "Access Denied: Unauthenticated." });
+
+  const claimantRole = await getUserRoleFromDb(claimant.id, claimant.user_metadata?.role);
+  if (!ADMIN_ROLES.includes(claimantRole)) {
+    return res.status(403).json({ error: "Access Denied: Insufficient authorization." });
+  }
+
+  const { id, updates } = req.body;
+  if (!id || !updates) return res.status(400).json({ error: "Invoice ID and updates are required." });
+
+  try {
+    console.log("[ADMIN WRITE] Updating Invoice:", { id, updates });
+    const { data, error } = await supabaseAdmin.from("invoices").update(updates).eq("id", id).select();
+    if (error) {
+      console.error("[SUPABASE ERROR] Update invoice failed:", error);
+      throw error;
+    }
+    return res.status(200).json({ success: true, invoice: data?.[0] });
+  } catch (err: any) {
+    console.error("[API EXCEPTION] /api/admin/invoices/update:", err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// API Route: Securely update plan approval status and activate plan
+app.post("/api/admin/plan-approvals/update", async (req, res) => {
+  const claimant = await getSessionUser(req);
+  if (!claimant) return res.status(401).json({ error: "Access Denied: Unauthenticated." });
+
+  const claimantRole = await getUserRoleFromDb(claimant.id, claimant.user_metadata?.role);
+  if (!ADMIN_ROLES.includes(claimantRole)) {
+    return res.status(403).json({ error: "Access Denied: Insufficient authorization." });
+  }
+
+  const { id, status } = req.body;
+  if (!id || !status) return res.status(400).json({ error: "Approval ID and status are required." });
+
+  try {
+    console.log("[ADMIN WRITE] Resolving Plan Approval Request:", { id, status });
+
+    // Fetch the target plan approval row
+    const { data: target, error: getErr } = await supabaseAdmin.from("plan_approvals").select("*").eq("id", id).maybeSingle();
+    if (getErr || !target) {
+      return res.status(404).json({ error: "Plan approval request not found." });
+    }
+
+    // Update plan approval row status
+    const { error: appErr } = await supabaseAdmin.from("plan_approvals").update({ status }).eq("id", id);
+    if (appErr) throw appErr;
+
+    if (status === "Approved") {
+      const start = new Date();
+      const renewal = new Date();
+      renewal.setMonth(renewal.getMonth() + (target.billing_cycle === "Annually" ? 12 : 1));
+
+      // Expire older active plans
+      const { error: expErr } = await supabaseAdmin.from("active_plans").update({ status: "Expired" }).eq("client_id", target.client_id);
+      if (expErr) {
+        console.warn("Failed to expire old active plans, proceeding:", expErr.message);
+      }
+
+      const planId = "plan-" + Math.random().toString(36).substring(4);
+      const nextActivePlan = {
+        id: planId,
+        client_id: target.client_id,
+        plan_name: target.plan_name,
+        price: target.price,
+        status: "Active",
+        billing_cycle: target.billing_cycle,
+        start_date: start.toISOString().split("T")[0],
+        renewal_date: renewal.toISOString().split("T")[0],
+        features: [
+          "Standard customer support queue priority access",
+          "Sub-second loading times custom cache configs",
+          "Bi-weekly system updates audits",
+          "Visual activity logging"
+        ],
+        duration: target.billing_cycle === "Annually" ? "12 Months" : "1 Month",
+        notes: "Approved automatically via Client Elevations panel."
+      };
+
+      const { error: planErr } = await supabaseAdmin.from("active_plans").insert([nextActivePlan]);
+      if (planErr) throw planErr;
+    }
+
+    return res.status(200).json({ success: true });
+  } catch (err: any) {
+    console.error("[API EXCEPTION] /api/admin/plan-approvals/update:", err.message);
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // API Route: Securely insert Review / Testimonial
 app.post("/api/admin/reviews", async (req, res) => {
   const claimant = await getSessionUser(req);
