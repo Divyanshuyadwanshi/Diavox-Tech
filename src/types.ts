@@ -389,6 +389,9 @@ export interface PrivateMessage {
   recipient_id: string;
   message_text: string;
   created_at: string;
+  file_url?: string;
+  file_name?: string;
+  is_image?: boolean;
 }
 
 export interface TeamGroup {

@@ -91,7 +91,7 @@ interface AgencyState {
   purchasePlan: (planName: "Starter" | "Professional" | "Enterprise", isAnnual: boolean) => void;
   
   // Chat / Messages
-  sendMessage: (recipientId: string, text: string) => void;
+  sendMessage: (recipientId: string, text: string, file_url?: string, file_name?: string, is_image?: boolean) => void;
   
   // Notifications
   addNotification: (userId: string, title: string, content: string) => void;
@@ -167,7 +167,7 @@ interface AgencyState {
   deletePortfolioItem: (id: string) => Promise<void>;
   fetchPortfolio: () => Promise<void>;
 
-  sendPrivateMessage: (senderId: string, senderName: string, recipientId: string, text: string) => void;
+  sendPrivateMessage: (senderId: string, senderName: string, recipientId: string, text: string, file_url?: string, file_name?: string, is_image?: boolean) => void;
   sendTeamMessage: (groupId: string, senderId: string, senderName: string, senderRole: string, text: string, file_url?: string, file_name?: string, is_image?: boolean) => void;
   createTeamGroup: (name: string, description?: string) => void;
   deleteTeamGroup: (id: string) => void;
@@ -1180,6 +1180,25 @@ export const useStore = create<AgencyState>((set, get) => {
           set({ privateMessages: privateMessagesList as PrivateMessage[] });
         }
 
+        // Fetch Quote Replies and Attachments
+        try {
+          const { data: repliesList } = await supabase.from("quote_replies").select("*").order("created_at", { ascending: true });
+          if (repliesList) {
+            const { data: attachmentsList } = await supabase.from("quote_attachments").select("*");
+            const quoteAtts = attachmentsList || [];
+            const mappedReplies = (repliesList as QuoteReply[]).map(reply => ({
+              ...reply,
+              attachments: quoteAtts.filter(att => att.reply_id === reply.id)
+            }));
+            set({ 
+              quoteReplies: mappedReplies,
+              quoteAttachments: quoteAtts
+            });
+          }
+        } catch (errQuote) {
+          console.warn("Failed to retrieve quote replies and attachments on load:", errQuote);
+        }
+
         // Fetch AI Training files
         const { data: trainingFiles } = await supabase.from("ai_training_files").select("*");
         if (trainingFiles) {
@@ -1524,22 +1543,117 @@ export const useStore = create<AgencyState>((set, get) => {
         // Realtime Subscription for instant chat messages updates
         try {
           supabase
-            .channel("messages-sync")
-            .on("postgres_changes", { event: "*", schema: "public", table: "messages" }, async () => {
-              try {
-                const currentUserObj = get().currentUser || cached?.currentUser;
-                const isTeamUser = currentUserObj && currentUserObj.role === "team_member";
-                const hasChatPermission = !isTeamUser || (currentUserObj?.permissions?.includes("contact_clients") === true);
-
-                if (hasChatPermission) {
-                  const { data: messagesList } = await supabase.from("messages").select("*").order("created_at", { ascending: true });
-                  if (messagesList) {
-                    set({ messages: messagesList as Message[] });
-                  }
-                } else {
-                  set({ messages: [] });
+            .channel("messages-realtime")
+            .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
+              const newMsg = payload.new as Message;
+              if (newMsg) {
+                if (!get().messages.some(x => x.id === newMsg.id)) {
+                  set(state => ({ messages: [...state.messages, newMsg] }));
                 }
-              } catch (err) {}
+              }
+            })
+            .subscribe();
+        } catch (e) {}
+
+        // Realtime Subscription for team channels / project groups
+        try {
+          supabase
+            .channel("team-messages-realtime")
+            .on("postgres_changes", { event: "INSERT", schema: "public", table: "team_messages" }, (payload) => {
+              const newMsg = payload.new as any;
+              if (newMsg) {
+                const mappedMsg: TeamMessage = {
+                  id: newMsg.id,
+                  group_id: newMsg.group_id,
+                  sender_id: newMsg.sender_id,
+                  sender_name: newMsg.sender_name,
+                  sender_role: newMsg.sender_role,
+                  message_text: newMsg.text, // Database column 'text' mapped to frontend 'message_text'
+                  file_url: newMsg.file_url,
+                  file_name: newMsg.file_name,
+                  is_image: newMsg.is_image,
+                  created_at: newMsg.created_at
+                };
+                if (!get().teamMessages.some(x => x.id === mappedMsg.id)) {
+                  set(state => ({ teamMessages: [...state.teamMessages, mappedMsg] }));
+                }
+              }
+            })
+            .subscribe();
+        } catch (e) {}
+
+        // Realtime Subscription for private direct team messages
+        try {
+          supabase
+            .channel("private-messages-realtime")
+            .on("postgres_changes", { event: "INSERT", schema: "public", table: "private_messages" }, (payload) => {
+              const newMsg = payload.new as PrivateMessage;
+              if (newMsg) {
+                if (!get().privateMessages.some(x => x.id === newMsg.id)) {
+                  set(state => ({ privateMessages: [...state.privateMessages, newMsg] }));
+                }
+              }
+            })
+            .subscribe();
+        } catch (e) {}
+
+        // Realtime Subscription for quote replies
+        try {
+          supabase
+            .channel("quote-replies-realtime")
+            .on("postgres_changes", { event: "INSERT", schema: "public", table: "quote_replies" }, (payload) => {
+              const newReply = payload.new as QuoteReply;
+              if (newReply) {
+                if (!get().quoteReplies.some(x => x.id === newReply.id)) {
+                  const replyWithAtts: QuoteReply = {
+                    ...newReply,
+                    attachments: get().quoteAttachments.filter(att => att.reply_id === newReply.id)
+                  };
+                  set(state => ({ quoteReplies: [...state.quoteReplies, replyWithAtts] }));
+                }
+              }
+            })
+            .subscribe();
+        } catch (e) {}
+
+        // Realtime Subscription for quote attachments
+        try {
+          supabase
+            .channel("quote-attachments-realtime")
+            .on("postgres_changes", { event: "INSERT", schema: "public", table: "quote_attachments" }, (payload) => {
+              const newAtt = payload.new as QuoteAttachment;
+              if (newAtt) {
+                if (!get().quoteAttachments.some(x => x.id === newAtt.id)) {
+                  set(state => {
+                    const nextAtts = [...state.quoteAttachments, newAtt];
+                    const nextReplies = state.quoteReplies.map(reply => {
+                      if (reply.id === newAtt.reply_id) {
+                        const replyAtts = reply.attachments || [];
+                        if (!replyAtts.some(x => x.id === newAtt.id)) {
+                          return { ...reply, attachments: [...replyAtts, newAtt] };
+                        }
+                      }
+                      return reply;
+                    });
+                    return { quoteAttachments: nextAtts, quoteReplies: nextReplies };
+                  });
+                }
+              }
+            })
+            .subscribe();
+        } catch (e) {}
+
+        // Realtime Subscription for notification feeds
+        try {
+          supabase
+            .channel("notifications-realtime")
+            .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications" }, (payload) => {
+              const newNotif = payload.new as Notification;
+              if (newNotif) {
+                if (!get().notifications.some(x => x.id === newNotif.id)) {
+                  set(state => ({ notifications: [newNotif, ...state.notifications] }));
+                }
+              }
             })
             .subscribe();
         } catch (e) {}
@@ -2036,9 +2150,6 @@ export const useStore = create<AgencyState>((set, get) => {
         attachments: attachments
       };
 
-      const updatedReplies = [...get().quoteReplies, newReply];
-      const updatedAttachments = [...get().quoteAttachments, ...attachments];
-
       const quote = get().requests.find(r => r.id === quoteId);
       const notifyUserId = user.role === "client" ? "all_admins" : (quote ? quote.client_id : "all_team");
       
@@ -2051,19 +2162,8 @@ export const useStore = create<AgencyState>((set, get) => {
         created_at: new Date().toISOString()
       };
 
-      set({ 
-        quoteReplies: updatedReplies,
-        quoteAttachments: updatedAttachments,
-        notifications: [newNotif, ...get().notifications]
-      });
-      saveStateToCache({ 
-        quoteReplies: updatedReplies, 
-        quoteAttachments: updatedAttachments,
-        notifications: [newNotif, ...get().notifications]
-      });
-
       try {
-        await supabase.from("quote_replies").insert([{
+        const { error: replyErr } = await supabase.from("quote_replies").insert([{
           id: newReply.id,
           quote_id: newReply.quote_id,
           sender_id: newReply.sender_id,
@@ -2072,10 +2172,38 @@ export const useStore = create<AgencyState>((set, get) => {
           message_text: newReply.message_text,
           created_at: newReply.created_at
         }]);
-        if (attachments.length > 0) {
-          await supabase.from("quote_attachments").insert(attachments);
+
+        if (replyErr) {
+          throw new Error(replyErr.message || "Failed to save quote reply inside Supabase");
         }
-        await supabase.from("notifications").insert([newNotif]);
+
+        if (attachments.length > 0) {
+          const { error: attErr } = await supabase.from("quote_attachments").insert(attachments);
+          if (attErr) {
+            throw new Error(attErr.message || "Failed to save quote reply attachments inside Supabase");
+          }
+        }
+
+        try {
+          await supabase.from("notifications").insert([newNotif]);
+        } catch (eNotif) {
+          console.warn("Failed to insert quote notification:", eNotif);
+        }
+
+        // Committing to local state only on successful database write!
+        const updatedReplies = [...get().quoteReplies, newReply];
+        const updatedAttachments = [...get().quoteAttachments, ...attachments];
+
+        set({ 
+          quoteReplies: updatedReplies,
+          quoteAttachments: updatedAttachments,
+          notifications: [newNotif, ...get().notifications]
+        });
+        saveStateToCache({ 
+          quoteReplies: updatedReplies, 
+          quoteAttachments: updatedAttachments,
+          notifications: [newNotif, ...get().notifications]
+        });
       } catch (err) {
         console.warn("Database sync quote replies failed:", err);
       }
@@ -2550,7 +2678,7 @@ export const useStore = create<AgencyState>((set, get) => {
     },
     
     // Messages
-    sendMessage: async (recipientId, text) => {
+    sendMessage: async (recipientId, text, file_url, file_name, is_image) => {
       const user = get().currentUser;
       if (!user) return;
 
@@ -2580,7 +2708,10 @@ export const useStore = create<AgencyState>((set, get) => {
         recipient_role: recipientRole,
         message_text: text,
         created_at: new Date().toISOString(),
-        is_read: false
+        is_read: false,
+        file_url,
+        file_name,
+        is_image
       };
 
       try {
@@ -2595,12 +2726,31 @@ export const useStore = create<AgencyState>((set, get) => {
           recipient_role: newMessage.recipient_role,
           message_text: newMessage.message_text,
           created_at: newMessage.created_at,
-          is_read: newMessage.is_read
+          is_read: newMessage.is_read,
+          file_url: file_url || null,
+          file_name: file_name || null,
+          is_image: is_image || false
         }]);
 
         if (error) {
           console.error("Database INSERT failed for primary message:", error);
           throw new Error(error.message || "Failed to save message in Supabase.");
+        }
+
+        // Create notification on successful database write!
+        const notifyUserId = user.role === "client" ? "all_admins" : recipientId;
+        const newNotif: Notification = {
+          id: "not-" + Math.random().toString(36).substring(4),
+          user_id: notifyUserId,
+          title: user.role === "client" ? "New Message from Client" : "New Message from Support",
+          content: `${user.name} sent: ${text.substring(0, 60)}${text.length > 60 ? "..." : ""}`,
+          is_read: false,
+          created_at: new Date().toISOString()
+        };
+        try {
+          await supabase.from("notifications").insert([newNotif]);
+        } catch (eNotif) {
+          console.warn("Failed to insert chat notification:", eNotif);
         }
 
         // Now, UI update second!
@@ -3299,19 +3449,18 @@ export const useStore = create<AgencyState>((set, get) => {
       }
     },
 
-    sendPrivateMessage: async (senderId, senderName, recipientId, text) => {
+    sendPrivateMessage: async (senderId, senderName, recipientId, text, file_url, file_name, is_image) => {
       const newMsg: PrivateMessage = {
         id: "pm-" + Math.random().toString(36).substring(4),
         sender_id: senderId,
         sender_name: senderName,
         recipient_id: recipientId,
         message_text: text,
-        created_at: new Date().toISOString()
+        created_at: new Date().toISOString(),
+        file_url,
+        file_name,
+        is_image
       };
-      // Optimistic update
-      const updated = [...get().privateMessages, newMsg];
-      set({ privateMessages: updated });
-      saveStateToCache({ ...get(), privateMessages: updated });
 
       try {
         const { error } = await supabase.from("private_messages").insert({
@@ -3320,11 +3469,34 @@ export const useStore = create<AgencyState>((set, get) => {
           sender_name: newMsg.sender_name,
           recipient_id: newMsg.recipient_id,
           message_text: newMsg.message_text,
-          created_at: newMsg.created_at
+          created_at: newMsg.created_at,
+          file_url: newMsg.file_url || null,
+          file_name: newMsg.file_name || null,
+          is_image: newMsg.is_image || false
         });
         if (error) {
           console.error("[STORE] Failed to persist private message to Supabase DB:", error);
+          throw error;
         }
+
+        // Create notification on successful database write!
+        const newNotif: Notification = {
+          id: "not-" + Math.random().toString(36).substring(4),
+          user_id: recipientId,
+          title: "New Private Message",
+          content: `Private message from ${senderName}: ${text.substring(0, 60)}${text.length > 60 ? "..." : ""}`,
+          is_read: false,
+          created_at: new Date().toISOString()
+        };
+        try {
+          await supabase.from("notifications").insert([newNotif]);
+        } catch (eNotif) {
+          console.warn("Failed to insert private message notification:", eNotif);
+        }
+
+        const updated = [...get().privateMessages, newMsg];
+        set({ privateMessages: updated });
+        saveStateToCache({ ...get(), privateMessages: updated });
       } catch (err) {
         console.error("[STORE] Exception during private message Supabase write:", err);
       }
@@ -3343,10 +3515,6 @@ export const useStore = create<AgencyState>((set, get) => {
         is_image,
         created_at: new Date().toISOString()
       };
-      // Optimistic update
-      const updated = [...get().teamMessages, newMsg];
-      set({ teamMessages: updated });
-      saveStateToCache({ ...get(), teamMessages: updated });
 
       try {
         // Map message_text to 'text' for database column compatibility
@@ -3364,7 +3532,27 @@ export const useStore = create<AgencyState>((set, get) => {
         });
         if (error) {
           console.error("[STORE] Failed to persist team message to Supabase DB:", error);
+          throw error;
         }
+
+        // Create notification on successful database write!
+        const newNotif: Notification = {
+          id: "not-" + Math.random().toString(36).substring(4),
+          user_id: "all_team",
+          title: "New Channel Message",
+          content: `${senderName} posted in a team channel: ${text.substring(0, 60)}${text.length > 60 ? "..." : ""}`,
+          is_read: false,
+          created_at: new Date().toISOString()
+        };
+        try {
+          await supabase.from("notifications").insert([newNotif]);
+        } catch (eNotif) {
+          console.warn("Failed to insert team message notification:", eNotif);
+        }
+
+        const updated = [...get().teamMessages, newMsg];
+        set({ teamMessages: updated });
+        saveStateToCache({ ...get(), teamMessages: updated });
       } catch (err) {
         console.error("[STORE] Exception during team message Supabase write:", err);
       }

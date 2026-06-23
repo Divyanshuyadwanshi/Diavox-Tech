@@ -1213,13 +1213,26 @@ export default function TeamDashboard() {
                                     
                                     {/* Uploaded attachments render */}
                                     {reply.attachments && reply.attachments.length > 0 && (
-                                      <div className="mt-1.5 pt-1.5 border-t border-slate-100/20 text-[9px] font-mono flex flex-col gap-0.5 text-left">
-                                        {reply.attachments.map(at => (
-                                          <div key={at.id} className="flex items-center space-x-1">
-                                            <span className="opacity-60 font-sans">📎 File Scope:</span>
-                                            <a href={at.file_url} className="underline text-cyan-300 hover:text-white" target="_blank" rel="noopener noreferrer">{at.file_name}</a>
-                                          </div>
-                                        ))}
+                                      <div className="mt-1.5 pt-1.5 border-t border-slate-100/20 text-[9px] font-mono flex flex-col gap-1.5 text-left">
+                                        {reply.attachments.map(at => {
+                                          const isImg = /\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/i.test(at.file_url || "");
+                                          return (
+                                            <div key={at.id} className="flex flex-col gap-1">
+                                              <div className="flex items-center space-x-1">
+                                                <span className="opacity-60 font-sans">📎 File Scope:</span>
+                                                <a href={at.file_url} className="underline text-cyan-300 hover:text-white break-all" target="_blank" rel="noopener noreferrer">{at.file_name}</a>
+                                              </div>
+                                              {isImg && at.file_url && at.file_url !== "#" && (
+                                                <img 
+                                                  src={at.file_url} 
+                                                  alt={at.file_name || "Attachment"} 
+                                                  className="max-w-xs max-h-36 rounded border border-slate-750 mt-1 object-cover"
+                                                  referrerPolicy="no-referrer"
+                                                />
+                                              )}
+                                            </div>
+                                          );
+                                        })}
                                       </div>
                                     )}
                                   </div>
@@ -1259,9 +1272,17 @@ export default function TeamDashboard() {
                                 upInput.onchange = async (events: any) => {
                                   const fObj = events.target.files[0];
                                   if (fObj) {
-                                    await submitQuoteReply(req.id, `Uploaded proposal doc file: ${fObj.name}`, [{ file_name: fObj.name, file_url: "#" }]);
-                                    setSuccessText(`Successfully attached design file: "${fObj.name}"!`);
-                                    setTimeout(() => setSuccessText(null), 3000);
+                                    try {
+                                      setSuccessText(`Uploading "${fObj.name}" to secure storage...`);
+                                      const path = `quotes/${req.id}/${Date.now()}_${fObj.name}`;
+                                      const publicUrl = await uploadFileToBucket("chat-files", path, fObj);
+                                      await submitQuoteReply(req.id, `Uploaded proposal doc file: ${fObj.name}`, [{ file_name: fObj.name, file_url: publicUrl }]);
+                                      setSuccessText(`Successfully attached design file: "${fObj.name}"!`);
+                                      setTimeout(() => setSuccessText(null), 3000);
+                                    } catch (errQuote: any) {
+                                      setSuccessText(`Upload failed: ${errQuote.message || errQuote}`);
+                                      setTimeout(() => setSuccessText(null), 5000);
+                                    }
                                   }
                                 };
                                 upInput.click();

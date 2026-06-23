@@ -1217,13 +1217,26 @@ export default function ClientDashboard() {
                                     
                                     {/* Uploaded attachments render */}
                                     {reply.attachments && reply.attachments.length > 0 && (
-                                      <div className="mt-1.5 pt-1.5 border-t border-slate-100/20 text-[9px] font-mono flex flex-col gap-0.5 text-left">
-                                        {reply.attachments.map(at => (
-                                          <div key={at.id} className="flex items-center space-x-1">
-                                            <span className="opacity-60">📎 File:</span>
-                                            <a href={at.file_url} className="underline text-cyan-300 hover:text-white" target="_blank" rel="noopener noreferrer">{at.file_name}</a>
-                                          </div>
-                                        ))}
+                                      <div className="mt-1.5 pt-1.5 border-t border-slate-100/20 text-[9px] font-mono flex flex-col gap-1.5 text-left">
+                                        {reply.attachments.map(at => {
+                                          const isImg = /\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/i.test(at.file_url || "");
+                                          return (
+                                            <div key={at.id} className="flex flex-col gap-1">
+                                              <div className="flex items-center space-x-1">
+                                                <span className="opacity-60">📎 File:</span>
+                                                <a href={at.file_url} className="underline text-cyan-300 hover:text-white font-mono break-all" target="_blank" rel="noopener noreferrer">{at.file_name}</a>
+                                              </div>
+                                              {isImg && at.file_url && at.file_url !== "#" && (
+                                                <img 
+                                                  src={at.file_url} 
+                                                  alt={at.file_name || "Attachment"} 
+                                                  className="max-w-xs max-h-36 rounded border border-slate-750 mt-1 object-cover"
+                                                  referrerPolicy="no-referrer"
+                                                />
+                                              )}
+                                            </div>
+                                          );
+                                        })}
                                       </div>
                                     )}
                                   </div>
@@ -1263,9 +1276,17 @@ export default function ClientDashboard() {
                                 btnInput.onchange = async (events: any) => {
                                   const f = events.target.files[0];
                                   if (f) {
-                                    await submitQuoteReply(req.id, `Shared quote file scope: ${f.name}`, [{ file_name: f.name, file_url: "#" }]);
-                                    setAlertText(`Successfully linked quote document: "${f.name}"!`);
-                                    setTimeout(() => setAlertText(null), 3000);
+                                    try {
+                                      setAlertText(`Uploading "${f.name}" to secure storage...`);
+                                      const path = `quotes/${req.id}/${Date.now()}_${f.name}`;
+                                      const publicUrl = await uploadFileToBucket("chat-files", path, f);
+                                      await submitQuoteReply(req.id, `Shared quote file scope: ${f.name}`, [{ file_name: f.name, file_url: publicUrl }]);
+                                      setAlertText(`Successfully linked quote document: "${f.name}"!`);
+                                      setTimeout(() => setAlertText(null), 3000);
+                                    } catch (errQuote: any) {
+                                      setAlertText(`Upload failed: ${errQuote.message || errQuote}`);
+                                      setTimeout(() => setAlertText(null), 5000);
+                                    }
                                   }
                                 };
                                 btnInput.click();
@@ -1958,16 +1979,24 @@ Receipt authenticity check: SECURE PORTAL STABLE TRANSACTION
                     className="flex-1 overflow-hidden relative flex flex-col justify-between"
                     onDragOver={(e) => { e.preventDefault(); setIsDragOver(true); }}
                     onDragLeave={() => setIsDragOver(false)}
-                    onDrop={(e) => {
+                    onDrop={async (e) => {
                       e.preventDefault();
                       setIsDragOver(false);
                       const files = e.dataTransfer.files;
                       if (files && files.length > 0) {
-                        const fileName = files[0].name;
-                        // Pre-inject uploaded attachment message!
-                        sendMessage("team", `Shared contract file attachment: ${fileName} (Ready for developer assessment)`);
-                        setAlertText(`Document file: "${fileName}" has been safely parsed & shared with developers.`);
-                        setTimeout(() => setAlertText(null), 3500);
+                        const fileObj = files[0];
+                        try {
+                          setAlertText(`Uploading "${fileObj.name}" to secure storage...`);
+                          const path = `chats/${currentUser.id}/${Date.now()}_${fileObj.name}`;
+                          const publicUrl = await uploadFileToBucket("chat-files", path, fileObj);
+                          const isImg = fileObj.type.startsWith("image/");
+                          sendMessage("team", `Sent attachment: ${fileObj.name}`, publicUrl, fileObj.name, isImg);
+                          setAlertText(`File "${fileObj.name}" uploaded and shared with developers.`);
+                          setTimeout(() => setAlertText(null), 3500);
+                        } catch (err: any) {
+                          setAlertText(`Upload failed: ${err.message || err}`);
+                          setTimeout(() => setAlertText(null), 5000);
+                        }
                       }
                     }}
                   >
@@ -1993,10 +2022,36 @@ Receipt authenticity check: SECURE PORTAL STABLE TRANSACTION
                             <span className="text-[9px] font-mono opacity-50 mb-1">{m.sender_name} ({m.sender_role.replace("_", " ")})</span>
                             <div className={`p-3 rounded-xl text-xs leading-relaxed ${
                               isCurrentUser 
-                                ? "bg-cyan-600 text-white shadow-md" 
-                                : "dark:bg-slate-900 bg-white border dark:border-slate-800 border-slate-200 text-slate-900 dark:text-white"
+                                ? "bg-cyan-600 text-white shadow-md text-left" 
+                                : "dark:bg-slate-900 bg-white border dark:border-slate-800 border-slate-200 text-slate-900 dark:text-white text-left"
                             }`}>
-                              {m.message_text}
+                              <div>{m.message_text}</div>
+                              {m.file_url && (
+                                <div className="mt-2 pt-2 border-t border-white/10 dark:border-slate-800">
+                                  {m.is_image ? (
+                                    <img 
+                                      src={m.file_url} 
+                                      alt={m.file_name || "Attachment"} 
+                                      className="max-w-xs max-h-48 rounded-lg object-cover border border-slate-700/50 shadow-sm"
+                                      referrerPolicy="no-referrer"
+                                    />
+                                  ) : (
+                                    <a 
+                                      href={m.file_url} 
+                                      target="_blank" 
+                                      rel="noopener noreferrer" 
+                                      className={`flex items-center space-x-1.5 p-1.5 rounded text-[11px] font-mono transition-all max-w-xs border ${
+                                        isCurrentUser
+                                          ? "bg-cyan-700 hover:bg-cyan-800 text-white border-cyan-500/30"
+                                          : "bg-slate-800 hover:bg-slate-850 text-cyan-400 border-slate-750"
+                                      }`}
+                                    >
+                                      <span className="shrink-0">📎</span>
+                                      <span className="truncate">{m.file_name || "Download Attachment"}</span>
+                                    </a>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           </div>
                         );
@@ -2024,12 +2079,21 @@ Receipt authenticity check: SECURE PORTAL STABLE TRANSACTION
                         onClick={() => {
                           const input = document.createElement("input");
                           input.type = "file";
-                          input.onchange = (e: any) => {
+                          input.onchange = async (e: any) => {
                             const file = e.target.files[0];
                             if (file) {
-                              sendMessage("team", `Shared file attachment document: ${file.name}`);
-                              setAlertText(`Document attachment: "${file.name}" linked successfully in live room.`);
-                              setTimeout(() => setAlertText(null), 3500);
+                              try {
+                                setAlertText(`Uploading "${file.name}" to secure storage...`);
+                                const path = `chats/${currentUser.id}/${Date.now()}_${file.name}`;
+                                const publicUrl = await uploadFileToBucket("chat-files", path, file);
+                                const isImg = file.type.startsWith("image/");
+                                sendMessage("team", `Sent attachment: ${file.name}`, publicUrl, file.name, isImg);
+                                setAlertText(`File "${file.name}" uploaded and shared with developers.`);
+                                setTimeout(() => setAlertText(null), 3500);
+                              } catch (err: any) {
+                                setAlertText(`Upload failed: ${err.message || err}`);
+                                setTimeout(() => setAlertText(null), 5000);
+                              }
                             }
                           };
                           input.click();

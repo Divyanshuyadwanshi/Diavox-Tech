@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { useStore } from "../../store";
 import { TeamGroup, TeamMessage, PrivateMessage } from "../../types";
-import { Send, Users, MessageSquare, Check, X, ShieldAlert, FileIcon, MessageCircle } from "lucide-react";
+import { Send, Users, MessageSquare, Check, X, ShieldAlert, FileIcon, MessageCircle, Paperclip, Upload } from "lucide-react";
+import { uploadFileToBucket } from "../../supabase";
 
 export default function AdminTeamChats() {
   const { 
@@ -12,6 +13,7 @@ export default function AdminTeamChats() {
   const [activeChannelType, setActiveChannelType] = useState<"global" | "private" | "project">("global");
   const [selectedTargetId, setSelectedTargetId] = useState<string>("global");
   const [msgInput, setMsgInput] = useState("");
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
 
   const staffList = allUsers.filter(u => {
     if (u.id === currentUser.id) return false;
@@ -70,6 +72,45 @@ export default function AdminTeamChats() {
     }
 
     setMsgInput("");
+  };
+
+  const handleAttachmentUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setUploadStatus(`Uploading "${file.name}"...`);
+      const path = `team-chats/${currentUser.id}/${Date.now()}_${file.name}`;
+      const publicUrl = await uploadFileToBucket("chat-files", path, file);
+      const isImg = file.type.startsWith("image/");
+
+      if (activeChannelType === "global" || activeChannelType === "project") {
+        sendTeamMessage(
+          selectedTargetId,
+          currentUser.id,
+          currentUser.name,
+          currentUser.role,
+          `Shared file attachment: ${file.name}`,
+          publicUrl,
+          file.name,
+          isImg
+        );
+      } else {
+        sendPrivateMessage(
+          currentUser.id,
+          currentUser.name,
+          selectedTargetId,
+          `Shared file attachment: ${file.name}`,
+          publicUrl,
+          file.name,
+          isImg
+        );
+      }
+      setUploadStatus(null);
+    } catch (err: any) {
+      setUploadStatus(`Upload failed: ${err.message || err}`);
+      setTimeout(() => setUploadStatus(null), 4000);
+    }
   };
 
   return (
@@ -181,7 +222,7 @@ export default function AdminTeamChats() {
             </div>
 
             {/* Conversation list */}
-            <div className="space-y-3.5 max-h-[42vh] min-h-[42vh] overflow-y-auto p-2 mt-4 flex flex-col bg-slate-500/5 rounded-xl border dark:border-slate-900 border-slate-100">
+            <div className="space-y-3.5 max-h-[42vh] min-h-[42vh] overflow-y-auto p-2 mt-4 flex flex-col bg-slate-500/5 rounded-xl border dark:border-slate-900 border-slate-100 animate-fade-in">
               {filteredMessages().map((msg: any) => {
                 const isMe = msg.sender_id === currentUser.id;
                 return (
@@ -194,10 +235,34 @@ export default function AdminTeamChats() {
                     }`}
                   >
                     <div className="flex justify-between items-center text-[9px] font-mono text-slate-500 mb-1.5 gap-2">
-                      <span className="font-bold">{msg.sender_name} ({msg.sender_role})</span>
+                      <span className="font-bold">{msg.sender_name} ({msg.sender_role.replace("_", " ")})</span>
                       <span>{new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
                     </div>
-                    <p className="font-sans leading-relaxed whitespace-pre-wrap">{msg.message_text}</p>
+                    <div className="font-sans leading-relaxed whitespace-pre-wrap">{msg.message_text}</div>
+                    
+                    {/* Render attachment URL */}
+                    {msg.file_url && (
+                      <div className="mt-2 pt-1.5 border-t dark:border-slate-800 border-slate-200 text-left">
+                        {msg.is_image ? (
+                          <img 
+                            src={msg.file_url} 
+                            alt={msg.file_name || "Attachment"} 
+                            className="max-w-full max-h-36 rounded-lg object-cover border border-slate-800 mt-1"
+                            referrerPolicy="no-referrer"
+                          />
+                        ) : (
+                          <a 
+                            href={msg.file_url} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="flex items-center space-x-1.5 text-cyan-400 font-mono text-[10px] hover:underline mt-1 bg-slate-950/40 p-1 rounded"
+                          >
+                            <span>📎</span>
+                            <span className="truncate">{msg.file_name || "Download File"}</span>
+                          </a>
+                        )}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -212,27 +277,50 @@ export default function AdminTeamChats() {
           </div>
 
           {/* Form input */}
-          <form onSubmit={handleSend} className="mt-4 pt-3 border-t border-slate-850 flex items-center space-x-2">
-            <input
-              type="text"
-              required
-              value={msgInput}
-              onChange={(e) => setMsgInput(e.target.value)}
-              placeholder={`Send message to ${currentChannelName()}...`}
-              className={`flex-1 p-2.5 rounded-xl text-xs font-sans border focus:ring-1 outline-none transition-all ${
-                theme === "dark" 
-                  ? "bg-slate-900 border-slate-800 focus:border-cyan-555 text-white" 
-                  : "bg-white border-slate-205 focus:border-cyan-500 text-slate-900"
-              }`}
-            />
-            <button
-              type="submit"
-              className="p-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white transition-all shadow-md shrink-0"
-              title="Post message"
-            >
-              <Send size={14} />
-            </button>
-          </form>
+          <div className="mt-4 pt-3 border-t border-slate-850 flex flex-col gap-1.5">
+            {uploadStatus && (
+              <div className="text-[10px] font-mono text-cyan-400 animate-pulse pl-1">
+                {uploadStatus}
+              </div>
+            )}
+            <form onSubmit={handleSend} className="flex items-center space-x-2">
+              <label 
+                className={`p-2.5 rounded-xl border text-xs font-bold transition-all flex items-center justify-center cursor-pointer ${
+                  theme === "dark" 
+                    ? "bg-slate-900 border-slate-800 hover:bg-slate-850 text-slate-400 hover:text-white" 
+                    : "bg-white border-slate-205 hover:bg-slate-50 text-slate-600"
+                }`}
+                title="Attach file to chat message"
+              >
+                <Paperclip size={14} />
+                <input 
+                  type="file" 
+                  onChange={handleAttachmentUpload} 
+                  className="hidden" 
+                />
+              </label>
+
+              <input
+                type="text"
+                required
+                value={msgInput}
+                onChange={(e) => setMsgInput(e.target.value)}
+                placeholder={`Send message to ${currentChannelName()}...`}
+                className={`flex-1 p-2.5 rounded-xl text-xs font-sans border focus:ring-1 outline-none transition-all ${
+                  theme === "dark" 
+                    ? "bg-slate-900 border-slate-800 focus:border-cyan-555 text-white" 
+                    : "bg-white border-slate-205 focus:border-cyan-500 text-slate-900"
+                }`}
+              />
+              <button
+                type="submit"
+                className="p-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white transition-all shadow-md shrink-0"
+                title="Post message"
+              >
+                <Send size={14} />
+              </button>
+            </form>
+          </div>
         </div>
       </div>
     </div>
