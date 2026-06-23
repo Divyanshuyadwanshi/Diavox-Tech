@@ -3405,18 +3405,76 @@ export const useStore = create<AgencyState>((set, get) => {
       if (!target) return;
 
       try {
-        const res = await secureFetch("/api/admin/plan-approvals/update", {
-          method: "POST",
-          body: JSON.stringify({ id, status })
-        });
+        // 1. Update plan_approvals status directly in Supabase
+        const { error: appErr } = await supabase
+          .from("plan_approvals")
+          .update({ status })
+          .eq("id", id);
+        if (appErr) throw appErr;
 
-        if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.error || "Failed to update plan approval status securely.");
+        let planId = "plan-" + Math.random().toString(36).substring(4);
+        let nextActivePlanObj: ActivePlan | null = null;
+
+        if (status === "Approved") {
+          const start = new Date();
+          const renewal = new Date();
+          renewal.setMonth(renewal.getMonth() + (target.billing_cycle === "Annually" ? 12 : 1));
+
+          // 2. Expire older active plans for this client
+          const { error: expErr } = await supabase
+            .from("active_plans")
+            .update({ status: "Expired" })
+            .eq("client_id", target.client_id);
+          if (expErr) {
+            console.warn("Failed to expire old active plans, proceeding:", expErr.message);
+          }
+
+          nextActivePlanObj = {
+            id: planId,
+            client_id: target.client_id,
+            plan_name: target.plan_name,
+            price: target.price,
+            status: "Active",
+            billing_cycle: target.billing_cycle,
+            start_date: start.toISOString().split("T")[0],
+            renewal_date: renewal.toISOString().split("T")[0],
+            features: [
+              "Standard customer support queue priority access",
+              "Sub-second loading times custom cache configs",
+              "Bi-weekly system updates audits",
+              "Visual activity logging"
+            ],
+            duration: target.billing_cycle === "Annually" ? "12 Months" : "1 Month",
+            notes: "Approved automatically via Client Elevations panel."
+          };
+
+          // 3. Insert new active plan directly in Supabase
+          const { error: planErr } = await supabase
+            .from("active_plans")
+            .insert([nextActivePlanObj]);
+          if (planErr) throw planErr;
         }
 
+        // 4. Update Zustand state immediately for seamless UX
         const updatedApprovals = get().planApprovals.map(pa => pa.id === id ? { ...pa, status } : pa);
-        set({ planApprovals: updatedApprovals });
+        let updatedPlans = get().activePlans;
+        if (status === "Approved" && nextActivePlanObj) {
+          updatedPlans = updatedPlans.map(p => p.client_id === target.client_id ? { ...p, status: "Expired" } : p);
+          updatedPlans = [nextActivePlanObj, ...updatedPlans];
+        }
+
+        set({ 
+          planApprovals: updatedApprovals,
+          activePlans: updatedPlans
+        });
+
+        saveStateToCache({ 
+          ...get(), 
+          planApprovals: updatedApprovals,
+          activePlans: updatedPlans 
+        });
+
+        // 5. Complete full sync
         await get().syncSupabase();
       } catch (err: any) {
         console.error("Failed to update plan approval status securely:", err.message);
@@ -3432,38 +3490,39 @@ export const useStore = create<AgencyState>((set, get) => {
           ...plan
         };
 
-        const res = await secureFetch("/api/admin/active-plans", {
-          method: "POST",
-          body: JSON.stringify({ plan: fullPlan })
-        });
+        const { error } = await supabase
+          .from("active_plans")
+          .insert([fullPlan]);
+        if (error) throw error;
 
-        if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.error || "Failed to create active plan");
-        }
+        // Immediately update Zustand state locally
+        const updatedPlans = [fullPlan, ...get().activePlans];
+        set({ activePlans: updatedPlans });
+        saveStateToCache({ ...get(), activePlans: updatedPlans });
 
         await get().syncSupabase();
       } catch (err: any) {
-        console.error("Failed to insert active plan to Supabase securely:", err.message);
+        console.error("Failed to insert active plan to Supabase directly:", err.message);
         throw err;
       }
     },
 
     updateActivePlan: async (id, updates) => {
       try {
-        const res = await secureFetch("/api/admin/active-plans/update", {
-          method: "POST",
-          body: JSON.stringify({ id, updates })
-        });
+        const { error } = await supabase
+          .from("active_plans")
+          .update(updates)
+          .eq("id", id);
+        if (error) throw error;
 
-        if (!res.ok) {
-          const errData = await res.json();
-          throw new Error(errData.error || "Failed to update active plan");
-        }
+        // Immediately update Zustand state locally
+        const updatedPlans = get().activePlans.map(p => p.id === id ? { ...p, ...updates } : p);
+        set({ activePlans: updatedPlans });
+        saveStateToCache({ ...get(), activePlans: updatedPlans });
 
         await get().syncSupabase();
       } catch (err: any) {
-        console.error("Failed to update active plan secure API:", err.message);
+        console.error("Failed to update active plan directly:", err.message);
         throw err;
       }
     },
@@ -3471,22 +3530,21 @@ export const useStore = create<AgencyState>((set, get) => {
     deleteActivePlan: async (id) => {
       console.log("Attempting to delete active plan:", id);
       try {
-        const res = await secureFetch("/api/admin/active-plans/delete", {
-          method: "POST",
-          body: JSON.stringify({ id })
-        });
-        
-        const resData = await res.json();
-        console.log("Delete response:", resData);
+        const { error } = await supabase
+          .from("active_plans")
+          .delete()
+          .eq("id", id);
+        if (error) throw error;
 
-        if (!res.ok) {
-          throw new Error(resData.error || "Failed to delete active plan");
-        }
+        // Immediately update Zustand state locally
+        const updatedPlans = get().activePlans.filter(p => p.id !== id);
+        set({ activePlans: updatedPlans });
+        saveStateToCache({ ...get(), activePlans: updatedPlans });
 
         await get().syncSupabase();
         console.log("Active plans synced after deletion.");
       } catch (err: any) {
-        console.error("Failed to delete active plan secure API:", err.message);
+        console.error("Failed to delete active plan directly:", err.message);
         throw err;
       }
     },

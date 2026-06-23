@@ -56,11 +56,21 @@ export default function AdminActivePlans() {
   const clientsOnly = allUsers.filter(u => u.role === "client" || !u.role || u.role === "developer");
 
   const handleApprove = async (id: string) => {
-    await updatePlanApprovalStatus(id, "Approved");
+    try {
+      await updatePlanApprovalStatus(id, "Approved");
+      alert("Elevation request approved and activated successfully!");
+    } catch (err: any) {
+      alert("Error approving elevation: " + (err.message || err));
+    }
   };
 
   const handleDecline = async (id: string) => {
-    await updatePlanApprovalStatus(id, "Rejected");
+    try {
+      await updatePlanApprovalStatus(id, "Rejected");
+      alert("Elevation request has been rejected.");
+    } catch (err: any) {
+      alert("Error declining request: " + (err.message || err));
+    }
   };
 
   const openAddForm = () => {
