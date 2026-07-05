@@ -1348,10 +1348,16 @@ export default function TeamDashboard() {
                   );
                 }
 
-                const clientUsers = (allUsers as UserProfile[]).filter(u => u.role === "client" || u.id.startsWith("client-"));
-                const msgSenderClientIds = Array.from(new Set((messages as Message[]).map(m => m.sender_id))).filter(id => id.startsWith("client-") || id === "client-test" || id === "client-guest");
+                const clientUsers = (allUsers as UserProfile[]).filter(u => u.role === "client" || u.id.startsWith("client-") || u.id === "client-test" || u.id === "client-guest");
+                const msgSenderClientIds = Array.from(new Set((messages as Message[]).filter(m => m.sender_role === "client").map(m => m.sender_id)));
                 const clientIdsFromUsers = clientUsers.map(u => u.id);
-                const allClientIds = Array.from(new Set([...clientIdsFromUsers, ...msgSenderClientIds]));
+                const allClientIds = Array.from(new Set([...clientIdsFromUsers, ...msgSenderClientIds])).filter(clientId => {
+                  const u = (allUsers as UserProfile[]).find(usr => usr.id === clientId);
+                  if (u) {
+                    return u.role === "client";
+                  }
+                  return clientId !== "system-ai" && clientId !== "system-ai-expert" && clientId !== "admin-secret";
+                });
 
                 if (allClientIds.length === 0) {
                   allClientIds.push("client-test", "client-guest");

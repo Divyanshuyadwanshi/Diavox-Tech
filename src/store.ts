@@ -2728,8 +2728,7 @@ export const useStore = create<AgencyState>((set, get) => {
           created_at: newMessage.created_at,
           is_read: newMessage.is_read,
           file_url: file_url || null,
-          file_name: file_name || null,
-          is_image: is_image || false
+          file_name: file_name || null
         }]);
 
         if (error) {
