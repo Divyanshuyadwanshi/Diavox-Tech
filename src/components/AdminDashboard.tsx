@@ -30,7 +30,7 @@ import {
   Trash2, Plus, Edit2, Lock, Shield, UserCheck, AlertCircle, 
   MessageSquare, LockKeyhole, Mail, UserPlus, Star, Save, Tag, DollarSign, PlusCircle,
   History, CreditCard, Cpu, Layout, Eye, Download, Search, FileText, Filter,
-  ChevronUp, ChevronDown, GripVertical, EyeOff, Globe, Clock,
+  ChevronUp, ChevronDown, GripVertical, EyeOff, Globe, Clock, Upload,
   Facebook, Instagram, Linkedin, Twitter, Youtube, Github, HelpCircle, X, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight
 } from "lucide-react";
 import { TeamDepartment, UserRole, RequestStatus, UserProfile, Message, PricingOption, PricingTierObj } from "../types";
@@ -2890,10 +2890,36 @@ export default function AdminDashboard() {
                               <span className="text-[9px] font-mono opacity-50 mb-1">{m.sender_name} ({m.sender_role.replace("_", " ")})</span>
                               <div className={`p-3 rounded-xl text-xs leading-relaxed ${
                                 isRepByAdmin 
-                                  ? "bg-cyan-600 text-white" 
-                                  : "dark:bg-slate-900 bg-white border dark:border-slate-800 border-slate-200 text-slate-900 dark:text-white"
+                                  ? "bg-cyan-600 text-white shadow-md text-left" 
+                                  : "dark:bg-slate-900 bg-white border dark:border-slate-800 border-slate-200 text-slate-900 dark:text-white text-left"
                               }`}>
-                                {m.message_text}
+                                <div>{m.message_text}</div>
+                                {m.file_url && (
+                                  <div className="mt-2 pt-2 border-t border-white/10 dark:border-slate-800">
+                                    {(m.is_image || /\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/i.test(m.file_url)) ? (
+                                      <img 
+                                        src={m.file_url} 
+                                        alt={m.file_name || "Attachment"} 
+                                        className="max-w-xs max-h-48 rounded-lg object-cover border border-slate-700/50 shadow-sm"
+                                        referrerPolicy="no-referrer"
+                                      />
+                                    ) : (
+                                      <a 
+                                        href={m.file_url} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer" 
+                                        className={`flex items-center space-x-1.5 p-1.5 rounded text-[11px] font-mono transition-all max-w-xs border ${
+                                          isRepByAdmin
+                                            ? "bg-cyan-700 hover:bg-cyan-800 text-white border-cyan-500/30"
+                                            : "bg-slate-800 hover:bg-slate-850 text-cyan-400 border-slate-750"
+                                        }`}
+                                      >
+                                        <span className="shrink-0">📎</span>
+                                        <span className="truncate">{m.file_name || "Download Attachment"}</span>
+                                      </a>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           );
@@ -2904,7 +2930,42 @@ export default function AdminDashboard() {
                       </div>
 
                       {/* Reply form */}
-                      <form onSubmit={handleHelpdeskSend} className="p-3 bg-slate-80 bg-slate-100 dark:bg-slate-900 border-t dark:border-slate-950 border-slate-150 flex gap-2">
+                      <form onSubmit={handleHelpdeskSend} className="p-3 bg-slate-100 dark:bg-slate-900 border-t dark:border-slate-950 border-slate-150 flex gap-2">
+                        {/* Manual upload paperclip trigger */}
+                        <button 
+                          type="button"
+                          onClick={() => {
+                            const input = document.createElement("input");
+                            input.type = "file";
+                            input.onchange = async (e: any) => {
+                              const file = e.target.files[0];
+                              if (file) {
+                                try {
+                                  setDashAlert(`Uploading "${file.name}" to secure storage...`);
+                                  const path = `chats/${currentUser.id}/${Date.now()}_${file.name}`;
+                                  const publicUrl = await uploadFileToBucket("chat-files", path, file);
+                                  const isImg = file.type.startsWith("image/");
+                                  sendMessage(activeClient.id, `Sent attachment: ${file.name}`, publicUrl, file.name, isImg);
+                                  setDashAlert(`File "${file.name}" uploaded and shared with client.`);
+                                  setTimeout(() => setDashAlert(null), 3500);
+                                } catch (err: any) {
+                                  setDashAlert(`Upload failed: ${err.message || err}`);
+                                  setTimeout(() => setDashAlert(null), 5000);
+                                }
+                              }
+                            };
+                            input.click();
+                          }}
+                          className={`p-2.5 rounded-lg border text-xs font-bold transition-all flex items-center justify-center ${
+                            theme === "dark" 
+                              ? "bg-slate-950 border-slate-800 hover:bg-slate-850 text-slate-400 hover:text-white" 
+                              : "bg-white border-slate-200 hover:bg-slate-50 text-slate-600"
+                          }`}
+                          title="Upload attachment document"
+                        >
+                          <Upload size={14} />
+                        </button>
+
                         <input
                           type="text"
                           value={chatReplyMsg}

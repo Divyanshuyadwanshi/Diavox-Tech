@@ -1473,12 +1473,38 @@ export default function TeamDashboard() {
                                   <span className="text-[9px] font-mono opacity-40 mb-1">
                                     {isMe ? currentUser.name : msg.sender_name} ({msg.sender_role?.replace("_", " ") || "Client"})
                                   </span>
-                                  <div className={`p-3 rounded-xl text-xs leading-relaxed ${
+                                  <div className={`p-3 rounded-xl text-xs leading-relaxed text-left ${
                                     isMe 
                                       ? "bg-gradient-to-r from-purple-600 to-pink-650 text-white rounded-tr-none shadow" 
                                       : "bg-slate-900 border dark:border-slate-800 border-slate-250 text-slate-100 rounded-tl-none"
                                   }`}>
                                     <p>{msg.message_text}</p>
+                                    {msg.file_url && (
+                                      <div className="mt-2 pt-2 border-t border-white/10 dark:border-slate-800">
+                                        {(msg.is_image || /\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/i.test(msg.file_url)) ? (
+                                          <img 
+                                            src={msg.file_url} 
+                                            alt={msg.file_name || "Attachment"} 
+                                            className="max-w-xs max-h-48 rounded-lg object-cover border border-slate-700/50 shadow-sm"
+                                            referrerPolicy="no-referrer"
+                                          />
+                                        ) : (
+                                          <a 
+                                            href={msg.file_url} 
+                                            target="_blank" 
+                                            rel="noopener noreferrer" 
+                                            className={`flex items-center space-x-1.5 p-1.5 rounded text-[11px] font-mono transition-all max-w-xs border ${
+                                              isMe
+                                                ? "bg-purple-700 hover:bg-purple-800 text-white border-purple-500/30"
+                                                : "bg-slate-800 hover:bg-slate-855 text-cyan-400 border-slate-750"
+                                            }`}
+                                          >
+                                            <span className="shrink-0">📎</span>
+                                            <span className="truncate">{msg.file_name || "Download Attachment"}</span>
+                                          </a>
+                                        )}
+                                      </div>
+                                    )}
                                   </div>
                                   <span className="text-[8px] font-mono opacity-30 mt-0.5">
                                     {new Date(msg.created_at).toLocaleString()}
@@ -1491,6 +1517,41 @@ export default function TeamDashboard() {
 
                         {/* Message Input compose bar */}
                         <form onSubmit={handleTeamSend} className={`p-2.5 rounded-b-2xl border-x border-b ${theme === "dark" ? "bg-slate-900 border-slate-900" : "bg-slate-50 border-slate-200"} flex items-center space-x-2`}>
+                          {/* Manual upload paperclip trigger */}
+                          <button 
+                            type="button"
+                            onClick={() => {
+                              const input = document.createElement("input");
+                              input.type = "file";
+                              input.onchange = async (e: any) => {
+                                const file = e.target.files[0];
+                                if (file) {
+                                  try {
+                                    setSuccessText(`Uploading "${file.name}" to secure storage...`);
+                                    const path = `chats/${currentUser.id}/${Date.now()}_${file.name}`;
+                                    const publicUrl = await uploadFileToBucket("chat-files", path, file);
+                                    const isImg = file.type.startsWith("image/");
+                                    sendMessage(activeClient.id, `Sent attachment: ${file.name}`, publicUrl, file.name, isImg);
+                                    setSuccessText(`File "${file.name}" uploaded and shared with client.`);
+                                    setTimeout(() => setSuccessText(null), 3500);
+                                  } catch (err: any) {
+                                    setSuccessText(`Upload failed: ${err.message || err}`);
+                                    setTimeout(() => setSuccessText(null), 5000);
+                                  }
+                                }
+                              };
+                              input.click();
+                            }}
+                            className={`p-2.5 rounded-xl border text-xs font-bold transition-all flex items-center justify-center ${
+                              theme === "dark" 
+                                ? "bg-slate-950 border-slate-800 hover:bg-slate-850 text-slate-400 hover:text-white" 
+                                : "bg-white border-slate-200 hover:bg-slate-50 text-slate-600"
+                            }`}
+                            title="Upload attachment document"
+                          >
+                            <Upload size={14} />
+                          </button>
+
                           <input
                             type="text"
                             value={chatReplyMsg}

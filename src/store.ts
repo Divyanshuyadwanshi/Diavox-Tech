@@ -2883,7 +2883,7 @@ export const useStore = create<AgencyState>((set, get) => {
     },
     
     // Notifications & Alert rules
-    addNotification: (userId, title, content) => {
+    addNotification: async (userId, title, content) => {
       const newNotif: Notification = {
         id: "not-" + Math.random().toString(36).substring(4),
         user_id: userId,
@@ -2892,12 +2892,19 @@ export const useStore = create<AgencyState>((set, get) => {
         is_read: false,
         created_at: new Date().toISOString()
       };
+      
+      try {
+        await supabase.from("notifications").insert([newNotif]);
+      } catch (err) {
+        console.warn("Failed to persist notification to database:", err);
+      }
+
       const updatedNotifs = [newNotif, ...get().notifications];
       set({ notifications: updatedNotifs });
       saveStateToCache({ ...get(), notifications: updatedNotifs });
     },
     
-    markNotificationsRead: (userId) => {
+    markNotificationsRead: async (userId) => {
       const updatedNotifs = get().notifications.map(n => 
         (n.user_id === userId || n.user_id === "all_admins" || n.user_id === "all_team") 
           ? { ...n, is_read: true } 
@@ -2905,6 +2912,15 @@ export const useStore = create<AgencyState>((set, get) => {
       );
       set({ notifications: updatedNotifs });
       saveStateToCache({ ...get(), notifications: updatedNotifs });
+
+      try {
+        await supabase
+          .from("notifications")
+          .update({ is_read: true })
+          .in("user_id", [userId, "all_admins", "all_team"]);
+      } catch (err) {
+        console.warn("Failed to mark notifications read in database:", err);
+      }
     },
 
     // Additional dynamic portfolio & pricing management actions
@@ -3449,12 +3465,14 @@ export const useStore = create<AgencyState>((set, get) => {
     },
 
     sendPrivateMessage: async (senderId, senderName, recipientId, text, file_url, file_name, is_image) => {
+      const persistenceText = text + (file_url ? `\n\n📎 Attachment: [${file_name || "File"}](${file_url})` : "");
+
       const newMsg: PrivateMessage = {
         id: "pm-" + Math.random().toString(36).substring(4),
         sender_id: senderId,
         sender_name: senderName,
         recipient_id: recipientId,
-        message_text: text,
+        message_text: persistenceText,
         created_at: new Date().toISOString(),
         file_url,
         file_name,
@@ -3468,10 +3486,8 @@ export const useStore = create<AgencyState>((set, get) => {
           sender_name: newMsg.sender_name,
           recipient_id: newMsg.recipient_id,
           message_text: newMsg.message_text,
-          created_at: newMsg.created_at,
-          file_url: newMsg.file_url || null,
-          file_name: newMsg.file_name || null,
-          is_image: newMsg.is_image || false
+          created_at: newMsg.created_at
+          // Exclude file_url, file_name, is_image to prevent column missing errors in private_messages
         });
         if (error) {
           console.error("[STORE] Failed to persist private message to Supabase DB:", error);
