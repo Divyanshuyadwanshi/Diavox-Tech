@@ -17,7 +17,7 @@ import { TeamDepartment, UserRole, RequestStatus, UserProfile, Message } from ".
 export default function TeamDashboard() {
   const { 
     theme, currentUser, projects, requests, updateProjectProgress, sendMessage, messages, allUsers,
-    quoteReplies, quoteAttachments, quoteStatusHistory, submitQuoteReply, updateQuoteStatusDetail
+    quoteReplies, quoteAttachments, quoteStatusHistory, submitQuoteReply, updateQuoteStatusDetail, markClientMessagesRead
   } = useStore();
   const [activeProject, setActiveProject] = useState<string>("proj-3");
   const [progressVal, setProgressVal] = useState<number>(68);
@@ -37,6 +37,12 @@ export default function TeamDashboard() {
 
   const [selectedClientId, setSelectedClientId] = useState<string>("client-test");
   const [chatReplyMsg, setChatReplyMsg] = useState<string>("Hello, we are processing your request.");
+
+  useEffect(() => {
+    if (selectedClientId) {
+      markClientMessagesRead(selectedClientId);
+    }
+  }, [selectedClientId, messages.length, markClientMessagesRead]);
 
   // Team profile states
   const [profileName, setProfileName] = useState<string>(currentUser?.name || "");
@@ -1430,7 +1436,25 @@ export default function TeamDashboard() {
                                   className="w-7 h-7 rounded-full bg-slate-950 shrink-0"
                                 />
                                 <div className="min-w-0 flex-1 leading-tight">
-                                  <p className="text-xs font-bold font-sans truncate">{client.name}</p>
+                                  {(() => {
+                                    const clientUnreadCount = (messages as Message[]).filter(m => 
+                                      m.sender_role === "client" && 
+                                      m.sender_id === client.id && 
+                                      (m.recipient_id === "team" || m.recipient_id === currentUser?.id) && 
+                                      !m.is_read
+                                    ).length;
+
+                                    return (
+                                      <div className="flex items-center justify-between">
+                                        <p className="text-xs font-bold font-sans truncate">{client.name}</p>
+                                        {clientUnreadCount > 0 && (
+                                          <span className="bg-purple-500 text-slate-950 text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full shrink-0 ml-1.5">
+                                            {clientUnreadCount}
+                                          </span>
+                                        )}
+                                      </div>
+                                    );
+                                  })()}
                                   <p className="text-[9px] font-mono opacity-50 truncate mt-0.5">{client.email}</p>
                                   <p className="text-[10px] opacity-75 truncate mt-2 font-mono italic">
                                     {clientLastMsg ? `"${clientLastMsg.message_text}"` : "No message logs yet"}

@@ -92,6 +92,7 @@ interface AgencyState {
   
   // Chat / Messages
   sendMessage: (recipientId: string, text: string, file_url?: string, file_name?: string, is_image?: boolean) => void;
+  markClientMessagesRead: (clientId: string) => Promise<void>;
   
   // Notifications
   addNotification: (userId: string, title: string, content: string) => void;
@@ -2570,6 +2571,16 @@ export const useStore = create<AgencyState>((set, get) => {
             created_at: new Date().toISOString()
           }]);
         }
+
+        // Trigger notification to the client
+        const targetProj = get().projects.find(p => p.id === projectId);
+        if (targetProj && targetProj.client_id) {
+          await get().addNotification(
+            targetProj.client_id,
+            "Project Progress Update",
+            `Your project "${targetProj.title}" progress has been updated to ${progress}%. ${updateText ? `Details: ${updateText}` : ""}`
+          );
+        }
       } catch (err) {
         console.warn("Failed to commit project progress inside Supabase:", err);
       }
@@ -2602,6 +2613,16 @@ export const useStore = create<AgencyState>((set, get) => {
         throw new Error(error.message || "Failed to save contract in database.");
       }
 
+      // Trigger notification to the client if not a guest
+      const resolvedClientId = (newContract.client_id === "client-guest" || !newContract.client_id) ? null : newContract.client_id;
+      if (resolvedClientId) {
+        await get().addNotification(
+          resolvedClientId,
+          "New Contract Sent",
+          `A new contract is ready for your signature: "${newContract.project_title}".`
+        );
+      }
+
       const updatedContracts = [newContract, ...get().contracts];
       set({ contracts: updatedContracts });
       saveStateToCache({ contracts: updatedContracts });
@@ -2616,6 +2637,16 @@ export const useStore = create<AgencyState>((set, get) => {
 
       try {
         await supabase.from("contracts").update({ status: "Signed" }).eq("id", contractId);
+
+        // Trigger notification to admin/team
+        const contract = get().contracts.find(c => c.id === contractId);
+        if (contract) {
+          await get().addNotification(
+            "all_admins",
+            "Contract Signed",
+            `Contract "${contract.project_title}" has been signed by the client.`
+          );
+        }
       } catch (err) {
         console.warn("Failed to sign contract in Supabase:", err);
       }
@@ -2650,17 +2681,6 @@ export const useStore = create<AgencyState>((set, get) => {
       set({ activePlans: nextPlans, metrics: updatedMetrics });
       saveStateToCache({ activePlans: nextPlans, metrics: updatedMetrics });
       
-      const purchaseNotif: Notification = {
-        id: "not-" + Math.random().toString(36).substring(4),
-        user_id: user.id,
-        title: "Plan Activated",
-        content: `Your subscription to Diavox ${planName} Plan is now registered successfully!`,
-        is_read: false,
-        created_at: new Date().toISOString()
-      };
-      
-      set({ notifications: [purchaseNotif, ...get().notifications] });
-
       try {
         await supabase.from("active_plans").insert([{
           id: activeP.id,
@@ -2671,7 +2691,20 @@ export const useStore = create<AgencyState>((set, get) => {
           billing_cycle: activeP.billing_cycle,
           start_date: activeP.start_date
         }]);
-        await supabase.from("notifications").insert([purchaseNotif]);
+
+        // Insert notification for client using addNotification which handles Supabase + state
+        await get().addNotification(
+          user.id,
+          "Plan Activated",
+          `Your subscription to Diavox ${planName} Plan is now registered successfully!`
+        );
+
+        // Insert notification for admin/team
+        await get().addNotification(
+          "all_admins",
+          "Client Purchased Plan",
+          `Client ${user.name} has purchased the ${planName} plan.`
+        );
       } catch (err) {
         console.warn("Failed to activate plan subscription row in Supabase:", err);
       }
@@ -2734,6 +2767,11 @@ export const useStore = create<AgencyState>((set, get) => {
         if (error) {
           console.error("Database INSERT failed for primary message:", error);
           throw new Error(error.message || "Failed to save message in Supabase.");
+        }
+
+        // If admin/team member replies to client, clear unread count for that client
+        if (user.role !== "client") {
+          await get().markClientMessagesRead(recipientId);
         }
 
         // Create notification on successful database write!
@@ -2879,6 +2917,27 @@ export const useStore = create<AgencyState>((set, get) => {
       } catch (err: any) {
         console.error("Failed to post chat message in Supabase:", err.message);
         throw err;
+      }
+    },
+
+    markClientMessagesRead: async (clientId) => {
+      const updatedMessages = get().messages.map(m => 
+        (m.sender_role === "client" && m.sender_id === clientId && !m.is_read)
+          ? { ...m, is_read: true }
+          : m
+      );
+      set({ messages: updatedMessages });
+      saveStateToCache({ ...get(), messages: updatedMessages });
+
+      try {
+        await supabase
+          .from("messages")
+          .update({ is_read: true })
+          .eq("sender_id", clientId)
+          .eq("sender_role", "client")
+          .eq("is_read", false);
+      } catch (err) {
+        console.warn("Failed to mark client messages read in database:", err);
       }
     },
     
@@ -3089,6 +3148,16 @@ export const useStore = create<AgencyState>((set, get) => {
         const updated = [newInvoice, ...get().invoices];
         set({ invoices: updated });
         saveStateToCache({ ...get(), invoices: updated });
+
+        // Trigger notification to the client
+        if (newInvoice.client_id) {
+          await get().addNotification(
+            newInvoice.client_id,
+            "New Invoice Issued",
+            `Invoice ${newInvoice.invoice_number} has been issued for ${newInvoice.amount}. Due date: ${newInvoice.due_date}.`
+          );
+        }
+
         await get().syncSupabase();
       } catch (err: any) {
         console.error("[SECURE API ERROR] Failed to insert invoice:", err.message);
@@ -3109,6 +3178,28 @@ export const useStore = create<AgencyState>((set, get) => {
         const updated = get().invoices.map(inv => inv.id === id ? { ...inv, status } : inv);
         set({ invoices: updated });
         saveStateToCache({ ...get(), invoices: updated });
+
+        // Trigger notifications
+        const invoice = get().invoices.find(inv => inv.id === id);
+        if (invoice) {
+          // Notify client of status change
+          if (invoice.client_id) {
+            await get().addNotification(
+              invoice.client_id,
+              "Invoice Updated",
+              `Invoice ${invoice.invoice_number} is now marked as ${status.toUpperCase()}.`
+            );
+          }
+          // If invoice is paid, also notify admin/team
+          if (status === "paid") {
+            await get().addNotification(
+              "all_admins",
+              "Invoice Paid",
+              `Client ${invoice.client_name} paid Invoice ${invoice.invoice_number} of ${invoice.amount}.`
+            );
+          }
+        }
+
         await get().syncSupabase();
       } catch (err: any) {
         console.error("[SECURE API ERROR] Failed to update invoice status:", err.message);
@@ -3670,6 +3761,13 @@ export const useStore = create<AgencyState>((set, get) => {
         const updated = [newApproval, ...get().planApprovals];
         set({ planApprovals: updated });
         saveStateToCache({ ...get(), planApprovals: updated });
+
+        // Trigger notification to admin/team
+        await get().addNotification(
+          "all_admins",
+          "New Plan Request",
+          `Client ${clientName} requested approval for the ${planName} plan.`
+        );
       } catch (err: any) {
         console.error("[SUPABASE ERROR] Failed to submit plan request:", err.message);
         throw err;
@@ -3764,6 +3862,15 @@ export const useStore = create<AgencyState>((set, get) => {
           planApprovals: updatedApprovals,
           activePlans: updatedPlans 
         });
+
+        // Trigger notification to client
+        if (target.client_id) {
+          await get().addNotification(
+            target.client_id,
+            "Plan Request Update",
+            `Your request for the ${target.plan_name} plan has been ${status.toLowerCase()}.`
+          );
+        }
 
         // 5. Complete full sync
         await get().syncSupabase();

@@ -785,6 +785,17 @@ CREATE POLICY "Audit Logs restricted select" ON public.audit_logs FOR SELECT USI
   public.is_admin(auth.uid()::text)
 );
 
+-- Notifications system policies
+DROP POLICY IF EXISTS "Notifications Scope Access" ON public.notifications;
+CREATE POLICY "Notifications Scope Access" ON public.notifications FOR ALL USING (
+  public.is_staff(auth.uid()::text)
+  OR user_id = auth.uid()::text
+  OR user_id = 'all_clients'
+  OR user_id = 'all_admins'
+  OR user_id = 'all_team'
+);
+
+
 --------------------------------------------------------------------------------
 -- 15. PROVISION BUCKETS AND FILES SYSTEM IN STORAGE SCHEMAS
 --------------------------------------------------------------------------------
