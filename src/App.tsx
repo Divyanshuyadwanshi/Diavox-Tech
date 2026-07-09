@@ -11,6 +11,7 @@ import Hero from "./components/Hero";
 import Services from "./components/Services";
 import Portfolio from "./components/Portfolio";
 import Team from "./components/Team";
+import SEO from "./components/SEO";
 import Pricing from "./components/Pricing";
 import Blog from "./components/Blog";
 import Reviews from "./components/Reviews";
@@ -101,8 +102,65 @@ const sectionToPath: Record<string, string> = {
   "about-page": "/about",
   "blog-page": "/blog",
 };
+
+const pageSeo: Record<string, { title: string; description: string; path: string }> = {
+  hero: {
+    title: "Diavox Tech | Web Development, AI Automation & SEO Services",
+    description:
+      "Diavox Tech builds fast websites, custom web apps, AI automation systems, business templates, UI/UX designs, and SEO-ready digital solutions.",
+    path: "/",
+  },
+  "services-page": {
+    title: "Services | Web Development, AI Automation, UI/UX & SEO | Diavox Tech",
+    description:
+      "Explore Diavox Tech services including web development, AI automation, business templates, UI/UX design, and search engine optimization.",
+    path: "/services",
+  },
+  "pricing-page": {
+    title: "Pricing | Diavox Tech",
+    description:
+      "View Diavox Tech pricing for websites, business software, automation systems, UI/UX design, and SEO services.",
+    path: "/pricing",
+  },
+  "portfolio-page": {
+    title: "Portfolio | Diavox Tech",
+    description:
+      "Explore Diavox Tech projects, websites, dashboards, automation tools, and custom software work.",
+    path: "/portfolio",
+  },
+  "blog-page": {
+    title: "Blog | Web Development, AI Automation & SEO Insights | Diavox Tech",
+    description:
+      "Read Diavox Tech articles about web development, AI automation, SEO, UI/UX design, business growth, and digital systems.",
+    path: "/blog",
+  },
+  "reviews-page": {
+    title: "Client Reviews | Diavox Tech",
+    description:
+      "Read client reviews for Diavox Tech web development, automation, design, and SEO services.",
+    path: "/reviews",
+  },
+  "contact-page": {
+    title: "Contact Diavox Tech | Start Your Project",
+    description:
+      "Contact Diavox Tech to discuss websites, web apps, AI automation, business templates, UI/UX design, and SEO services.",
+    path: "/contact",
+  },
+  "about-page": {
+    title: "About Diavox Tech | Digital Systems & Automation Company",
+    description:
+      "Learn about Diavox Tech, a digital systems company building websites, AI automation, dashboards, and business software.",
+    path: "/about",
+  },
+  "team-page": {
+    title: "Team | Diavox Tech",
+    description:
+      "Meet the Diavox Tech team behind web development, AI automation, UI/UX design, SEO, and custom digital systems.",
+    path: "/team",
+  },
+};
 export default function App() {
-  const { theme, currentUser, syncSupabase, cmsContent, socialMediaLinks, isCmsLoaded, isCmsFresh } = useStore();
+  const { theme, currentUser, syncSupabase, cmsContent, socialMediaLinks, isCmsLoaded, isCmsFresh, blogs } = useStore();
   const [activeSection, setActiveSection] = useState<string>(() => {
   if (window.location.pathname.startsWith("/blog/")) {
     return "blog-page";
@@ -323,6 +381,24 @@ useEffect(() => {
         </section>
       ));
   };
+  const blogSlug = window.location.pathname.startsWith("/blog/")
+    ? window.location.pathname.replace("/blog/", "").replace(/\/$/, "")
+    : "";
+
+  const activeBlogSeo = blogSlug
+    ? blogs.find((blog: any) => blog.slug === blogSlug)
+    : null;
+
+  const seo: { title: string; description: string; path: string; image?: string } = activeBlogSeo
+    ? {
+        title: `${activeBlogSeo.title} | Diavox Tech`,
+        description: (activeBlogSeo.content || "")
+          .replace(/\s+/g, " ")
+          .slice(0, 155),
+        path: `/blog/${activeBlogSeo.slug}`,
+        image: activeBlogSeo.image_url || "https://www.diavoxtech.in/og-image.png",
+      }
+    : pageSeo[activeSection] || pageSeo.hero;
 
   if (!isCmsLoaded) {
     return (
@@ -343,7 +419,10 @@ useEffect(() => {
   }
 
   return (
-    <div className={`min-h-screen flex flex-col font-sans transition-colors duration-300 ${
+    <>
+      <SEO title={seo.title} description={seo.description} path={seo.path} image={seo.image} />
+
+      <div className={`min-h-screen flex flex-col font-sans transition-colors duration-300 ${
       theme === "dark" ? "bg-slate-950 text-white" : "bg-white text-slate-900"
     }`}>
       
@@ -808,6 +887,7 @@ useEffect(() => {
         }}
       />
 
-    </div>
+      </div>
+    </>
   );
 }
