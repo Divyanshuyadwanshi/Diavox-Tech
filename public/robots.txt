@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+
+Disallow: /admin
+Disallow: /admin-dash
+Disallow: /client-dash
+Disallow: /team-dash
+Disallow: /api/
+
+Sitemap: https://www.diavoxtech.in/sitemap.xml
