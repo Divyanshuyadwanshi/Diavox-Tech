@@ -5,6 +5,7 @@
     { "source": "/portfolio", "destination": "/" },
     { "source": "/reviews", "destination": "/" },
     { "source": "/blog", "destination": "/" },
+    { "source": "/blog/:slug", "destination": "/" }
     { "source": "/contact", "destination": "/" },
     { "source": "/about", "destination": "/" },
     { "source": "/team", "destination": "/" }
