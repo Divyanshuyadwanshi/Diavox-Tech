@@ -56,8 +56,13 @@ export default function Hero({ onNavigate, onOpenAuth }: HeroProps) {
 
   const currentSlide = slides[currentSlideIndex] || {
     id: "default",
-    title: cmsContent?.heroTitle || "Aesthetic Modern Digital Systems",
-    subtitle: cmsContent?.heroSubtitle || "Empowering brands through precision engineering and design.",
+    title:
+    cmsContent?.heroTitle ||
+    "Web Development, AI Automation & SEO Services for Growing Businesses",
+
+   subtitle:
+    cmsContent?.heroSubtitle ||
+    "Diavox Tech builds fast websites, custom web apps, AI automation systems, business templates, UI/UX designs, and SEO-ready digital solutions for modern businesses.",
     buttonText: cmsContent?.heroCtaPrimaryText || "Initialize Request",
     buttonLink: "#services",
     status: true,
