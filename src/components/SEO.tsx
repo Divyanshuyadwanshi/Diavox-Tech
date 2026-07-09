@@ -5,6 +5,7 @@ interface SEOProps {
   description: string;
   path?: string;
   image?: string;
+  jsonLd?: object;
 }
 
 const SITE_URL = "https://www.diavoxtech.in";
@@ -15,6 +16,7 @@ export default function SEO({
   description,
   path = "/",
   image = DEFAULT_IMAGE,
+  jsonLd,
 }: SEOProps) {
   useEffect(() => {
     const canonicalUrl = `${SITE_URL}${path}`;
@@ -53,7 +55,20 @@ export default function SEO({
     setMeta('meta[name="twitter:title"]', "content", title);
     setMeta('meta[name="twitter:description"]', "content", description);
     setMeta('meta[name="twitter:image"]', "content", image);
-  }, [title, description, path, image]);
+
+    const existingJsonLd = document.getElementById("dynamic-jsonld");
+    if (existingJsonLd) {
+      existingJsonLd.remove();
+    }
+
+    if (jsonLd) {
+      const script = document.createElement("script");
+      script.id = "dynamic-jsonld";
+      script.type = "application/ld+json";
+      script.textContent = JSON.stringify(jsonLd);
+      document.head.appendChild(script);
+    }
+  }, [title, description, path, image, jsonLd]);
 
   return null;
 }
