@@ -78,6 +78,44 @@
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" href="/favicon.ico" />
 
+    <!-- Structured Data: Organization + Website -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": "https://www.diavoxtech.in/#organization",
+      "name": "Diavox Tech",
+      "url": "https://www.diavoxtech.in/",
+      "logo": "https://www.diavoxtech.in/og-image.png",
+      "description": "Diavox Tech delivers professional web development, AI solutions, SaaS platforms, automation, mobile apps, dashboards, ERP systems, CRM solutions, UI/UX design, and custom business software."
+    },
+    {
+      "@type": "WebSite",
+      "@id": "https://www.diavoxtech.in/#website",
+      "url": "https://www.diavoxtech.in/",
+      "name": "Diavox Tech",
+      "publisher": {
+        "@id": "https://www.diavoxtech.in/#organization"
+      }
+    },
+    {
+      "@type": "WebPage",
+      "@id": "https://www.diavoxtech.in/#webpage",
+      "url": "https://www.diavoxtech.in/",
+      "name": "Diavox Tech | Web Development, AI Solutions & Business Software",
+      "isPartOf": {
+        "@id": "https://www.diavoxtech.in/#website"
+      },
+      "about": {
+        "@id": "https://www.diavoxtech.in/#organization"
+      }
+    }
+  ]
+}
+</script>
+
     <!-- Razorpay -->
     <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
   </head>
