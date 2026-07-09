@@ -1479,10 +1479,10 @@ export default function AdminDashboard() {
                     </defs>
                   </svg>
                   <div className="absolute bottom-1 left-2 right-2 flex justify-between text-[8px] font-mono opacity-55">
-                    <span>Q1: $18K</span>
-                    <span>Q2: $26K</span>
-                    <span>Q3: $32K</span>
-                    <span>Q4: $54.9K</span>
+                    <span>Q1: {getCurrencySymbol(defCurrency)}18K</span>
+                    <span>Q2: {getCurrencySymbol(defCurrency)}26K</span>
+                    <span>Q3: {getCurrencySymbol(defCurrency)}32K</span>
+                    <span>Q4: {getCurrencySymbol(defCurrency)}54.9K</span>
                   </div>
                 </div>
               </div>
@@ -3258,7 +3258,7 @@ export default function AdminDashboard() {
                         due_date: invDueDate,
                         status: "unpaid"
                       });
-                      addActivityLog(currentUser.id, `Created dynamic client invoice ${invNum}`, "", `Amount: $${invAmount}, Tax: $${taxVal}`);
+                      addActivityLog(currentUser.id, `Created dynamic client invoice ${invNum}`, "", `Amount: ${formatAmount(invAmount, defCurrency)}, Tax: ${formatAmount(taxVal, defCurrency)}`);
                       setDashAlert(`Invoice ${invNum} generated successfully and synced.`);
                       setInvNum("DX-2026-" + Math.floor(Math.random() * 900 + 100));
                     } catch (err: any) {
@@ -3367,12 +3367,12 @@ export default function AdminDashboard() {
                       <div key={mile.id} className="p-4 bg-slate-950/40 rounded-xl border dark:border-slate-850 space-y-3 font-sans text-xs">
                         <div className="flex justify-between font-bold border-b dark:border-slate-800 pb-2">
                           <span className="text-slate-200">{mile.project_title}</span>
-                          <span className="font-mono text-cyan-400">${mile.total_budget.toLocaleString()}</span>
+                          <span className="font-mono text-cyan-400">{formatAmount(mile.total_budget, defCurrency)}</span>
                         </div>
                         <div className="grid grid-cols-3 gap-2 leading-tight">
                           <div className={`p-2 rounded-lg text-center ${mile.advance_paid ? "bg-emerald-950/30 border border-emerald-500/20" : "bg-slate-900/40 border dark:border-slate-800"}`}>
                             <p className="text-[10px] font-mono opacity-50">Advance (30%)</p>
-                            <p className="font-mono text-xs font-bold mt-1 text-slate-200">${mile.advance_amount}</p>
+                            <p className="font-mono text-xs font-bold mt-1 text-slate-200">{formatAmount(mile.advance_amount, defCurrency)}</p>
                             <button
                               onClick={() => {
                                 if (mile.advance_paid) return;
@@ -3388,7 +3388,7 @@ export default function AdminDashboard() {
                           </div>
                           <div className={`p-2 rounded-lg text-center ${mile.midway_paid ? "bg-emerald-950/30 border border-emerald-500/20" : "bg-slate-900/40 border dark:border-slate-800"}`}>
                             <p className="text-[10px] font-mono opacity-50">Midway (40%)</p>
-                            <p className="font-mono text-xs font-bold mt-1 text-slate-200">${mile.midway_amount}</p>
+                            <p className="font-mono text-xs font-bold mt-1 text-slate-200">{formatAmount(mile.midway_amount, defCurrency)}</p>
                             <button
                               onClick={() => {
                                 if (mile.midway_paid) return;
@@ -3404,7 +3404,7 @@ export default function AdminDashboard() {
                           </div>
                           <div className={`p-2 rounded-lg text-center ${mile.final_paid ? "bg-emerald-950/30 border border-emerald-500/20" : "bg-slate-900/40 border dark:border-slate-800"}`}>
                             <p className="text-[10px] font-mono opacity-50">Final (30%)</p>
-                            <p className="font-mono text-xs font-bold mt-1 text-slate-200">${mile.final_amount}</p>
+                            <p className="font-mono text-xs font-bold mt-1 text-slate-200">{formatAmount(mile.final_amount, defCurrency)}</p>
                             <button
                               onClick={() => {
                                 if (mile.final_paid) return;

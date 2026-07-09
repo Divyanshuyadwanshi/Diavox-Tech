@@ -42,8 +42,43 @@ const getSocialIcon = (iconName: string) => {
   }
 };
 
+const LandingSkeleton = () => {
+  return (
+    <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 space-y-24 animate-pulse text-left">
+      {/* Hero Skeleton */}
+      <div className="space-y-8 max-w-4xl pt-8">
+        <div className="h-4 bg-slate-850 dark:bg-slate-200/10 rounded w-1/4" />
+        <div className="h-16 bg-slate-850 dark:bg-slate-200/10 rounded w-11/12" />
+        <div className="h-16 bg-slate-850 dark:bg-slate-200/10 rounded w-3/4" />
+        <div className="h-24 bg-slate-850 dark:bg-slate-200/10 rounded w-full" />
+        <div className="flex space-x-4 pt-4">
+          <div className="h-12 bg-slate-850 dark:bg-slate-200/10 rounded-xl w-40" />
+          <div className="h-12 bg-slate-850 dark:bg-slate-200/10 rounded-xl w-40" />
+        </div>
+      </div>
+
+      {/* Services Grid Skeleton */}
+      <div className="space-y-12 pt-12 border-t border-slate-800/20 dark:border-slate-800/60">
+        <div className="space-y-4">
+          <div className="h-4 bg-slate-850 dark:bg-slate-200/10 rounded w-1/6" />
+          <div className="h-10 bg-slate-850 dark:bg-slate-200/10 rounded w-1/3" />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="p-8 rounded-2xl border border-slate-800/10 dark:border-slate-800/40 space-y-6">
+              <div className="w-12 h-12 rounded-xl bg-slate-850 dark:bg-slate-200/10" />
+              <div className="h-8 bg-slate-850 dark:bg-slate-200/10 rounded w-2/3" />
+              <div className="h-20 bg-slate-850 dark:bg-slate-200/10 rounded w-full" />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function App() {
-  const { theme, currentUser, syncSupabase, cmsContent, socialMediaLinks } = useStore();
+  const { theme, currentUser, syncSupabase, cmsContent, socialMediaLinks, isCmsLoaded, isCmsFresh } = useStore();
   const [activeSection, setActiveSection] = useState<string>("hero");
   const [authModalOpen, setAuthModalOpen] = useState<boolean>(false);
   const [showScrollTop, setShowScrollTop] = useState<boolean>(false);
@@ -238,6 +273,24 @@ export default function App() {
       ));
   };
 
+  if (!isCmsLoaded) {
+    return (
+      <div className={`min-h-screen flex flex-col items-center justify-center font-sans ${
+        theme === "dark" ? "bg-slate-950 text-white" : "bg-white text-slate-900"
+      }`}>
+        <div className="space-y-4 text-center">
+          <div className="relative w-12 h-12 mx-auto">
+            <div className="absolute inset-0 rounded-full border border-cyan-500/10 animate-ping" />
+            <div className="absolute inset-0 rounded-full border-2 border-t-cyan-500 border-r-cyan-500 border-b-cyan-550/10 border-l-cyan-550/10 animate-spin" />
+          </div>
+          <p className="text-xs font-mono uppercase tracking-widest text-slate-500 animate-pulse">
+            Establishing Secured Portals...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`min-h-screen flex flex-col font-sans transition-colors duration-300 ${
       theme === "dark" ? "bg-slate-950 text-white" : "bg-white text-slate-900"
@@ -276,6 +329,8 @@ export default function App() {
             {activeSection === "team-dash" && <TeamDashboard />}
 
           </div>
+        ) : !isCmsFresh ? (
+          <LandingSkeleton />
         ) : [
           "services-page", 
           "pricing-page", 

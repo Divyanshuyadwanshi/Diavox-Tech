@@ -5,6 +5,7 @@
 
 import { create } from "zustand";
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from "./supabase";
+import { formatAmount, getCurrencySymbol } from "./utils/currency";
 import { 
   UserProfile, Project, ServiceRequest, ClientReview, Blog, Message, 
   Notification, Contract, ActivePlan, AgencyMetrics, UserRole, RequestStatus, TeamDepartment,
@@ -111,6 +112,8 @@ interface AgencyState {
   payments: PaymentHistoryItem[];
   aiKnowledge: AiKnowledgeItem[];
   cmsContent: CmsContent;
+  isCmsLoaded: boolean;
+  isCmsFresh: boolean;
   milestones: MilestonePayment[];
   webhookLogs: any[];
 
@@ -565,7 +568,8 @@ const saveStateToCache = (state: Partial<AgencyState>) => {
     const existing = loadSavedState();
     const cacheData = {
       currentUser: state.currentUser !== undefined ? state.currentUser : existing.currentUser,
-      theme: state.theme !== undefined ? state.theme : existing.theme
+      theme: state.theme !== undefined ? state.theme : existing.theme,
+      cmsContent: state.cmsContent !== undefined ? state.cmsContent : existing.cmsContent
     };
     localStorage.setItem("diavox_cached_state", JSON.stringify(cacheData));
   } catch (err) {
@@ -588,6 +592,8 @@ const mapDbReviewToClientReview = (row: any): ClientReview => {
     date: row.date || new Date().toISOString().split("T")[0]
   };
 };
+
+let isSyncingSupabase = false;
 
 export const useStore = create<AgencyState>((set, get) => {
   const cached = loadSavedState();
@@ -812,8 +818,11 @@ export const useStore = create<AgencyState>((set, get) => {
         phone: "+1 (800) 555-3210",
         supportEmail: "support@diavox.com",
         businessHours: "Mon - Fri: 9:00 AM - 6:00 PM (GMT-5)"
-      }
+      },
+      ...cached.cmsContent
     },
+    isCmsLoaded: !!(cached && cached.cmsContent),
+    isCmsFresh: false,
     milestones: [],
     webhookLogs: [],
 
@@ -918,320 +927,47 @@ export const useStore = create<AgencyState>((set, get) => {
     },
     
     syncSupabase: async () => {
-      // 1. Resolve and synchronize active Supabase Auth session on mount / synckey
-      try {
-        const currentLocalUser = get().currentUser;
-        if (currentLocalUser && currentLocalUser.id === "admin-secret") {
-          // Skip remote Supabase fetch for local/bypass account to avoid UUID type errors
-          console.log("[STORE] Bypass Supabase profile check for admin-secret session sync.");
-        } else {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session && session.user) {
-            if (!currentLocalUser || currentLocalUser.id !== session.user.id) {
-              const { data: dbProf } = await supabase.from("profiles").select("*").eq("id", session.user.id).maybeSingle();
-              if (dbProf) {
-                const synchronizedUser: UserProfile = {
-                  id: dbProf.id,
-                  email: dbProf.email,
-                  name: dbProf.name,
-                  role: dbProf.role as UserRole,
-                  department: dbProf.department as TeamDepartment,
-                  avatar_url: dbProf.avatar_url,
-                  username: dbProf.username,
-                  permissions: dbProf.skills || dbProf.permissions || [],
-                  status: dbProf.status
-                };
-                set({ currentUser: synchronizedUser });
-                saveStateToCache({ currentUser: synchronizedUser });
-              }
-            }
-          }
-        }
-      } catch (sessionErr) {
-        console.warn("Session auto-discovery warning:", sessionErr);
+      if (isSyncingSupabase) {
+        console.log("[STORE] Supabase sync is already in progress, skipping duplicate call.");
+        return;
       }
+      isSyncingSupabase = true;
 
       try {
-        // Fetch Profiles via Secure API to bypass RLS issues
-        let profilesList: any[] = [];
+        // 1. Resolve and synchronize active Supabase Auth session on mount / synckey
         try {
-          const res = await secureFetch("/api/admin/profiles");
-          if (res.ok) {
-            const data = await res.json();
-            profilesList = data.profiles;
+          const currentLocalUser = get().currentUser;
+          if (currentLocalUser && currentLocalUser.id === "admin-secret") {
+            // Skip remote Supabase fetch for local/bypass account to avoid UUID type errors
+            console.log("[STORE] Bypass Supabase profile check for admin-secret session sync.");
           } else {
-            // Fallback to direct supabase if API fails
-            const { data: profiles } = await supabase.from("profiles").select("*");
-            const { data: teamMembers } = await supabase.from("team_members").select("*");
-            if (profiles) {
-              profilesList = profiles.map(p => {
-                const matchedTeamMember = (teamMembers || []).find(t => String(p.id).trim().toLowerCase() === String(t.profile_id).trim().toLowerCase());
-                return {
-                  ...p,
-                  ...(matchedTeamMember || {})
-                };
-              });
-            } else {
-              profilesList = [];
-            }
-          }
-        } catch (fetchErr) {
-          const { data: profiles } = await supabase.from("profiles").select("*");
-          const { data: teamMembers } = await supabase.from("team_members").select("*");
-          if (profiles) {
-            profilesList = profiles.map(p => {
-              const matchedTeamMember = (teamMembers || []).find(t => String(p.id).trim().toLowerCase() === String(t.profile_id).trim().toLowerCase());
-              return {
-                ...p,
-                ...(matchedTeamMember || {})
-              };
-            });
-          } else {
-            profilesList = [];
-          }
-        }
-
-        if (profilesList.length > 0) {
-          const currentRole = get().currentUser?.role || "client";
-          const roleValues: Record<string, number> = {
-            secret_admin: 5,
-            primary_admin: 4,
-            secondary_admin: 3,
-            third_admin: 2,
-            team_member: 1,
-            developer: 1,
-            client: 0
-          };
-          const currentVal = roleValues[currentRole] || 0;
-          
-          let filtered = profilesList;
-          const currentId = get().currentUser?.id;
-          
-          const isStaffAndNotSecretAdmin = (r: string) => ["primary_admin", "secondary_admin", "third_admin", "team_member", "developer"].includes(r);
-          const isStaff = (r: string) => ["secret_admin", "primary_admin", "secondary_admin", "third_admin", "team_member", "developer"].includes(r);
-          const isAdmin = (r: string) => ["secret_admin", "primary_admin", "secondary_admin", "third_admin"].includes(r);
-
-          filtered = profilesList.filter(p => {
-            const pRole = p.role || "client";
-
-            // Anyone can view their own profile
-            if (currentId && p.id === currentId) return true;
-
-            // Secret Admin is visible ONLY to Secret Admin and Primary Admin
-            if (pRole === "secret_admin") {
-              return currentRole === "secret_admin" || currentRole === "primary_admin";
-            }
-
-            // Public visitors (no currentId or no currentRole) can see public team profiles (staff except secret_admin)
-            if (!currentId || !currentRole) {
-              return isStaffAndNotSecretAdmin(pRole);
-            }
-
-            // Clients can see team members and admins (staff except secret_admin), but not other clients
-            if (currentRole === "client") {
-              return isStaffAndNotSecretAdmin(pRole);
-            }
-
-            // Team members / developers can see admins and team members (staff profiles, except secret_admin)
-            if (["team_member", "developer"].includes(currentRole)) {
-              return isStaffAndNotSecretAdmin(pRole);
-            }
-
-            // Primary Admins and Secret Admins can see everyone
-            if (currentRole === "primary_admin" || currentRole === "secret_admin") {
-              return true;
-            }
-
-            // Other admin roles (secondary_admin, third_admin) can see staff & clients
-            if (["secondary_admin", "third_admin"].includes(currentRole)) {
-              return pRole !== "secret_admin";
-            }
-
-            return false;
-          });
-          
-          set({ allUsers: filtered });
-        }
-
-        // Fetch Projects
-        const { data: projectsList } = await supabase.from("projects").select("*");
-        if (projectsList) {
-          set({ projects: projectsList as Project[] });
-        }
-
-        // Fetch Project Progress
-        const { data: updatesList } = await supabase.from("project_progress").select("*").order("created_at", { ascending: true });
-        if (updatesList) {
-          const grouped: { [projectId: string]: any[] } = {};
-          updatesList.forEach(u => {
-            if (!grouped[u.project_id]) {
-              grouped[u.project_id] = [];
-            }
-            grouped[u.project_id].push({
-              id: u.id,
-              author_name: u.author_name || "Specialist",
-              update_text: u.update_text,
-              file_url: u.file_url,
-              file_name: u.file_name,
-              created_at: u.created_at
-            });
-          });
-          set({ projectUpdates: grouped });
-        }
-
-        // Fetch Quote Requests (Mapped to requests state)
-        const { data: requestsList } = await supabase.from("quote_requests").select("*");
-        if (requestsList) {
-          set({ requests: requestsList as ServiceRequest[] });
-        }
-
-        // Fetch Contracts
-        const { data: contractsList } = await supabase.from("contracts").select("*");
-        if (contractsList) {
-          set({ contracts: contractsList as Contract[] });
-        }
-
-        // Fetch Active Plans
-        const { data: activePlansList } = await supabase.from("active_plans").select("*");
-        if (activePlansList) {
-          set({ activePlans: activePlansList as ActivePlan[] });
-        }
-
-        // Fetch Invoices
-        const { data: invoicesList } = await supabase.from("invoices").select("*");
-        if (invoicesList) {
-          set({ invoices: invoicesList as Invoice[] });
-        }
-
-        // Fetch Payment History
-        const { data: paymentsList } = await supabase.from("payment_history").select("*");
-        if (paymentsList) {
-          set({ payments: paymentsList as PaymentHistoryItem[] });
-        }
-
-        // Fetch Reviews
-        const { data: revList } = await supabase.from("reviews").select("*");
-        if (revList) {
-          const mappedReviews: ClientReview[] = revList.map((row: any) => ({
-            id: row.id,
-            client_id: row.client_id || "",
-            client_name: row.client_name || row.name || "Anonymous",
-            client_avatar: row.client_avatar || row.avatar_url || "",
-            rating: row.rating || 5,
-            review_text: row.review_text || "",
-            service_used: row.service_used || row.role || "Website Development",
-            status: row.status || "Pending",
-            is_featured: row.featured !== undefined ? row.featured : (row.is_featured || false),
-            reply_text: row.admin_reply || row.reply_text || "",
-            date: row.date || new Date().toISOString().split("T")[0]
-          }));
-          set({ reviews: mappedReviews });
-        }
-
-        // Fetch Blogs directly from the database first
-        try {
-          const { data: blogsList, error: blogsErr } = await supabase.from("blogs").select("*");
-          if (!blogsErr && blogsList) {
-            set({ blogs: blogsList as Blog[] });
-          } else {
-            const blogsRes = await secureFetch("/api/blogs");
-            if (blogsRes.ok) {
-              const blogsData = await blogsRes.json().catch(() => null);
-              if (blogsData && blogsData.blogs) {
-                set({ blogs: blogsData.blogs as Blog[] });
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session && session.user) {
+              if (!currentLocalUser || currentLocalUser.id !== session.user.id) {
+                const { data: dbProf } = await supabase.from("profiles").select("*").eq("id", session.user.id).maybeSingle();
+                if (dbProf) {
+                  const synchronizedUser: UserProfile = {
+                    id: dbProf.id,
+                    email: dbProf.email,
+                    name: dbProf.name,
+                    role: dbProf.role as UserRole,
+                    department: dbProf.department as TeamDepartment,
+                    avatar_url: dbProf.avatar_url,
+                    username: dbProf.username,
+                    permissions: dbProf.skills || dbProf.permissions || [],
+                    status: dbProf.status
+                  };
+                  set({ currentUser: synchronizedUser });
+                  saveStateToCache({ currentUser: synchronizedUser });
+                }
               }
             }
           }
-        } catch (e) {
-          console.warn("Failed to fetch blogs:", e);
+        } catch (sessionErr) {
+          console.warn("Session auto-discovery warning:", sessionErr);
         }
 
-        // Fetch Messages with Zero-Trust permission checks
-        const currentUserObj = get().currentUser || cached?.currentUser;
-        const isTeamUser = currentUserObj && currentUserObj.role === "team_member";
-        const hasChatPermission = !isTeamUser || (currentUserObj?.permissions?.includes("contact_clients") === true);
-
-        if (hasChatPermission) {
-          const { data: messagesList } = await supabase.from("messages").select("*").order("created_at", { ascending: true });
-          if (messagesList) {
-            set({ messages: messagesList as Message[] });
-          }
-        } else {
-          set({ messages: [] });
-        }
-
-        // Fetch Team Groups
-        const { data: teamGroupsList } = await supabase.from("team_groups").select("*");
-        if (teamGroupsList) {
-          set({ teamGroups: teamGroupsList as TeamGroup[] });
-        }
-
-        // Fetch Team Messages
-        const { data: teamMessagesList } = await supabase.from("team_messages").select("*").order("created_at", { ascending: true });
-        if (teamMessagesList) {
-          const mappedTeamMessages = teamMessagesList.map((m: any) => ({
-            ...m,
-            message_text: m.text // map 'text' database column to 'message_text' frontend property
-          }));
-          set({ teamMessages: mappedTeamMessages as TeamMessage[] });
-        }
-
-        // Fetch Private Messages
-        const { data: privateMessagesList } = await supabase.from("private_messages").select("*").order("created_at", { ascending: true });
-        if (privateMessagesList) {
-          set({ privateMessages: privateMessagesList as PrivateMessage[] });
-        }
-
-        // Fetch Quote Replies and Attachments
-        try {
-          const { data: repliesList } = await supabase.from("quote_replies").select("*").order("created_at", { ascending: true });
-          if (repliesList) {
-            const { data: attachmentsList } = await supabase.from("quote_attachments").select("*");
-            const quoteAtts = attachmentsList || [];
-            const mappedReplies = (repliesList as QuoteReply[]).map(reply => ({
-              ...reply,
-              attachments: quoteAtts.filter(att => att.reply_id === reply.id)
-            }));
-            set({ 
-              quoteReplies: mappedReplies,
-              quoteAttachments: quoteAtts
-            });
-          }
-        } catch (errQuote) {
-          console.warn("Failed to retrieve quote replies and attachments on load:", errQuote);
-        }
-
-        // Fetch AI Training files
-        const { data: trainingFiles } = await supabase.from("ai_training_files").select("*");
-        if (trainingFiles) {
-          set({ aiTrainingFiles: trainingFiles as AiTrainingFile[] });
-        }
-
-        // Fetch Plan Approvals
-        const { data: planApprovalsList } = await supabase.from("plan_approvals").select("*");
-        if (planApprovalsList) {
-          set({ planApprovals: planApprovalsList as PlanApproval[] });
-        }
-
-        // Social links and CMS config fallback (direct table row is primary)
-        try {
-          // Fetch CMS securely first, with silent JSON parse error resilience
-          const cmsRes = await secureFetch("/api/cms");
-          if (cmsRes.ok) {
-            const cmsData = await cmsRes.json().catch(() => null);
-            if (cmsData && cmsData.cms) {
-              set(state => ({
-                cmsContent: {
-                  ...state.cmsContent,
-                  ...cmsData.cms
-                }
-              }));
-            }
-          }
-        } catch (err) {
-          console.warn("[ZERO TRUST] CMS secure API fetch warning:", err);
-        }
-
+        // 2. Fetch CMS & Social Links (essential for everyone)
         const { data: linksList, error: fetchError } = await supabase.from("social_media_links").select("*").order("display_order", { ascending: true });
         if (linksList && linksList.length > 0) {
           const cmsConfigRow = linksList.find(l => l.id === "cms_app_state");
@@ -1272,7 +1008,66 @@ export const useStore = create<AgencyState>((set, get) => {
           }
         }
 
-        // Portfolio items with enterprise schema field mapping
+        // CMS is fully fetched now. Update cache and isCmsLoaded state
+        set({ isCmsLoaded: true, isCmsFresh: true });
+        saveStateToCache({ cmsContent: get().cmsContent });
+
+        // 3. Fetch public-facing items (Profiles for Team block, Portfolio, Blogs, Reviews, Pricing)
+        // Fetch Profiles via Secure API to bypass RLS issues
+        let profilesList: any[] = [];
+        try {
+          const res = await secureFetch("/api/admin/profiles");
+          if (res.ok) {
+            const data = await res.json();
+            profilesList = data.profiles;
+          } else {
+            const { data: profiles } = await supabase.from("profiles").select("*");
+            const { data: teamMembers } = await supabase.from("team_members").select("*");
+            if (profiles) {
+              profilesList = profiles.map(p => {
+                const matchedTeamMember = (teamMembers || []).find(t => String(p.id).trim().toLowerCase() === String(t.profile_id).trim().toLowerCase());
+                return { ...p, ...(matchedTeamMember || {}) };
+              });
+            }
+          }
+        } catch (fetchErr) {
+          const { data: profiles } = await supabase.from("profiles").select("*");
+          const { data: teamMembers } = await supabase.from("team_members").select("*");
+          if (profiles) {
+            profilesList = profiles.map(p => {
+              const matchedTeamMember = (teamMembers || []).find(t => String(p.id).trim().toLowerCase() === String(t.profile_id).trim().toLowerCase());
+              return { ...p, ...(matchedTeamMember || {}) };
+            });
+          }
+        }
+
+        if (profilesList.length > 0) {
+          const currentRole = get().currentUser?.role || "client";
+          const roleValues: Record<string, number> = {
+            secret_admin: 5, primary_admin: 4, secondary_admin: 3, third_admin: 2, team_member: 1, developer: 1, client: 0
+          };
+          let filtered = profilesList;
+          const currentId = get().currentUser?.id;
+          const isStaffAndNotSecretAdmin = (r: string) => ["primary_admin", "secondary_admin", "third_admin", "team_member", "developer"].includes(r);
+          filtered = profilesList.filter(p => {
+            const pRole = p.role || "client";
+            if (currentId && p.id === currentId) return true;
+            if (pRole === "secret_admin") {
+              return currentRole === "secret_admin" || currentRole === "primary_admin";
+            }
+            if (!currentId || !currentRole || currentRole === "client" || ["team_member", "developer"].includes(currentRole)) {
+              return isStaffAndNotSecretAdmin(pRole);
+            }
+            if (currentRole === "primary_admin" || currentRole === "secret_admin") return true;
+            if (["secondary_admin", "third_admin"].includes(currentRole)) {
+              return pRole !== "secret_admin";
+            }
+            return false;
+          });
+          set({ allUsers: filtered });
+        }
+
+        // Fetch Portfolio
         const { data: portfolioItemsList } = await supabase.from("portfolio_items").select("*");
         if (portfolioItemsList) {
           const mapped = portfolioItemsList.map((item: any) => ({
@@ -1289,25 +1084,44 @@ export const useStore = create<AgencyState>((set, get) => {
           set({ portfolioItems: mapped as PortfolioItem[] });
         }
 
-        // Notifications
-        const { data: notifList } = await supabase.from("notifications").select("*").order("created_at", { ascending: false });
-        if (notifList) {
-          set({ notifications: notifList as Notification[] });
+        // Fetch Reviews
+        const { data: revList } = await supabase.from("reviews").select("*");
+        if (revList) {
+          const mappedReviews: ClientReview[] = revList.map((row: any) => ({
+            id: row.id,
+            client_id: row.client_id || "",
+            client_name: row.client_name || row.name || "Anonymous",
+            client_avatar: row.client_avatar || row.avatar_url || "",
+            rating: row.rating || 5,
+            review_text: row.review_text || "",
+            service_used: row.service_used || row.role || "Website Development",
+            status: row.status || "Pending",
+            is_featured: row.featured !== undefined ? row.featured : (row.is_featured || false),
+            reply_text: row.admin_reply || row.reply_text || "",
+            date: row.date || new Date().toISOString().split("T")[0]
+          }));
+          set({ reviews: mappedReviews });
         }
 
-        // Activity Logs
-        const { data: activityLogsList } = await supabase.from("activity_logs").select("*").order("timestamp", { ascending: false });
-        if (activityLogsList) {
-          set({ activityLogs: activityLogsList as ActivityLog[] });
+        // Fetch Blogs
+        try {
+          const { data: blogsList, error: blogsErr } = await supabase.from("blogs").select("*");
+          if (!blogsErr && blogsList) {
+            set({ blogs: blogsList as Blog[] });
+          } else {
+            const blogsRes = await secureFetch("/api/blogs");
+            if (blogsRes.ok) {
+              const blogsData = await blogsRes.json().catch(() => null);
+              if (blogsData && blogsData.blogs) {
+                set({ blogs: blogsData.blogs as Blog[] });
+              }
+            }
+          }
+        } catch (e) {
+          console.warn("Failed to fetch blogs:", e);
         }
 
-        // AI Knowledge
-        const { data: aiKnowledgeList } = await supabase.from("ai_knowledge").select("*");
-        if (aiKnowledgeList) {
-          set({ aiKnowledge: aiKnowledgeList as AiKnowledgeItem[] });
-        }
-
-        // Fetch Pricing Options directly from database first, with secure legacy fallback
+        // Fetch Pricing Options
         try {
           const { data: pricingList, error: pricingErr } = await supabase.from("pricing_options").select("*");
           if (!pricingErr && pricingList && pricingList.length > 0) {
@@ -1325,82 +1139,182 @@ export const useStore = create<AgencyState>((set, get) => {
           console.warn("[ZERO TRUST] Failed to sync pricing:", e);
         }
 
-        // Fetch Help Center Articles
-        try {
-          const { data: artList } = await supabase.from("knowledge_base").select("*").order("created_at", { ascending: false });
-          if (artList) {
-            set({ knowledgeArticles: artList as KnowledgeArticle[] });
+        // 4. Conditional Dashboard/Private queries for logged-in sessions only!
+        const currentUserObj = get().currentUser;
+        if (currentUserObj) {
+          // Fetch Projects
+          const { data: projectsList } = await supabase.from("projects").select("*");
+          if (projectsList) {
+            set({ projects: projectsList as Project[] });
           }
-        } catch (e) {
-          console.warn("Bypass knowledge_base sync:", e);
-        }
 
-        // Fetch Help Center Categories
-        try {
-          const { data: catList } = await supabase.from("knowledge_categories").select("*");
-          if (catList) {
-            set({ knowledgeCategories: catList as KnowledgeCategory[] });
+          // Fetch Project Progress
+          const { data: updatesList } = await supabase.from("project_progress").select("*").order("created_at", { ascending: true });
+          if (updatesList) {
+            const grouped: { [projectId: string]: any[] } = {};
+            updatesList.forEach(u => {
+              if (!grouped[u.project_id]) grouped[u.project_id] = [];
+              grouped[u.project_id].push({
+                id: u.id,
+                author_name: u.author_name || "Specialist",
+                update_text: u.update_text,
+                file_url: u.file_url,
+                file_name: u.file_name,
+                created_at: u.created_at
+              });
+            });
+            set({ projectUpdates: grouped });
           }
-        } catch (e) {
-          console.warn("Bypass knowledge_categories sync:", e);
-        }
 
-        // Fetch Help Center Tags
-        try {
-          const { data: tagList } = await supabase.from("knowledge_tags").select("*");
-          if (tagList) {
-            set({ knowledgeTags: tagList as KnowledgeTag[] });
+          // Fetch Quote Requests
+          const { data: requestsList } = await supabase.from("quote_requests").select("*");
+          if (requestsList) {
+            set({ requests: requestsList as ServiceRequest[] });
           }
-        } catch (e) {
-          console.warn("Bypass knowledge_tags sync:", e);
-        }
 
-        // Fetch Saved Articles
-        try {
-          const { data: savedList } = await supabase.from("saved_articles").select("*");
-          if (savedList) {
-            set({ savedArticles: savedList as SavedArticle[] });
+          // Fetch Contracts
+          const { data: contractsList } = await supabase.from("contracts").select("*");
+          if (contractsList) {
+            set({ contracts: contractsList as Contract[] });
           }
-        } catch (e) {
-          console.warn("Bypass saved_articles sync:", e);
-        }
 
-        // Fetch Timeline Events
-        try {
-          const { data: timelineList } = await supabase.from("timeline_events").select("*").order("created_at", { ascending: false });
-          if (timelineList) {
-            set({ timelineEvents: timelineList as TimelineEvent[] });
+          // Fetch Active Plans
+          const { data: activePlansList } = await supabase.from("active_plans").select("*");
+          if (activePlansList) {
+            set({ activePlans: activePlansList as ActivePlan[] });
           }
-        } catch (e) {
-          console.warn("Bypass timeline_events sync:", e);
-        }
 
-        // Fetch User Activities
-        try {
-          const { data: userActList } = await supabase.from("user_activities").select("*").order("created_at", { ascending: false });
-          if (userActList) {
-            set({ userActivities: userActList as UserActivity[] });
+          // Fetch Invoices
+          const { data: invoicesList } = await supabase.from("invoices").select("*");
+          if (invoicesList) {
+            set({ invoices: invoicesList as Invoice[] });
           }
-        } catch (e) {
-          console.warn("Bypass user_activities sync:", e);
+
+          // Fetch Payment History
+          const { data: paymentsList } = await supabase.from("payment_history").select("*");
+          if (paymentsList) {
+            set({ payments: paymentsList as PaymentHistoryItem[] });
+          }
+
+          // Fetch Messages (with permission check)
+          const isTeamUser = currentUserObj.role === "team_member";
+          const hasChatPermission = !isTeamUser || (currentUserObj.permissions?.includes("contact_clients") === true);
+          if (hasChatPermission) {
+            const { data: messagesList } = await supabase.from("messages").select("*").order("created_at", { ascending: true });
+            if (messagesList) {
+              set({ messages: messagesList as Message[] });
+            }
+          } else {
+            set({ messages: [] });
+          }
+
+          // Fetch Team Groups
+          const { data: teamGroupsList } = await supabase.from("team_groups").select("*");
+          if (teamGroupsList) {
+            set({ teamGroups: teamGroupsList as TeamGroup[] });
+          }
+
+          // Fetch Team Messages
+          const { data: teamMessagesList } = await supabase.from("team_messages").select("*").order("created_at", { ascending: true });
+          if (teamMessagesList) {
+            const mappedTeamMessages = teamMessagesList.map((m: any) => ({
+              ...m,
+              message_text: m.text
+            }));
+            set({ teamMessages: mappedTeamMessages as TeamMessage[] });
+          }
+
+          // Fetch Private Messages
+          const { data: privateMessagesList } = await supabase.from("private_messages").select("*").order("created_at", { ascending: true });
+          if (privateMessagesList) {
+            set({ privateMessages: privateMessagesList as PrivateMessage[] });
+          }
+
+          // Fetch Quote Replies and Attachments
+          try {
+            const { data: repliesList } = await supabase.from("quote_replies").select("*").order("created_at", { ascending: true });
+            if (repliesList) {
+              const { data: attachmentsList } = await supabase.from("quote_attachments").select("*");
+              const quoteAtts = attachmentsList || [];
+              const mappedReplies = (repliesList as QuoteReply[]).map(reply => ({
+                ...reply,
+                attachments: quoteAtts.filter(att => att.reply_id === reply.id)
+              }));
+              set({ quoteReplies: mappedReplies, quoteAttachments: quoteAtts });
+            }
+          } catch (errQuote) {
+            console.warn("Failed to retrieve quote replies and attachments:", errQuote);
+          }
+
+          // Fetch AI Training Files
+          const { data: trainingFiles } = await supabase.from("ai_training_files").select("*");
+          if (trainingFiles) {
+            set({ aiTrainingFiles: trainingFiles as AiTrainingFile[] });
+          }
+
+          // Fetch Plan Approvals
+          const { data: planApprovalsList } = await supabase.from("plan_approvals").select("*");
+          if (planApprovalsList) {
+            set({ planApprovals: planApprovalsList as PlanApproval[] });
+          }
+
+          // Fetch Notifications
+          const { data: notifList } = await supabase.from("notifications").select("*").order("created_at", { ascending: false });
+          if (notifList) {
+            set({ notifications: notifList as Notification[] });
+          }
+
+          // Fetch Activity Logs
+          const { data: activityLogsList } = await supabase.from("activity_logs").select("*").order("timestamp", { ascending: false });
+          if (activityLogsList) {
+            set({ activityLogs: activityLogsList as ActivityLog[] });
+          }
+
+          // Fetch AI Knowledge
+          const { data: aiKnowledgeList } = await supabase.from("ai_knowledge").select("*");
+          if (aiKnowledgeList) {
+            set({ aiKnowledge: aiKnowledgeList as AiKnowledgeItem[] });
+          }
+
+          // Fetch Help Center Articles
+          try {
+            const { data: artList } = await supabase.from("knowledge_base").select("*").order("created_at", { ascending: false });
+            if (artList) set({ knowledgeArticles: artList as KnowledgeArticle[] });
+          } catch (e) {}
+
+          // Fetch Help Center Categories
+          try {
+            const { data: catList } = await supabase.from("knowledge_categories").select("*");
+            if (catList) set({ knowledgeCategories: catList as KnowledgeCategory[] });
+          } catch (e) {}
+
+          // Fetch Help Center Tags
+          try {
+            const { data: tagList } = await supabase.from("knowledge_tags").select("*");
+            if (tagList) set({ knowledgeTags: tagList as KnowledgeTag[] });
+          } catch (e) {}
+
+          // Fetch Saved Articles
+          try {
+            const { data: savedList } = await supabase.from("saved_articles").select("*");
+            if (savedList) set({ savedArticles: savedList as SavedArticle[] });
+          } catch (e) {}
+
+          // Fetch Timeline Events
+          try {
+            const { data: timelineList } = await supabase.from("timeline_events").select("*").order("created_at", { ascending: false });
+            if (timelineList) set({ timelineEvents: timelineList as TimelineEvent[] });
+          } catch (e) {}
+
+          // Fetch User Activities
+          try {
+            const { data: userActList } = await supabase.from("user_activities").select("*").order("created_at", { ascending: false });
+            if (userActList) set({ userActivities: userActList as UserActivity[] });
+          } catch (e) {}
         }
 
-        // Realtime Subscription for instant timeline updates
-        try {
-          supabase
-            .channel("public-timeline-sync")
-            .on("postgres_changes", { event: "INSERT", schema: "public", table: "timeline_events" }, (payload) => {
-              const newEv = payload.new as TimelineEvent;
-              if (newEv && !get().timelineEvents.some(x => x.id === newEv.id)) {
-                set(state => ({ timelineEvents: [newEv, ...state.timelineEvents] }));
-              }
-            })
-            .subscribe();
-        } catch (err) {
-          console.warn("Unable to initiate Realtime subscription feed:", err);
-        }
-
-        // Realtime Subscription for instant CMS changes
+        // 5. Setup Public and Conditional Private Realtime Subscriptions
+        // Public subscriptions
         try {
           supabase
             .channel("cms-state-sync")
@@ -1411,10 +1325,7 @@ export const useStore = create<AgencyState>((set, get) => {
                   const parsed = JSON.parse(row.url);
                   if (parsed) {
                     set(state => ({
-                      cmsContent: {
-                        ...state.cmsContent,
-                        ...parsed
-                      }
+                      cmsContent: { ...state.cmsContent, ...parsed }
                     }));
                   }
                 } catch (e) {
@@ -1425,22 +1336,18 @@ export const useStore = create<AgencyState>((set, get) => {
             .subscribe();
         } catch (e) {}
 
-        // Realtime Subscription for instant pricing alterations
         try {
           supabase
             .channel("pricing-options-sync")
             .on("postgres_changes", { event: "*", schema: "public", table: "pricing_options" }, async () => {
               try {
                 const { data, error } = await supabase.from("pricing_options").select("*");
-                if (!error && data) {
-                  set({ pricingOptions: data as PricingOption[] });
-                }
+                if (!error && data) set({ pricingOptions: data as PricingOption[] });
               } catch (err) {}
             })
             .subscribe();
         } catch (e) {}
 
-        // Realtime Subscription for instant portfolio adjustments
         try {
           supabase
             .channel("portfolio-items-sync")
@@ -1466,202 +1373,206 @@ export const useStore = create<AgencyState>((set, get) => {
             .subscribe();
         } catch (e) {}
 
-        // Realtime Subscription for instant blog updates
         try {
           supabase
             .channel("blogs-sync")
             .on("postgres_changes", { event: "*", schema: "public", table: "blogs" }, async () => {
               try {
                 const { data, error } = await supabase.from("blogs").select("*");
-                if (!error && data) {
-                  set({ blogs: data as Blog[] });
-                }
+                if (!error && data) set({ blogs: data as Blog[] });
               } catch (err) {}
             })
             .subscribe();
         } catch (e) {}
 
-        // Realtime Subscription for instant active plans updates
-        try {
-          supabase
-            .channel("active-plans-sync")
-            .on("postgres_changes", { event: "*", schema: "public", table: "active_plans" }, async () => {
-              try {
-                const { data } = await supabase.from("active_plans").select("*");
-                if (data) {
-                  set({ activePlans: data as ActivePlan[] });
+        // Private subscriptions for logged-in sessions only
+        if (currentUserObj) {
+          try {
+            supabase
+              .channel("public-timeline-sync")
+              .on("postgres_changes", { event: "INSERT", schema: "public", table: "timeline_events" }, (payload) => {
+                const newEv = payload.new as TimelineEvent;
+                if (newEv && !get().timelineEvents.some(x => x.id === newEv.id)) {
+                  set(state => ({ timelineEvents: [newEv, ...state.timelineEvents] }));
                 }
-              } catch (err) {}
-            })
-            .subscribe();
-        } catch (e) {}
+              })
+              .subscribe();
+          } catch (err) {}
 
-        // Realtime Subscription for instant reviews updates
-        try {
-          supabase
-            .channel("reviews-sync")
-            .on("postgres_changes", { event: "*", schema: "public", table: "reviews" }, async () => {
-              try {
-                const { data: revList } = await supabase.from("reviews").select("*");
-                if (revList) {
-                  const mappedReviews: ClientReview[] = revList.map((row: any) => ({
-                    id: row.id,
-                    client_id: row.client_id || "",
-                    client_name: row.client_name || row.name || "Anonymous",
-                    client_avatar: row.client_avatar || row.avatar_url || "",
-                    rating: row.rating || 5,
-                    review_text: row.review_text || "",
-                    service_used: row.service_used || row.role || "Website Development",
-                    status: row.status || "Pending",
-                    is_featured: row.featured !== undefined ? row.featured : (row.is_featured || false),
-                    reply_text: row.admin_reply || row.reply_text || "",
-                    date: row.date || new Date().toISOString().split("T")[0]
-                  }));
-                  set({ reviews: mappedReviews });
-                }
-              } catch (err) {}
-            })
-            .subscribe();
-        } catch (e) {}
+          try {
+            supabase
+              .channel("active-plans-sync")
+              .on("postgres_changes", { event: "*", schema: "public", table: "active_plans" }, async () => {
+                try {
+                  const { data } = await supabase.from("active_plans").select("*");
+                  if (data) set({ activePlans: data as ActivePlan[] });
+                } catch (err) {}
+              })
+              .subscribe();
+          } catch (e) {}
 
-        // Realtime Subscription for instant quote requests updates
-        try {
-          supabase
-            .channel("quote-requests-sync")
-            .on("postgres_changes", { event: "*", schema: "public", table: "quote_requests" }, async () => {
-              try {
-                const { data: requestsList } = await supabase.from("quote_requests").select("*");
-                if (requestsList) {
-                  const sorted = (requestsList as ServiceRequest[]).sort((a, b) => {
-                    return new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime();
-                  });
-                  set({ requests: sorted });
-                }
-              } catch (err) {}
-            })
-            .subscribe();
-        } catch (e) {}
+          try {
+            supabase
+              .channel("reviews-sync")
+              .on("postgres_changes", { event: "*", schema: "public", table: "reviews" }, async () => {
+                try {
+                  const { data: revList } = await supabase.from("reviews").select("*");
+                  if (revList) {
+                    const mappedReviews: ClientReview[] = revList.map((row: any) => ({
+                      id: row.id,
+                      client_id: row.client_id || "",
+                      client_name: row.client_name || row.name || "Anonymous",
+                      client_avatar: row.client_avatar || row.avatar_url || "",
+                      rating: row.rating || 5,
+                      review_text: row.review_text || "",
+                      service_used: row.service_used || row.role || "Website Development",
+                      status: row.status || "Pending",
+                      is_featured: row.featured !== undefined ? row.featured : (row.is_featured || false),
+                      reply_text: row.admin_reply || row.reply_text || "",
+                      date: row.date || new Date().toISOString().split("T")[0]
+                    }));
+                    set({ reviews: mappedReviews });
+                  }
+                } catch (err) {}
+              })
+              .subscribe();
+          } catch (e) {}
 
-        // Realtime Subscription for instant chat messages updates
-        try {
-          supabase
-            .channel("messages-realtime")
-            .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
-              const newMsg = payload.new as Message;
-              if (newMsg) {
-                if (!get().messages.some(x => x.id === newMsg.id)) {
-                  set(state => ({ messages: [...state.messages, newMsg] }));
-                }
-              }
-            })
-            .subscribe();
-        } catch (e) {}
-
-        // Realtime Subscription for team channels / project groups
-        try {
-          supabase
-            .channel("team-messages-realtime")
-            .on("postgres_changes", { event: "INSERT", schema: "public", table: "team_messages" }, (payload) => {
-              const newMsg = payload.new as any;
-              if (newMsg) {
-                const mappedMsg: TeamMessage = {
-                  id: newMsg.id,
-                  group_id: newMsg.group_id,
-                  sender_id: newMsg.sender_id,
-                  sender_name: newMsg.sender_name,
-                  sender_role: newMsg.sender_role,
-                  message_text: newMsg.text, // Database column 'text' mapped to frontend 'message_text'
-                  file_url: newMsg.file_url,
-                  file_name: newMsg.file_name,
-                  is_image: newMsg.is_image,
-                  created_at: newMsg.created_at
-                };
-                if (!get().teamMessages.some(x => x.id === mappedMsg.id)) {
-                  set(state => ({ teamMessages: [...state.teamMessages, mappedMsg] }));
-                }
-              }
-            })
-            .subscribe();
-        } catch (e) {}
-
-        // Realtime Subscription for private direct team messages
-        try {
-          supabase
-            .channel("private-messages-realtime")
-            .on("postgres_changes", { event: "INSERT", schema: "public", table: "private_messages" }, (payload) => {
-              const newMsg = payload.new as PrivateMessage;
-              if (newMsg) {
-                if (!get().privateMessages.some(x => x.id === newMsg.id)) {
-                  set(state => ({ privateMessages: [...state.privateMessages, newMsg] }));
-                }
-              }
-            })
-            .subscribe();
-        } catch (e) {}
-
-        // Realtime Subscription for quote replies
-        try {
-          supabase
-            .channel("quote-replies-realtime")
-            .on("postgres_changes", { event: "INSERT", schema: "public", table: "quote_replies" }, (payload) => {
-              const newReply = payload.new as QuoteReply;
-              if (newReply) {
-                if (!get().quoteReplies.some(x => x.id === newReply.id)) {
-                  const replyWithAtts: QuoteReply = {
-                    ...newReply,
-                    attachments: get().quoteAttachments.filter(att => att.reply_id === newReply.id)
-                  };
-                  set(state => ({ quoteReplies: [...state.quoteReplies, replyWithAtts] }));
-                }
-              }
-            })
-            .subscribe();
-        } catch (e) {}
-
-        // Realtime Subscription for quote attachments
-        try {
-          supabase
-            .channel("quote-attachments-realtime")
-            .on("postgres_changes", { event: "INSERT", schema: "public", table: "quote_attachments" }, (payload) => {
-              const newAtt = payload.new as QuoteAttachment;
-              if (newAtt) {
-                if (!get().quoteAttachments.some(x => x.id === newAtt.id)) {
-                  set(state => {
-                    const nextAtts = [...state.quoteAttachments, newAtt];
-                    const nextReplies = state.quoteReplies.map(reply => {
-                      if (reply.id === newAtt.reply_id) {
-                        const replyAtts = reply.attachments || [];
-                        if (!replyAtts.some(x => x.id === newAtt.id)) {
-                          return { ...reply, attachments: [...replyAtts, newAtt] };
-                        }
-                      }
-                      return reply;
+          try {
+            supabase
+              .channel("quote-requests-sync")
+              .on("postgres_changes", { event: "*", schema: "public", table: "quote_requests" }, async () => {
+                try {
+                  const { data: requestsList } = await supabase.from("quote_requests").select("*");
+                  if (requestsList) {
+                    const sorted = (requestsList as ServiceRequest[]).sort((a, b) => {
+                      return new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime();
                     });
-                    return { quoteAttachments: nextAtts, quoteReplies: nextReplies };
-                  });
-                }
-              }
-            })
-            .subscribe();
-        } catch (e) {}
+                    set({ requests: sorted });
+                  }
+                } catch (err) {}
+              })
+              .subscribe();
+          } catch (e) {}
 
-        // Realtime Subscription for notification feeds
-        try {
-          supabase
-            .channel("notifications-realtime")
-            .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications" }, (payload) => {
-              const newNotif = payload.new as Notification;
-              if (newNotif) {
-                if (!get().notifications.some(x => x.id === newNotif.id)) {
-                  set(state => ({ notifications: [newNotif, ...state.notifications] }));
+          try {
+            supabase
+              .channel("messages-realtime")
+              .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
+                const newMsg = payload.new as Message;
+                if (newMsg) {
+                  if (!get().messages.some(x => x.id === newMsg.id)) {
+                    set(state => ({ messages: [...state.messages, newMsg] }));
+                  }
                 }
-              }
-            })
-            .subscribe();
-        } catch (e) {}
+              })
+              .subscribe();
+          } catch (e) {}
+
+          try {
+            supabase
+              .channel("team-messages-realtime")
+              .on("postgres_changes", { event: "INSERT", schema: "public", table: "team_messages" }, (payload) => {
+                const newMsg = payload.new as any;
+                if (newMsg) {
+                  const mappedMsg: TeamMessage = {
+                    id: newMsg.id,
+                    group_id: newMsg.group_id,
+                    sender_id: newMsg.sender_id,
+                    sender_name: newMsg.sender_name,
+                    sender_role: newMsg.sender_role,
+                    message_text: newMsg.text,
+                    file_url: newMsg.file_url,
+                    file_name: newMsg.file_name,
+                    is_image: newMsg.is_image,
+                    created_at: newMsg.created_at
+                  };
+                  if (!get().teamMessages.some(x => x.id === mappedMsg.id)) {
+                    set(state => ({ teamMessages: [...state.teamMessages, mappedMsg] }));
+                  }
+                }
+              })
+              .subscribe();
+          } catch (e) {}
+
+          try {
+            supabase
+              .channel("private-messages-realtime")
+              .on("postgres_changes", { event: "INSERT", schema: "public", table: "private_messages" }, (payload) => {
+                const newMsg = payload.new as PrivateMessage;
+                if (newMsg) {
+                  if (!get().privateMessages.some(x => x.id === newMsg.id)) {
+                    set(state => ({ privateMessages: [...state.privateMessages, newMsg] }));
+                  }
+                }
+              })
+              .subscribe();
+          } catch (e) {}
+
+          try {
+            supabase
+              .channel("quote-replies-realtime")
+              .on("postgres_changes", { event: "INSERT", schema: "public", table: "quote_replies" }, (payload) => {
+                const newReply = payload.new as QuoteReply;
+                if (newReply) {
+                  if (!get().quoteReplies.some(x => x.id === newReply.id)) {
+                    const replyWithAtts: QuoteReply = {
+                      ...newReply,
+                      attachments: get().quoteAttachments.filter(att => att.reply_id === newReply.id)
+                    };
+                    set(state => ({ quoteReplies: [...state.quoteReplies, replyWithAtts] }));
+                  }
+                }
+              })
+              .subscribe();
+          } catch (e) {}
+
+          try {
+            supabase
+              .channel("quote-attachments-realtime")
+              .on("postgres_changes", { event: "INSERT", schema: "public", table: "quote_attachments" }, (payload) => {
+                const newAtt = payload.new as QuoteAttachment;
+                if (newAtt) {
+                  if (!get().quoteAttachments.some(x => x.id === newAtt.id)) {
+                    set(state => {
+                      const nextAtts = [...state.quoteAttachments, newAtt];
+                      const nextReplies = state.quoteReplies.map(reply => {
+                        if (reply.id === newAtt.reply_id) {
+                          const replyAtts = reply.attachments || [];
+                          if (!replyAtts.some(x => x.id === newAtt.id)) {
+                            return { ...reply, attachments: [...replyAtts, newAtt] };
+                          }
+                        }
+                        return reply;
+                      });
+                      return { quoteAttachments: nextAtts, quoteReplies: nextReplies };
+                    });
+                  }
+                }
+              })
+              .subscribe();
+          } catch (e) {}
+
+          try {
+            supabase
+              .channel("notifications-realtime")
+              .on("postgres_changes", { event: "INSERT", schema: "public", table: "notifications" }, (payload) => {
+                const newNotif = payload.new as Notification;
+                if (newNotif) {
+                  if (!get().notifications.some(x => x.id === newNotif.id)) {
+                    set(state => ({ notifications: [newNotif, ...state.notifications] }));
+                  }
+                }
+              })
+              .subscribe();
+          } catch (e) {}
+        }
 
       } catch (err) {
         console.warn("Supabase database synchronization failed, operating offline.", err);
+        set({ isCmsLoaded: true, isCmsFresh: true });
+      } finally {
+        isSyncingSupabase = false;
       }
     },
 
@@ -2100,7 +2011,7 @@ export const useStore = create<AgencyState>((set, get) => {
               id: "plan-" + Math.random().toString(36).substring(4),
               client_id: targetReq.client_id,
               plan_name: targetReq.service_type.includes("E-commerce") || targetReq.service_type.includes("SaaS") ? "Enterprise" : "Professional",
-              price: targetReq.budget || "$4,999",
+              price: targetReq.budget || formatAmount(4999, get().cmsContent?.defaultCurrency || "USD"),
               status: "Active",
               billing_cycle: "Monthly",
               start_date: new Date().toISOString().split("T")[0]
@@ -2657,9 +2568,26 @@ export const useStore = create<AgencyState>((set, get) => {
       const user = get().currentUser;
       if (!user) return;
       
-      const planPrice = planName === "Starter" ? (isAnnual ? "$1,599/mo" : "$1,999/mo") : 
-                        planName === "Professional" ? (isAnnual ? "$3,999/mo" : "$4,999/mo") : 
-                        (isAnnual ? "$7,999/mo" : "$9,999/mo");
+      const defCurrency = get().cmsContent?.defaultCurrency || "USD";
+      const symbol = getCurrencySymbol(defCurrency);
+      
+      let basePriceUSD = planName === "Starter" ? (isAnnual ? 1599 : 1999) : 
+                         planName === "Professional" ? (isAnnual ? 3999 : 4999) : 
+                         (isAnnual ? 7999 : 9999);
+                         
+      let planPrice = "";
+      if (defCurrency === "INR") {
+        const inrPrice = basePriceUSD * 83; // standard approximation conversion
+        planPrice = "₹" + Math.round(inrPrice).toLocaleString("en-IN") + "/mo";
+      } else if (defCurrency === "GBP") {
+        const gbpPrice = basePriceUSD * 0.8;
+        planPrice = "£" + Math.round(gbpPrice).toLocaleString("en-GB") + "/mo";
+      } else if (defCurrency === "EUR") {
+        const eurPrice = basePriceUSD * 0.9;
+        planPrice = "€" + Math.round(eurPrice).toLocaleString("en-US") + "/mo";
+      } else {
+        planPrice = symbol + basePriceUSD.toLocaleString("en-US") + "/mo";
+      }
                         
       const activeP: ActivePlan = {
         id: "plan-" + Math.random().toString(36).substring(4),
