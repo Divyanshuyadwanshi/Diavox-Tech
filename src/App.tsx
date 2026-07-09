@@ -103,7 +103,13 @@ const sectionToPath: Record<string, string> = {
 };
 export default function App() {
   const { theme, currentUser, syncSupabase, cmsContent, socialMediaLinks, isCmsLoaded, isCmsFresh } = useStore();
-  const [activeSection, setActiveSection] = useState<string>(() => {   return pathToSection[window.location.pathname] || "hero"; });
+  const [activeSection, setActiveSection] = useState<string>(() => {
+  if (window.location.pathname.startsWith("/blog/")) {
+    return "blog-page";
+  }
+
+  return pathToSection[window.location.pathname] || "hero";
+});
   const [authModalOpen, setAuthModalOpen] = useState<boolean>(false);
   const [showScrollTop, setShowScrollTop] = useState<boolean>(false);
   const [commandCenterOpen, setCommandCenterOpen] = useState<boolean>(false);
@@ -258,7 +264,11 @@ export default function App() {
 };
 useEffect(() => {
   const handlePopState = () => {
-    setActiveSection(pathToSection[window.location.pathname] || "hero");
+    if (window.location.pathname.startsWith("/blog/")) {
+  setActiveSection("blog-page");
+} else {
+  setActiveSection(pathToSection[window.location.pathname] || "hero");
+}
   };
 
   window.addEventListener("popstate", handlePopState);
