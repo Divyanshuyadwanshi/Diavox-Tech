@@ -307,7 +307,7 @@ export default function Hero({ onNavigate, onOpenAuth }: HeroProps) {
             </div>
             <div className="space-y-1">
               <h3 className="text-3xl md:text-4xl font-display font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-purple-400">
-                120+
+                5+
               </h3>
               <p className="text-xs font-mono opacity-70">Remote Projects Done</p>
             </div>
