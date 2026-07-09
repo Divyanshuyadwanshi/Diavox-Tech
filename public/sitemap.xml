@@ -1,7 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="https://www.sitemaps.org/schemas/sitemap/0.9">
-  <url>
-    <loc>https://www.diavoxtech.in/</loc>
-    <priority>1.0</priority>
-  </url>
+  <url><loc>https://www.diavoxtech.in/</loc><priority>1.0</priority></url>
+  <url><loc>https://www.diavoxtech.in/services</loc><priority>0.9</priority></url>
+  <url><loc>https://www.diavoxtech.in/pricing</loc><priority>0.8</priority></url>
+  <url><loc>https://www.diavoxtech.in/portfolio</loc><priority>0.8</priority></url>
+  <url><loc>https://www.diavoxtech.in/blog</loc><priority>0.8</priority></url>
+  <url><loc>https://www.diavoxtech.in/reviews</loc><priority>0.7</priority></url>
+  <url><loc>https://www.diavoxtech.in/contact</loc><priority>0.7</priority></url>
+  <url><loc>https://www.diavoxtech.in/about</loc><priority>0.6</priority></url>
+  <url><loc>https://www.diavoxtech.in/team</loc><priority>0.6</priority></url>
 </urlset>
