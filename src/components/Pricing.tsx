@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useStore } from "../store";
 import { Check, ArrowUpRight, CheckCircle2, ShieldCheck, Globe, CreditCard, X, MessageSquare, MessageCircle } from "lucide-react";
 
@@ -16,12 +16,22 @@ interface PricingProps {
 export default function Pricing({ onOpenAuth, onNavigate, preview }: PricingProps) {
   const { theme, currentUser, pricingOptions, purchasePlan, cmsContent } = useStore();
   const [isAnnual, setIsAnnual] = useState<boolean>(false);
-  const [currency, setCurrency] = useState<"USD" | "INR" | "GBP font-sans">("INR"); // Default to Indian Rupees (INR) to delight clients as requested!
+  const [currency, setCurrency] = useState<"USD" | "INR" | "GBP">("INR"); 
   const [notification, setNotification] = useState<string | null>(null);
+
+  // Synchronize initial currency tab with cmsContent default currency
+  useEffect(() => {
+    if (cmsContent?.defaultCurrency) {
+      const def = cmsContent.defaultCurrency.toUpperCase();
+      if (def === "USD" || def === "INR" || def === "GBP") {
+        setCurrency(def as any);
+      }
+    }
+  }, [cmsContent?.defaultCurrency]);
 
   const displayedPricing = preview ? pricingOptions.slice(0, 1) : pricingOptions;
 
-  const activeCurrency: "USD" | "INR" | "GBP" = currency.includes("INR") ? "INR" : currency.includes("GBP") ? "GBP" : "USD";
+  const activeCurrency: "USD" | "INR" | "GBP" = currency === "INR" ? "INR" : currency === "GBP" ? "GBP" : "USD";
 
   const getPriceValue = (tier: any) => {
     if (activeCurrency === "INR") return tier.priceINR;

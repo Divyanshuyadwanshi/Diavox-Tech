@@ -643,6 +643,7 @@ export const useStore = create<AgencyState>((set, get) => {
       heroBadge: "Serving clients worldwide remotely",
       heroBadgeEffect: "spin",
       fontSans: "Inter",
+      defaultCurrency: "USD",
       fontDisplay: "Space Grotesk",
       fontMono: "JetBrains Mono",
       headerLogoTitle: "Diavox",

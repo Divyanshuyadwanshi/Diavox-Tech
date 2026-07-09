@@ -66,6 +66,7 @@ export default function AdminCms() {
 
   // NEW BRANDING, FONTS, HEADER AND FOOTER STATE HOOKS
   const [fontSans, setFontSans] = useState<string>("");
+  const [defaultCurrency, setDefaultCurrency] = useState<string>("USD");
   const [fontDisplay, setFontDisplay] = useState<string>("");
   const [fontMono, setFontMono] = useState<string>("");
 
@@ -103,6 +104,7 @@ export default function AdminCms() {
         contact: true
       });
       setFontSans(cmsContent.fontSans || "Inter");
+      setDefaultCurrency(cmsContent.defaultCurrency || "USD");
       setFontDisplay(cmsContent.fontDisplay || "Space Grotesk");
       setFontMono(cmsContent.fontMono || "JetBrains Mono");
       setHeaderLogoTitle(cmsContent.headerLogoTitle || "Diavox");
@@ -317,6 +319,7 @@ export default function AdminCms() {
         sectionDescriptions: sectDescriptions,
         sectionColors: sectColors,
         fontSans,
+        defaultCurrency,
         fontDisplay,
         fontMono,
         headerLogoTitle,
@@ -1080,7 +1083,24 @@ export default function AdminCms() {
                   Select clean web fonts to stylize the app's interfaces. Font definitions automatically fetch from the official Google Fonts Web API.
                 </p>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                  <div>
+                    <label className="text-[10px] font-mono opacity-50 block mb-1 uppercase tracking-wider">Default Site Currency</label>
+                    <select
+                      value={defaultCurrency}
+                      onChange={e => setDefaultCurrency(e.target.value)}
+                      className="w-full bg-slate-950 border dark:border-slate-800 p-2.5 rounded-lg text-white font-semibold text-xs focus:outline-none"
+                    >
+                      <option value="USD">USD ($)</option>
+                      <option value="INR">INR (₹)</option>
+                      <option value="GBP">GBP (£)</option>
+                      <option value="EUR">EUR (€)</option>
+                      <option value="CAD">CAD (C$)</option>
+                      <option value="AUD">AUD (A$)</option>
+                      <option value="SGD">SGD (S$)</option>
+                    </select>
+                  </div>
+
                   <div>
                     <label className="text-[10px] font-mono opacity-50 block mb-1 uppercase tracking-wider">Heading/Display Font</label>
                     <select

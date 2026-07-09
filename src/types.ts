@@ -303,6 +303,7 @@ export interface CmsContent {
     github?: string;
   };
   fontSans?: string;
+  defaultCurrency?: string;
   fontDisplay?: string;
   fontMono?: string;
   headerLogoTitle?: string;

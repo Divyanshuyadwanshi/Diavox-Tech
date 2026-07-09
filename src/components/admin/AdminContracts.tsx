@@ -1,10 +1,12 @@
 import React, { useState } from "react";
 import { useStore } from "../../store";
+import { formatAmount, getCurrencySymbol } from "../../utils/currency";
 import { Plus, Check, X, FileText, Clipboard, DollarSign, UserCheck } from "lucide-react";
 import { Contract } from "../../types";
 
 export default function AdminContracts() {
-  const { contracts, allUsers, theme, addContract } = useStore();
+  const { contracts, allUsers, theme, addContract, cmsContent } = useStore();
+  const defCurrency = cmsContent?.defaultCurrency || "USD";
 
   const [isAdding, setIsAdding] = useState(false);
   const [clientName, setClientName] = useState("");
@@ -145,7 +147,7 @@ export default function AdminContracts() {
                 required
                 value={price}
                 onChange={(e) => setPrice(e.target.value)}
-                placeholder="$12,000 / ₹9,95,000"
+                placeholder={`e.g. ${getCurrencySymbol(defCurrency)}12,000`}
                 className={`w-full p-2.5 rounded-xl text-xs font-sans border focus:ring-1 outline-none transition-all ${
                   theme === "dark" 
                     ? "bg-slate-900 border-slate-800 focus:border-cyan-550 w-full text-white" 
@@ -227,7 +229,7 @@ export default function AdminContracts() {
                   }`}>
                     {con.status}
                   </span>
-                  <span className="text-[10px] font-mono text-slate-550 font-bold uppercase">{con.price}</span>
+                  <span className="text-[10px] font-mono text-slate-550 font-bold uppercase">{formatAmount(con.price, defCurrency)}</span>
                 </div>
 
                 <div className="flex items-center space-x-2 mt-3 text-slate-900 dark:text-white">

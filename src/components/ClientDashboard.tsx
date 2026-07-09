@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useStore } from "../store";
+import { formatAmount, getCurrencySymbol } from "../utils/currency";
 import { uploadFileToBucket, supabase } from "../supabase";
 import { motion, AnimatePresence } from "motion/react";
 import { 
@@ -20,8 +21,36 @@ export default function ClientDashboard() {
   const { 
     theme, currentUser, requests, projects, contracts, activePlans, planApprovals, submitPlanApproval, invoices,
     notifications, messages, reviews, sendMessage, signContract, addReview, deleteReview, markNotificationsRead,
-    quoteReplies, quoteAttachments, quoteStatusHistory, submitQuoteReply, pricingOptions
+    quoteReplies, quoteAttachments, quoteStatusHistory, submitQuoteReply, pricingOptions, cmsContent
   } = useStore();
+
+  const defCurrency = cmsContent?.defaultCurrency || "USD";
+
+  const getTierPriceString = (tier: any, optionType: string) => {
+    let rawVal = tier.priceUSD;
+    let symbol = "$";
+    let locale = "en-US";
+    
+    if (defCurrency === "INR") {
+      rawVal = tier.priceINR;
+      symbol = "₹";
+      locale = "en-IN";
+    } else if (defCurrency === "GBP") {
+      rawVal = tier.priceGBP;
+      symbol = "£";
+      locale = "en-GB";
+    } else if (defCurrency === "EUR") {
+      rawVal = tier.priceUSD; // Keep USD base and format as EUR symbol
+      symbol = "€";
+      locale = "en-US";
+    } else {
+      symbol = getCurrencySymbol(defCurrency);
+    }
+    
+    const cleanVal = parseFloat(rawVal.replace(/,/g, ""));
+    if (isNaN(cleanVal)) return rawVal;
+    return symbol + cleanVal.toLocaleString(locale);
+  };
 
   const [activeTab, setActiveTab] = useState<"profile" | "projects" | "contracts" | "plans" | "requests" | "chat" | "reviews" | "help-kb">("profile");
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
@@ -1335,7 +1364,7 @@ export default function ClientDashboard() {
                     <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
                       <div>
                         <h4 className="text-sm font-bold font-display">{con.project_title}</h4>
-                        <span className="text-[10px] font-mono opacity-50">Price Scope: {con.price}</span>
+                        <span className="text-[10px] font-mono opacity-50">Price Scope: {formatAmount(con.price, defCurrency)}</span>
                       </div>
                       
                       <span className={`px-2.5 py-1 rounded-lg text-[10px] font-mono ${
@@ -1360,7 +1389,7 @@ export default function ClientDashboard() {
 
 Contract Reference ID: ${con.id}
 Created On: ${new Date(con.created_at || new Date()).toLocaleDateString()}
-Price Core Value: ${con.price}
+Price Core Value: ${formatAmount(con.price, defCurrency)}
 Status: ${con.status}
 
 CLIENT REPRESENTATIVE:
@@ -1471,7 +1500,7 @@ Platform Integration Code: Diavox Remote Sync Engine
                             </span>
                             <h4 className="text-xl font-display font-extrabold mt-2 text-white">Diavox {pl.plan_name}</h4>
                             <p className="text-xs font-mono opacity-60 mt-1">
-                              Payment rate: {pl.price} (Cycle start: {pl.start_date})
+                              Payment rate: {formatAmount(pl.price, defCurrency)} (Cycle start: {pl.start_date})
                             </p>
                           </div>
 
@@ -1608,7 +1637,7 @@ Platform Integration Code: Diavox Remote Sync Engine
                                     </h4>
                                   </div>
                                   <p className="text-lg font-mono font-black text-white">
-                                    ${parseFloat(tier.priceUSD.replace(/,/g, "")).toLocaleString("en-US")}
+                                    {getTierPriceString(tier, option.type)}
                                     <span className="text-[10px] opacity-50 font-normal">
                                       {option.type === "monthly-subscription" ? " / mo" : " one-time"}
                                     </span>
@@ -1626,7 +1655,7 @@ Platform Integration Code: Diavox Remote Sync Engine
                                   onClick={async () => {
                                     try {
                                       const billingCycle = option.type === "monthly-subscription" ? "Monthly" : "Annually";
-                                      const formattedPrice = "$" + parseFloat(tier.priceUSD.replace(/,/g, "")).toLocaleString("en-US");
+                                      const formattedPrice = getTierPriceString(tier, option.type);
                                       await submitPlanApproval(
                                         currentUser.id,
                                         currentUser.name,
@@ -1690,7 +1719,7 @@ Platform Integration Code: Diavox Remote Sync Engine
                     <div className="p-4 rounded-xl bg-slate-500/5 border dark:border-slate-900 border-slate-205">
                       <span className="text-[9px] font-mono opacity-50 uppercase block font-bold text-slate-450">Gross Invoiced Val</span>
                       <span className="text-lg font-mono font-bold dark:text-white text-slate-900 mt-1 block">
-                        ${(clientInvoices.reduce((sum, item) => sum + parseFloat(item.amount.replace(/[^0-9.]/g, "") || "0"), 0) + 12000).toLocaleString()}+
+                        {formatAmount(clientInvoices.reduce((sum, item) => sum + parseFloat(item.amount.replace(/[^0-9.]/g, "") || "0"), 0) + 12000, defCurrency)}+
                       </span>
                     </div>
                   </div>
@@ -1708,7 +1737,7 @@ Platform Integration Code: Diavox Remote Sync Engine
                       <div className="space-y-1.5 text-xs font-mono">
                         <p className="text-slate-300"><span className="text-slate-500">Service:</span> Diavox custom portal setup & design studies</p>
                         <p className="text-slate-300"><span className="text-slate-500">Due:</span> 2026-06-11</p>
-                        <p className="font-bold text-emerald-400 text-sm"><span className="text-slate-500 font-normal">Amount:</span> $12,000</p>
+                        <p className="font-bold text-emerald-400 text-sm"><span className="text-slate-500 font-normal">Amount:</span> {formatAmount(12000, defCurrency)}</p>
                       </div>
                       <div className="pt-1">
                         <button
@@ -1724,10 +1753,10 @@ Client Identifier: ${currentUser.id}
 
 PARTICULARS:
 ------------------------------------------
-Diavox custom portal setup & design studies: $12,000.00
-Tax / Cess Rate (SLA standard): $0.00
+Diavox custom portal setup & design studies: ${formatAmount(12000, defCurrency)}
+Tax / Cess Rate (SLA standard): ${formatAmount(0, defCurrency)}
 
-TOTAL SETTLED AMOUNT: $12,000.00
+TOTAL SETTLED AMOUNT: ${formatAmount(12000, defCurrency)}
 Status: Settled (OK)
 
 =====================================================
@@ -1769,7 +1798,7 @@ Receipt authenticity check: SECURE PORTAL STABLE TRANSACTION
                         <div className="space-y-1.5 text-xs font-mono">
                           <p className="text-slate-350"><span className="text-slate-500 font-bold">Service:</span> {inv.services || "General subscription retainer"}</p>
                           <p className="text-slate-350"><span className="text-slate-500 font-bold">Due:</span> {inv.due_date || "2026-06-30"}</p>
-                          <p className="font-bold text-slate-200 text-sm"><span className="text-slate-500 font-bold">Amount:</span> {inv.amount}</p>
+                          <p className="font-bold text-slate-200 text-sm"><span className="text-slate-500 font-bold">Amount:</span> {formatAmount(inv.amount, defCurrency)}</p>
                         </div>
                         <div className="pt-1">
                           <button
@@ -1785,10 +1814,10 @@ Client Identifier: ${currentUser.id}
 
 PARTICULARS:
 ------------------------------------------
-${inv.services || "Diavox Custom Retainer Subscription"}: ${inv.amount}
-Tax / Cess Rate (SLA standard): ${inv.taxes || "$250"}
+${inv.services || "Diavox Custom Retainer Subscription"}: ${formatAmount(inv.amount, defCurrency)}
+Tax / Cess Rate (SLA standard): ${formatAmount(inv.taxes || "$250", defCurrency)}
 
-TOTAL INVOICED VALUE: ${inv.amount}
+TOTAL INVOICED VALUE: ${formatAmount(inv.amount, defCurrency)}
 Status: ${inv.status?.toUpperCase() || "PENDING"}
 
 =====================================================
@@ -1833,7 +1862,7 @@ Receipt authenticity check: SECURE PORTAL STABLE TRANSACTION
                           <td className="p-4 font-bold">#INV-43209</td>
                           <td className="p-4">Diavox custom portal setup & design studies</td>
                           <td className="p-4">2026-06-11</td>
-                          <td className="p-4 font-bold">$12,000</td>
+                          <td className="p-4 font-bold">{formatAmount(12000, defCurrency)}</td>
                           <td className="p-4">
                             <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-500/10">PAID</span>
                           </td>
@@ -1851,10 +1880,10 @@ Client Identifier: ${currentUser.id}
 
 PARTICULARS:
 ------------------------------------------
-Diavox custom portal setup & design studies: $12,000.00
-Tax / Cess Rate (SLA standard): $0.00
+Diavox custom portal setup & design studies: ${formatAmount(12000, defCurrency)}
+Tax / Cess Rate (SLA standard): ${formatAmount(0, defCurrency)}
 
-TOTAL SETTLED AMOUNT: $12,000.00
+TOTAL SETTLED AMOUNT: ${formatAmount(12000, defCurrency)}
 Status: Settled (OK)
 
 =====================================================
@@ -1883,7 +1912,7 @@ Receipt authenticity check: SECURE PORTAL STABLE TRANSACTION
                             <td className="p-4 font-bold">#{inv.invoice_number || `INV-${inv.id.substring(4, 9).toUpperCase()}`}</td>
                             <td className="p-4">{inv.services || "General subscription retainer"}</td>
                             <td className="p-4">{inv.due_date || "2026-06-30"}</td>
-                            <td className="p-4 font-bold">{inv.amount}</td>
+                            <td className="p-4 font-bold">{formatAmount(inv.amount, defCurrency)}</td>
                             <td className="p-4">
                               <span className={`px-2 py-0.5 rounded text-[9px] font-bold ${
                                 inv.status === "paid" 
@@ -1909,10 +1938,10 @@ Client Identifier: ${currentUser.id}
 
 PARTICULARS:
 ------------------------------------------
-${inv.services || "Diavox Custom Retainer Subscription"}: ${inv.amount}
-Tax / Cess Rate (SLA standard): ${inv.taxes || "$250"}
+${inv.services || "Diavox Custom Retainer Subscription"}: ${formatAmount(inv.amount, defCurrency)}
+Tax / Cess Rate (SLA standard): ${formatAmount(inv.taxes || "$250", defCurrency)}
 
-TOTAL INVOICED VALUE: ${inv.amount}
+TOTAL INVOICED VALUE: ${formatAmount(inv.amount, defCurrency)}
 Status: ${inv.status?.toUpperCase() || "PENDING"}
 
 =====================================================

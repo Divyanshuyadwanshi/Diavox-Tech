@@ -1,9 +1,11 @@
 import React from "react";
 import { useStore } from "../../store";
+import { formatAmount } from "../../utils/currency";
 import { DollarSign, ShieldCheck, CreditCard, Activity } from "lucide-react";
 
 export default function AdminPayments() {
-  const { payments, metrics, invoices, theme } = useStore();
+  const { payments, metrics, invoices, theme, cmsContent } = useStore();
+  const defCurrency = cmsContent?.defaultCurrency || "USD";
 
   return (
     <div className="space-y-6 text-left" id="admin-payments-panel">
@@ -25,7 +27,7 @@ export default function AdminPayments() {
             <DollarSign size={16} className="text-emerald-500" />
           </div>
           <p className="text-2xl font-display font-bold text-slate-900 dark:text-white mt-2">
-            ${metrics.revenue.toLocaleString()}
+            {formatAmount(metrics.revenue, defCurrency)}
           </p>
           <span className="text-[10px] font-mono text-emerald-400">● Live Razorpay API</span>
         </div>
@@ -70,7 +72,7 @@ export default function AdminPayments() {
             <div key={pay.id} className="p-4 rounded-xl border dark:border-slate-800 border-slate-200 dark:bg-slate-900 bg-slate-50 space-y-2">
               <div className="flex justify-between items-center border-b dark:border-slate-800 border-slate-200 pb-2">
                 <span className="font-mono text-[10px] text-slate-450 truncate max-w-[120px]">{pay.id}</span>
-                <span className="font-mono text-xs font-bold text-emerald-400">${pay.amount}</span>
+                <span className="font-mono text-xs font-bold text-emerald-400">{formatAmount(pay.amount, defCurrency)}</span>
               </div>
               <div className="space-y-1 font-mono text-[11px] text-slate-400">
                 <p><span className="text-slate-500">Razorpay ID:</span> <span className="text-cyan-400 break-all">{pay.transaction_id}</span></p>
@@ -107,7 +109,7 @@ export default function AdminPayments() {
                   <td className="py-3.5 font-mono text-[11px]">{pay.invoice_id || "Direct Upgrade"}</td>
                   <td className="py-3.5">{new Date(pay.date).toLocaleDateString()}</td>
                   <td className="py-3.5 text-slate-400">{pay.method || "Razorpay API Check"}</td>
-                  <td className="py-3.5 text-right font-mono font-bold text-emerald-400">${pay.amount}</td>
+                  <td className="py-3.5 text-right font-mono font-bold text-emerald-400">{formatAmount(pay.amount, defCurrency)}</td>
                 </tr>
               ))}
             </tbody>

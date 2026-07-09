@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useStore } from "../store";
+import { formatAmount, getCurrencySymbol } from "../utils/currency";
 import { uploadFileToBucket } from "../supabase";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -64,6 +65,8 @@ export default function AdminDashboard() {
     sendPrivateMessage, sendTeamMessage, createTeamGroup, createProjectGroup, deleteProjectGroup,
     addAiTrainingFile, deleteAiTrainingFile, submitPlanApproval, updatePlanApprovalStatus, markClientMessagesRead
   } = useStore();
+
+  const defCurrency = cmsContent?.defaultCurrency || "USD";
 
   const [activeTab, setActiveTab] = useState<
     | "profile"
@@ -3206,21 +3209,21 @@ export default function AdminDashboard() {
                 <div className="bg-slate-900/60 p-4 rounded-xl border dark:border-slate-800 border-slate-200">
                   <p className="text-[10px] font-mono uppercase tracking-wider text-slate-400">Total Raised Amount</p>
                   <h4 className="text-xl font-bold font-display text-white mt-1">
-                    ${invoices.reduce((acc, inv) => acc + (parseInt(inv.amount) || 0), 0).toLocaleString()}
+                    {formatAmount(invoices.reduce((acc, inv) => acc + (parseInt(inv.amount) || 0), 0), defCurrency)}
                   </h4>
                   <p className="text-[10px] text-slate-500 mt-1">Sum of all generated client invoices</p>
                 </div>
                 <div className="bg-slate-900/60 p-4 rounded-xl border dark:border-slate-800 border-slate-200">
                   <p className="text-[10px] font-mono uppercase tracking-wider text-slate-400">Total Cleared Revenue</p>
                   <h4 className="text-xl font-bold font-display text-emerald-450 text-emerald-400 mt-1">
-                    ${invoices.filter(i => i.status === "paid").reduce((acc, inv) => acc + (parseInt(inv.amount) || 0), 0).toLocaleString()}
+                    {formatAmount(invoices.filter(i => i.status === "paid").reduce((acc, inv) => acc + (parseInt(inv.amount) || 0), 0), defCurrency)}
                   </h4>
                   <p className="text-[10px] text-slate-500 mt-1">Cleared invoice revenue in ledger</p>
                 </div>
                 <div className="bg-slate-900/60 p-4 rounded-xl border dark:border-slate-800 border-slate-200">
                   <p className="text-[10px] font-mono uppercase tracking-wider text-slate-400">Pending Outstandings</p>
                   <h4 className="text-xl font-bold font-display text-amber-500 text-amber-400 mt-1">
-                    ${invoices.filter(i => i.status === "unpaid").reduce((acc, inv) => acc + (parseInt(inv.amount) || 0), 0).toLocaleString()}
+                    {formatAmount(invoices.filter(i => i.status === "unpaid").reduce((acc, inv) => acc + (parseInt(inv.amount) || 0), 0), defCurrency)}
                   </h4>
                   <p className="text-[10px] text-slate-500 mt-1">Awaiting client payment checkouts</p>
                 </div>
@@ -3310,10 +3313,10 @@ export default function AdminDashboard() {
                         <div className="leading-relaxed text-left">
                           <p className="font-bold text-slate-200">{inv.invoice_number} - {inv.client_name}</p>
                           <p className="text-[10px] text-slate-400 mt-0.5">{inv.services}</p>
-                          <p className="text-[10px] text-slate-500 mt-1">Due: {inv.due_date} | Tax (18%): ${inv.taxes}</p>
+                          <p className="text-[10px] text-slate-500 mt-1">Due: {inv.due_date} | Tax (18%): {formatAmount(inv.taxes, defCurrency)}</p>
                         </div>
                         <div className="text-right space-y-2 shrink-0">
-                          <p className="font-extrabold text-cyan-405 text-cyan-400 font-mono">${inv.amount}</p>
+                          <p className="font-extrabold text-cyan-405 text-cyan-400 font-mono">{formatAmount(inv.amount, defCurrency)}</p>
                           <div className="flex gap-1.5 justify-end">
                             <select
                               value={inv.status}

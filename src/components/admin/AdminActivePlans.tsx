@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useStore } from "../../store";
+import { formatAmount, getCurrencySymbol } from "../../utils/currency";
 import { 
   Check, 
   X, 
@@ -26,8 +27,11 @@ export default function AdminActivePlans() {
     addActivePlan, 
     updateActivePlan, 
     deleteActivePlan, 
-    theme 
+    theme,
+    cmsContent
   } = useStore();
+
+  const defCurrency = cmsContent?.defaultCurrency || "USD";
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingPlanId, setEditingPlanId] = useState<string | null>(null);
@@ -37,7 +41,7 @@ export default function AdminActivePlans() {
   const [planName, setPlanName] = useState("Starter");
   const [status, setStatus] = useState("Active");
   const [billingCycle, setBillingCycle] = useState("Monthly");
-  const [price, setPrice] = useState("$250.00");
+  const [price, setPrice] = useState(() => `${getCurrencySymbol(cmsContent?.defaultCurrency || "USD")}250.00`);
   const [startDate, setStartDate] = useState(new Date().toISOString().split("T")[0]);
   const [renewalDate, setRenewalDate] = useState(() => {
     const d = new Date();
@@ -79,7 +83,7 @@ export default function AdminActivePlans() {
     setPlanName("Starter");
     setStatus("Active");
     setBillingCycle("Monthly");
-    setPrice("$250.00");
+    setPrice(`${getCurrencySymbol(defCurrency)}250.00`);
     setStartDate(new Date().toISOString().split("T")[0]);
     const d = new Date();
     d.setMonth(d.getMonth() + 1);
@@ -245,7 +249,7 @@ export default function AdminActivePlans() {
                 {/* Pricing amount */}
                 <div>
                   <label className="block text-[11px] font-mono uppercase tracking-wider text-slate-400 mb-1.5 flex items-center space-x-1.5">
-                    <DollarSign size={12} />
+                    <span className="font-bold text-xs">{getCurrencySymbol(defCurrency)}</span>
                     <span>Price (Custom Terms ok)</span>
                   </label>
                   <input
@@ -254,7 +258,7 @@ export default function AdminActivePlans() {
                     onChange={(e) => setPrice(e.target.value)}
                     className="w-full rounded-xl p-2 px-3 text-xs dark:bg-slate-950 border dark:border-slate-800 border-slate-200 text-slate-300 focus:border-cyan-500"
                     required
-                    placeholder="e.g. $450.00"
+                    placeholder={`e.g. ${getCurrencySymbol(defCurrency)}450.00`}
                   />
                 </div>
 
@@ -489,7 +493,7 @@ export default function AdminActivePlans() {
                   
                   <div className="mt-3.5 space-y-1.5 text-[11px] font-mono text-slate-400 border-t border-dashed dark:border-slate-900 pt-3">
                     <p className="line-clamp-1"><span className="text-slate-550 font-medium">Recipient:</span> {clientUser ? `${clientUser.name || clientUser.email}` : plan.client_id}</p>
-                    <p><span className="text-slate-550 font-medium">Remuneration:</span> {plan.price}</p>
+                    <p><span className="text-slate-550 font-medium">Remuneration:</span> {formatAmount(plan.price, defCurrency)}</p>
                     <p><span className="text-slate-550 font-medium">Cycle span:</span> {plan.duration || "1 Month"}</p>
                     <p><span className="text-slate-550 font-medium">Setup:</span> {plan.start_date}</p>
                     <p><span className="text-slate-550 font-medium">Renewal:</span> {plan.renewal_date}</p>
