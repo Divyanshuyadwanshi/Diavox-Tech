@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, lazy, Suspense } from "react";
 import { useStore } from "./store";
 import { supabase } from "./supabase";
 import Header from "./components/Header";
@@ -11,17 +11,32 @@ import Hero from "./components/Hero";
 import Services from "./components/Services";
 import Portfolio from "./components/Portfolio";
 import Team from "./components/Team";
-import SEO from "./components/SEO";
-import GoogleAnalytics from "./components/GoogleAnalytics";
 import Pricing from "./components/Pricing";
 import Blog from "./components/Blog";
 import Reviews from "./components/Reviews";
 import Contact from "./components/Contact";
 import About from "./components/About";
 import AuthModal from "./components/AuthModal";
-import AdminDashboard from "./components/AdminDashboard";
-import ClientDashboard from "./components/ClientDashboard";
-import TeamDashboard from "./components/TeamDashboard";
+
+const AdminDashboard = lazy(() => import("./components/AdminDashboard"));
+const ClientDashboard = lazy(() => import("./components/ClientDashboard"));
+const TeamDashboard = lazy(() => import("./components/TeamDashboard"));
+
+const DashboardSkeleton = () => (
+  <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-8 animate-pulse text-left">
+    <div className="h-10 bg-slate-800/50 dark:bg-slate-200/10 rounded-xl w-1/4" />
+    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      {[1, 2, 3, 4].map(i => (
+        <div key={i} className="h-28 bg-slate-800/50 dark:bg-slate-200/10 rounded-2xl border border-slate-800/10 dark:border-slate-800/40" />
+      ))}
+    </div>
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="lg:col-span-2 h-96 bg-slate-800/50 dark:bg-slate-200/10 rounded-2xl border border-slate-800/10 dark:border-slate-800/40" />
+      <div className="h-96 bg-slate-800/50 dark:bg-slate-200/10 rounded-2xl border border-slate-800/10 dark:border-slate-800/40" />
+    </div>
+  </div>
+);
+
 import AIAssistantPopup from "./components/AIAssistantPopup";
 import GlobalCommandCenter from "./components/GlobalCommandCenter";
 import logoUrl from "./assets/images/diavox_tech_logo_1781679695870.jpg";
@@ -78,97 +93,10 @@ const LandingSkeleton = () => {
     </div>
   );
 };
-const pathToSection: Record<string, string> = {
-  "/": "hero",
-  "/services": "services-page",
-  "/pricing": "pricing-page",
-  "/portfolio": "portfolio-page",
-  "/projects": "projects-page",
-  "/team": "team-page",
-  "/reviews": "reviews-page",
-  "/contact": "contact-page",
-  "/about": "about-page",
-  "/blog": "blog-page",
-};
 
-const sectionToPath: Record<string, string> = {
-  hero: "/",
-  "services-page": "/services",
-  "pricing-page": "/pricing",
-  "portfolio-page": "/portfolio",
-  "projects-page": "/projects",
-  "team-page": "/team",
-  "reviews-page": "/reviews",
-  "contact-page": "/contact",
-  "about-page": "/about",
-  "blog-page": "/blog",
-};
-
-const pageSeo: Record<string, { title: string; description: string; path: string }> = {
-  hero: {
-    title: "Diavox Tech | Web Development, AI Automation & SEO Services",
-    description:
-      "Diavox Tech builds fast websites, custom web apps, AI automation systems, business templates, UI/UX designs, and SEO-ready digital solutions.",
-    path: "/",
-  },
-  "services-page": {
-    title: "Services | Web Development, AI Automation, UI/UX & SEO | Diavox Tech",
-    description:
-      "Explore Diavox Tech services including web development, AI automation, business templates, UI/UX design, and search engine optimization.",
-    path: "/services",
-  },
-  "pricing-page": {
-    title: "Pricing | Diavox Tech",
-    description:
-      "View Diavox Tech pricing for websites, business software, automation systems, UI/UX design, and SEO services.",
-    path: "/pricing",
-  },
-  "portfolio-page": {
-    title: "Portfolio | Diavox Tech",
-    description:
-      "Explore Diavox Tech projects, websites, dashboards, automation tools, and custom software work.",
-    path: "/portfolio",
-  },
-  "blog-page": {
-    title: "Blog | Web Development, AI Automation & SEO Insights | Diavox Tech",
-    description:
-      "Read Diavox Tech articles about web development, AI automation, SEO, UI/UX design, business growth, and digital systems.",
-    path: "/blog",
-  },
-  "reviews-page": {
-    title: "Client Reviews | Diavox Tech",
-    description:
-      "Read client reviews for Diavox Tech web development, automation, design, and SEO services.",
-    path: "/reviews",
-  },
-  "contact-page": {
-    title: "Contact Diavox Tech | Start Your Project",
-    description:
-      "Contact Diavox Tech to discuss websites, web apps, AI automation, business templates, UI/UX design, and SEO services.",
-    path: "/contact",
-  },
-  "about-page": {
-    title: "About Diavox Tech | Digital Systems & Automation Company",
-    description:
-      "Learn about Diavox Tech, a digital systems company building websites, AI automation, dashboards, and business software.",
-    path: "/about",
-  },
-  "team-page": {
-    title: "Team | Diavox Tech",
-    description:
-      "Meet the Diavox Tech team behind web development, AI automation, UI/UX design, SEO, and custom digital systems.",
-    path: "/team",
-  },
-};
 export default function App() {
-  const { theme, currentUser, syncSupabase, cmsContent, socialMediaLinks, isCmsLoaded, isCmsFresh, blogs } = useStore();
-  const [activeSection, setActiveSection] = useState<string>(() => {
-  if (window.location.pathname.startsWith("/blog/")) {
-    return "blog-page";
-  }
-
-  return pathToSection[window.location.pathname] || "hero";
-});
+  const { theme, currentUser, syncSupabase, cmsContent, socialMediaLinks, isCmsLoaded, isCmsFresh } = useStore();
+  const [activeSection, setActiveSection] = useState<string>("hero");
   const [authModalOpen, setAuthModalOpen] = useState<boolean>(false);
   const [showScrollTop, setShowScrollTop] = useState<boolean>(false);
   const [commandCenterOpen, setCommandCenterOpen] = useState<boolean>(false);
@@ -265,9 +193,10 @@ export default function App() {
 
   // Dynamically load Google Webfonts and override CSS layout custom properties
   useEffect(() => {
-    const sans = cmsContent?.fontSans || "Inter";
-    const display = cmsContent?.fontDisplay || "Space Grotesk";
-    const mono = cmsContent?.fontMono || "JetBrains Mono";
+    const sanitizeFontFamily = (name: string) => name.replace(/[^a-zA-Z0-9\s-]/g, "");
+    const sans = sanitizeFontFamily(cmsContent?.fontSans || "Inter");
+    const display = sanitizeFontFamily(cmsContent?.fontDisplay || "Space Grotesk");
+    const mono = sanitizeFontFamily(cmsContent?.fontMono || "JetBrains Mono");
 
     // Format query families safe for HTTP requests
     const uniqueFamilies = Array.from(new Set([sans, display, mono]));
@@ -305,37 +234,16 @@ export default function App() {
   }, [cmsContent?.fontSans, cmsContent?.fontDisplay, cmsContent?.fontMono]);
 
   const handleNavigate = (sectionId: string) => {
-  setActiveSection(sectionId);
-
-  const path = sectionToPath[sectionId];
-
-  if (path && window.location.pathname !== path) {
-    window.history.pushState({}, "", path);
-  }
-
-  const element = document.getElementById(sectionId);
-
-  if (element && sectionId === "hero") {
-    element.scrollIntoView({ behavior: "smooth" });
-  } else {
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
-};
-useEffect(() => {
-  const handlePopState = () => {
-    if (window.location.pathname.startsWith("/blog/")) {
-  setActiveSection("blog-page");
-} else {
-  setActiveSection(pathToSection[window.location.pathname] || "hero");
-}
+    setActiveSection(sectionId);
+    
+    // Scroll to section block if on general Home view
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: "smooth" });
+    } else {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
   };
-
-  window.addEventListener("popstate", handlePopState);
-
-  return () => {
-    window.removeEventListener("popstate", handlePopState);
-  };
-}, []);
 
   const handleScrollTopAction = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -382,24 +290,6 @@ useEffect(() => {
         </section>
       ));
   };
-  const blogSlug = window.location.pathname.startsWith("/blog/")
-    ? window.location.pathname.replace("/blog/", "").replace(/\/$/, "")
-    : "";
-
-  const activeBlogSeo = blogSlug
-    ? blogs.find((blog: any) => blog.slug === blogSlug)
-    : null;
-
-  const seo: { title: string; description: string; path: string; image?: string } = activeBlogSeo
-    ? {
-        title: `${activeBlogSeo.title} | Diavox Tech`,
-        description: (activeBlogSeo.content || "")
-          .replace(/\s+/g, " ")
-          .slice(0, 155),
-        path: `/blog/${activeBlogSeo.slug}`,
-        image: activeBlogSeo.image_url || "https://www.diavoxtech.in/og-image.png",
-      }
-    : pageSeo[activeSection] || pageSeo.hero;
 
   if (!isCmsLoaded) {
     return (
@@ -420,11 +310,7 @@ useEffect(() => {
   }
 
   return (
-    <>
-      <SEO title={seo.title} description={seo.description} path={seo.path} image={seo.image} />
-      <GoogleAnalytics />
-
-      <div className={`min-h-screen flex flex-col font-sans transition-colors duration-300 ${
+    <div className={`min-h-screen flex flex-col font-sans transition-colors duration-300 ${
       theme === "dark" ? "bg-slate-950 text-white" : "bg-white text-slate-900"
     }`}>
       
@@ -456,13 +342,13 @@ useEffect(() => {
             </div>
 
             {/* Render matched dashboard and pass active state */}
-            {activeSection === "admin-dash" && <AdminDashboard />}
-            {activeSection === "client-dash" && <ClientDashboard />}
-            {activeSection === "team-dash" && <TeamDashboard />}
+            <Suspense fallback={<DashboardSkeleton />}>
+              {activeSection === "admin-dash" && <AdminDashboard />}
+              {activeSection === "client-dash" && <ClientDashboard />}
+              {activeSection === "team-dash" && <TeamDashboard />}
+            </Suspense>
 
           </div>
-        ) : !isCmsFresh ? (
-          <LandingSkeleton />
         ) : [
           "services-page", 
           "pricing-page", 
@@ -889,7 +775,6 @@ useEffect(() => {
         }}
       />
 
-      </div>
-    </>
+    </div>
   );
 }

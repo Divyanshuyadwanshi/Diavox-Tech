@@ -154,12 +154,20 @@ export default function Pricing({ onOpenAuth, onNavigate, preview }: PricingProp
         
         {/* Title and Controls Panel */}
         <div className="max-w-4xl mx-auto text-center mb-16 space-y-6" id="pricing-header-root">
-          <p className="text-xs font-mono uppercase tracking-widest text-cyan-500 font-bold">MUTUAL SUCCESS ROADMAPS</p>
+          <p className="text-xs font-mono uppercase tracking-widest text-cyan-500 font-bold">
+            {cmsContent?.sectionTitles?.pricing || "MUTUAL SUCCESS ROADMAPS"}
+          </p>
           <h2 className="text-3xl sm:text-4xl md:text-5.5xl font-display font-light tracking-tight leading-tight">
-            Plans Suited for <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-500 via-amber-250 to-purple-400 font-normal italic">Every Scale</span>
+            {cmsContent?.sectionSubtitles?.pricing ? (
+              cmsContent.sectionSubtitles.pricing
+            ) : (
+              <>
+                Plans Suited for <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-500 via-amber-250 to-purple-400 font-normal italic">Every Scale</span>
+              </>
+            )}
           </h2>
           <p className="text-sm sm:text-base opacity-75 font-light max-w-2xl mx-auto">
-            Choose an on-demand service package. Toggle between global and Indian billing gateways below to view real-time converted rates instantly.
+            {cmsContent?.sectionDescriptions?.pricing || "Choose an on-demand service package. Toggle between global and Indian billing gateways below to view real-time converted rates instantly."}
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-6 pt-4" id="pricing-billing-gateways">

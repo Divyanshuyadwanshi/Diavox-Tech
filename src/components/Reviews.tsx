@@ -14,7 +14,7 @@ interface ReviewsProps {
 }
 
 export default function Reviews({ onOpenAuth, preview, onNavigate }: ReviewsProps) {
-  const { theme, reviews, currentUser, addReview, deleteReview } = useStore();
+  const { theme, reviews, currentUser, addReview, deleteReview, cmsContent } = useStore();
   const [composerOpen, setComposerOpen] = useState<boolean>(false);
   const [rating, setRating] = useState<number>(5);
   const [text, setText] = useState<string>("");
@@ -73,12 +73,20 @@ export default function Reviews({ onOpenAuth, preview, onNavigate }: ReviewsProp
         {/* Title and Ratings Statistics Panel */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center mb-16" id="reviews-header-block">
           <div className="lg:col-span-8 space-y-4">
-            <p className="text-xs font-mono uppercase tracking-widest text-cyan-500">CLIENT DELIGHT & FEEDBACK</p>
+            <p className="text-xs font-mono uppercase tracking-widest text-cyan-500">
+              {cmsContent?.sectionTitles?.reviews || "CLIENT DELIGHT & FEEDBACK"}
+            </p>
             <h2 className="text-3xl sm:text-4xl md:text-5.5xl font-display font-light tracking-tight leading-tight">
-              Testimonials from <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-500 via-amber-250 to-purple-400 font-normal italic">Worldwide Teams</span>
+              {cmsContent?.sectionSubtitles?.reviews ? (
+                cmsContent.sectionSubtitles.reviews
+              ) : (
+                <>
+                  Testimonials from <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-500 via-amber-250 to-purple-400 font-normal italic">Worldwide Teams</span>
+                </>
+              )}
             </h2>
             <p className="text-base font-light opacity-75">
-              Read transparent client success stories. Client satisfaction is our primary metric. Authenticated customers are welcomed to write, update, or manage reviews immediately.
+              {cmsContent?.sectionDescriptions?.reviews || "Read transparent client success stories. Client satisfaction is our primary metric. Authenticated customers are welcomed to write, update, or manage reviews immediately."}
             </p>
           </div>
 

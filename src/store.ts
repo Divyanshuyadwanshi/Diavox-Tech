@@ -932,34 +932,33 @@ export const useStore = create<AgencyState>((set, get) => {
         return;
       }
       isSyncingSupabase = true;
+      const startTime = performance.now();
 
       try {
         // 1. Resolve and synchronize active Supabase Auth session on mount / synckey
         try {
           const currentLocalUser = get().currentUser;
-          if (currentLocalUser && currentLocalUser.id === "admin-secret") {
-            // Skip remote Supabase fetch for local/bypass account to avoid UUID type errors
-            console.log("[STORE] Bypass Supabase profile check for admin-secret session sync.");
+          if (currentLocalUser) {
+            // Already initialized via AuthListener or Cache, no need to perform duplicate getSession + profile fetch
+            console.log("[STORE] Utilizing already resolved active session.");
           } else {
             const { data: { session } } = await supabase.auth.getSession();
             if (session && session.user) {
-              if (!currentLocalUser || currentLocalUser.id !== session.user.id) {
-                const { data: dbProf } = await supabase.from("profiles").select("*").eq("id", session.user.id).maybeSingle();
-                if (dbProf) {
-                  const synchronizedUser: UserProfile = {
-                    id: dbProf.id,
-                    email: dbProf.email,
-                    name: dbProf.name,
-                    role: dbProf.role as UserRole,
-                    department: dbProf.department as TeamDepartment,
-                    avatar_url: dbProf.avatar_url,
-                    username: dbProf.username,
-                    permissions: dbProf.skills || dbProf.permissions || [],
-                    status: dbProf.status
-                  };
-                  set({ currentUser: synchronizedUser });
-                  saveStateToCache({ currentUser: synchronizedUser });
-                }
+              const { data: dbProf } = await supabase.from("profiles").select("*").eq("id", session.user.id).maybeSingle();
+              if (dbProf) {
+                const synchronizedUser: UserProfile = {
+                  id: dbProf.id,
+                  email: dbProf.email,
+                  name: dbProf.name,
+                  role: dbProf.role as UserRole,
+                  department: dbProf.department as TeamDepartment,
+                  avatar_url: dbProf.avatar_url,
+                  username: dbProf.username,
+                  permissions: dbProf.skills || dbProf.permissions || [],
+                  status: dbProf.status
+                };
+                set({ currentUser: synchronizedUser });
+                saveStateToCache({ currentUser: synchronizedUser });
               }
             }
           }
@@ -1013,31 +1012,48 @@ export const useStore = create<AgencyState>((set, get) => {
         saveStateToCache({ cmsContent: get().cmsContent });
 
         // 3. Fetch public-facing items (Profiles for Team block, Portfolio, Blogs, Reviews, Pricing)
-        // Fetch Profiles via Secure API to bypass RLS issues
         let profilesList: any[] = [];
         try {
-          const res = await secureFetch("/api/admin/profiles");
-          if (res.ok) {
-            const data = await res.json();
-            profilesList = data.profiles;
+          const currentUserObj = get().currentUser;
+          const isStaff = currentUserObj && ["secret_admin", "primary_admin", "secondary_admin", "third_admin", "team_member", "developer"].includes(currentUserObj.role);
+          
+          if (isStaff) {
+            // Staff members need all profiles for dashboards
+            const res = await secureFetch("/api/admin/profiles");
+            if (res.ok) {
+              const data = await res.json();
+              profilesList = data.profiles || [];
+            }
           } else {
-            const { data: profiles } = await supabase.from("profiles").select("*");
-            const { data: teamMembers } = await supabase.from("team_members").select("*");
-            if (profiles) {
-              profilesList = profiles.map(p => {
-                const matchedTeamMember = (teamMembers || []).find(t => String(p.id).trim().toLowerCase() === String(t.profile_id).trim().toLowerCase());
-                return { ...p, ...(matchedTeamMember || {}) };
-              });
+            // Public/clients only need the public team members
+            const res = await fetch("/api/public/team");
+            if (res.ok) {
+              const data = await res.json();
+              profilesList = data.team || [];
             }
           }
         } catch (fetchErr) {
-          const { data: profiles } = await supabase.from("profiles").select("*");
-          const { data: teamMembers } = await supabase.from("team_members").select("*");
-          if (profiles) {
-            profilesList = profiles.map(p => {
-              const matchedTeamMember = (teamMembers || []).find(t => String(p.id).trim().toLowerCase() === String(t.profile_id).trim().toLowerCase());
-              return { ...p, ...(matchedTeamMember || {}) };
-            });
+          console.warn("[ZERO TRUST] profiles API fetch warning, using secure fallback:", fetchErr);
+        }
+
+        if (profilesList.length === 0) {
+          try {
+            const { data: teamMembers } = await supabase.from("team_members").select("*");
+            if (teamMembers && teamMembers.length > 0) {
+              const teamProfileIds = teamMembers.map(t => t.profile_id);
+              const { data: profiles } = await supabase
+                .from("profiles")
+                .select("id, name, role, department, avatar_url, username, status")
+                .in("id", teamProfileIds);
+              if (profiles) {
+                profilesList = profiles.map(p => {
+                  const matched = teamMembers.find(t => String(p.id).trim().toLowerCase() === String(t.profile_id).trim().toLowerCase());
+                  return { ...p, ...(matched || {}) };
+                });
+              }
+            }
+          } catch (fallbackErr) {
+            console.error("Direct fallback profiles query failed:", fallbackErr);
           }
         }
 
@@ -1314,6 +1330,11 @@ export const useStore = create<AgencyState>((set, get) => {
         }
 
         // 5. Setup Public and Conditional Private Realtime Subscriptions
+        try {
+          await supabase.removeAllChannels();
+        } catch (e) {
+          console.warn("[REALTIME] Error clearing old subscriptions:", e);
+        }
         // Public subscriptions
         try {
           supabase
@@ -1568,6 +1589,10 @@ export const useStore = create<AgencyState>((set, get) => {
           } catch (e) {}
         }
 
+        if ((import.meta as any).env?.DEV) {
+          const duration = performance.now() - startTime;
+          console.log(`[PERF] syncSupabase completed in ${duration.toFixed(2)}ms`);
+        }
       } catch (err) {
         console.warn("Supabase database synchronization failed, operating offline.", err);
         set({ isCmsLoaded: true, isCmsFresh: true });

@@ -345,14 +345,25 @@ export default function AdminCms() {
   // SERVICES HANDLERS
   const addService = () => {
     if (!newSvcTitle.trim()) return;
-    const newSvc = {
-      id: "service-" + Math.random().toString(36).substring(4),
-      title: newSvcTitle,
-      description: newSvcDesc,
-      icon: newSvcIcon
-    };
-    const updated = [...services, newSvc];
-    setServices(updated);
+    if (editingSvcId) {
+      const updated = services.map(s => {
+        if (s.id === editingSvcId) {
+          return { ...s, title: newSvcTitle, description: newSvcDesc, icon: newSvcIcon };
+        }
+        return s;
+      });
+      setServices(updated);
+      setEditingSvcId(null);
+    } else {
+      const newSvc = {
+        id: "service-" + Math.random().toString(36).substring(4),
+        title: newSvcTitle,
+        description: newSvcDesc,
+        icon: newSvcIcon
+      };
+      const updated = [...services, newSvc];
+      setServices(updated);
+    }
     setNewSvcTitle("");
     setNewSvcDesc("");
     setNewSvcIcon("Laptop");
@@ -1300,7 +1311,7 @@ export default function AdminCms() {
             {/* Left: Services form */}
             <div className="xl:col-span-4 bg-slate-900/30 p-6 rounded-2xl border dark:border-slate-900 border-slate-200 h-fit space-y-4">
               <h4 className="text-xs font-mono font-bold tracking-widest uppercase border-b dark:border-slate-850 pb-2 text-slate-200">
-                Create Custom Web Capability
+                {editingSvcId ? "Modify Custom Web Capability" : "Create Custom Web Capability"}
               </h4>
 
               <div className="space-y-3">
@@ -1342,14 +1353,31 @@ export default function AdminCms() {
                   />
                 </div>
 
-                <button
-                  type="button"
-                  onClick={addService}
-                  className="w-full py-3 bg-cyan-950 text-cyan-400 border border-cyan-500/30 font-mono font-bold rounded-xl hover:bg-cyan-900/60 transition-colors flex items-center justify-center space-x-1.5 cursor-pointer"
-                >
-                  <Plus size={14} />
-                  <span>Draft Capability</span>
-                </button>
+                <div className="space-y-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={addService}
+                    className="w-full py-3 bg-cyan-950 text-cyan-400 border border-cyan-500/30 font-mono font-bold rounded-xl hover:bg-cyan-900/60 transition-colors flex items-center justify-center space-x-1.5 cursor-pointer"
+                  >
+                    {editingSvcId ? <Check size={14} /> : <Plus size={14} />}
+                    <span>{editingSvcId ? "Update Capability" : "Draft Capability"}</span>
+                  </button>
+
+                  {editingSvcId && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingSvcId(null);
+                        setNewSvcTitle("");
+                        setNewSvcDesc("");
+                        setNewSvcIcon("Laptop");
+                      }}
+                      className="w-full py-2 bg-slate-950/40 text-slate-400 border dark:border-slate-850 font-mono rounded-xl hover:bg-slate-900 transition-colors cursor-pointer text-[10px]"
+                    >
+                      Cancel Edit
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -1390,10 +1418,31 @@ export default function AdminCms() {
                         <p className="text-[11px] opacity-75 leading-relaxed font-light line-clamp-3">{item.description}</p>
                       </div>
 
-                      <div className="mt-3 flex justify-end pt-2 border-t dark:border-slate-900">
+                      <div className="mt-3 flex justify-end pt-2 border-t dark:border-slate-900 space-x-1.5">
                         <button
                           type="button"
-                          onClick={() => deleteService(item.id)}
+                          onClick={() => {
+                            setEditingSvcId(item.id);
+                            setNewSvcTitle(item.title);
+                            setNewSvcDesc(item.description);
+                            setNewSvcIcon(item.icon);
+                          }}
+                          className="p-1.5 hover:bg-cyan-500/10 text-cyan-400 hover:text-cyan-300 rounded-lg transition-colors cursor-pointer"
+                          title="Edit capability"
+                        >
+                          <Edit2 size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (editingSvcId === item.id) {
+                              setEditingSvcId(null);
+                              setNewSvcTitle("");
+                              setNewSvcDesc("");
+                              setNewSvcIcon("Laptop");
+                            }
+                            deleteService(item.id);
+                          }}
                           className="p-1.5 hover:bg-rose-500/10 text-rose-400 hover:text-rose-300 rounded-lg transition-colors cursor-pointer"
                           title="Remove capability"
                         >

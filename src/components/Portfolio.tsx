@@ -13,7 +13,7 @@ interface PortfolioProps {
 }
 
 export default function Portfolio({ preview, onNavigate }: PortfolioProps) {
-  const { theme, portfolioItems, fetchPortfolio } = useStore();
+  const { theme, portfolioItems, fetchPortfolio, cmsContent } = useStore();
   const [activeCategory, setActiveCategory] = useState<string>("All");
   const [selectedProject, setSelectedProject] = useState<any | null>(null);
 
@@ -40,12 +40,20 @@ export default function Portfolio({ preview, onNavigate }: PortfolioProps) {
         {/* Core title and filter buttons */}
         <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-6" id="portfolio-header">
           <div className="max-w-xl space-y-4">
-            <p className="text-xs font-mono uppercase tracking-widest text-cyan-500">OUR RECENT PORTFOLIO</p>
+            <p className="text-xs font-mono uppercase tracking-widest text-cyan-500">
+              {cmsContent?.sectionTitles?.portfolio || "OUR RECENT PORTFOLIO"}
+            </p>
             <h2 className="text-3xl sm:text-4xl md:text-5.5xl font-display font-light tracking-tight leading-tight">
-              Crafted with <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-500 via-amber-250 to-purple-400 font-normal italic">Absolute Precision</span>
+              {cmsContent?.sectionSubtitles?.portfolio ? (
+                cmsContent.sectionSubtitles.portfolio
+              ) : (
+                <>
+                  Crafted with <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-500 via-amber-250 to-purple-400 font-normal italic">Absolute Precision</span>
+                </>
+              )}
             </h2>
             <p className="text-sm opacity-75 font-light">
-              Explore solutions we have delivered remotely to clients globally. Filter by industry niche to see our execution capabilities.
+              {cmsContent?.sectionDescriptions?.portfolio || "Explore solutions we have delivered remotely to clients globally. Filter by industry niche to see our execution capabilities."}
             </p>
           </div>
 

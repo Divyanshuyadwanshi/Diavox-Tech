@@ -35,130 +35,78 @@ export default function Services({ onNavigate, onOpenAuth, preview = true }: Ser
   const defaultServices = [
     {
       id: "service-1",
-icon: "Laptop",
-title: "Website Development",
-description:
-  "We design and develop fast, modern websites that help businesses establish a strong online presence. Whether you need a professional company website, a custom web application, an online store, or a client portal, every project is built with performance, scalability, and long-term maintainability in mind. Our development approach focuses on clean code, responsive design, secure architecture, and an intuitive user experience across all devices.",
-
-benefits:
-  "Enjoy faster loading pages, a seamless experience on desktop and mobile, and a website that's easy to manage, scale, and maintain as your business grows.",
-
-techUsed: [
-  "React",
-  "TypeScript",
-  "Vite",
-  "Node.js",
-  "Express",
-  "Supabase"
-],
-
-items: [
-  "Business & Corporate Websites",
-  "Custom Web Applications",
-  "E-commerce Stores (Custom & Shopify)",
-  "Client Portals & Admin Dashboards",
-  "Portfolio & Personal Brand Websites"
-]
+      icon: "Laptop",
+      title: "Website Development",
+      description: "We build clean, ultra-responsive web applications tailored for modern businesses. Our stack focuses on rapid load times, custom CMS panels, reliable security standards, and seamless database structures.",
+      benefits: "Guarantees a flawless display on mobile systems, zero sluggish animations, and clean code that any engineer can maintain in the future.",
+      techUsed: ["React", "TypeScript", "Vite", "Node.js", "Express", "Supabase DB"],
+      items: [
+        "Corporate & Business Websites",
+        "Creative & Editorial Portfolios",
+        "E-Commerce Stores (Custom or Shopify)",
+        "Database-Driven SaaS Applications",
+        "Sleek Web Portals & Dashboards"
+      ]
     },
     {
-     id: "service-2",
-icon: "Layers",
-title: "UI/UX Design",
-description:
-  "We design intuitive, user-focused interfaces that make digital products easy to use and visually engaging. Every design is created with your brand, audience, and business goals in mind, ensuring a seamless experience across desktop, tablet, and mobile devices. From wireframes to polished interfaces, we focus on clarity, consistency, and usability.",
-
-benefits:
-  "Create a better first impression, improve user engagement, and make it easier for visitors to find information, complete tasks, and take action.",
-
-techUsed: [
-  "Figma",
-  "Tailwind CSS",
-  "Framer Motion",
-  "Design Systems"
-],
-
-items: [
-  "Website & Web App UI Design",
-  "Wireframes & Interactive Prototypes",
-  "Responsive User Interfaces",
-  "Design Systems & Component Libraries",
-  "Brand Identity & Visual Design"
-]
+      id: "service-2",
+      icon: "Layers",
+      title: "Website Design",
+      description: "We craft professional layouts that tell your corporate story elegantly. Our design layouts balance beautiful readability with clever interactive details to keep visitors engaged and guide them toward your key actions.",
+      benefits: "Drives higher client inquiry rates, establishes immediate brand authority, and matches the visual standard of premium industry leaders.",
+      techUsed: ["Figma UI/UX", "Tailwind CSS", "Framer Motion", "Luxurious Typography"],
+      items: [
+        "Interactive High-Fidelity Prototypes",
+        "Mobile-first Fluid Screen Layouts",
+        "Responsive Grid Components",
+        "Corporate Identity & Palette Design",
+        "Interactive Branding & Style Systems"
+      ]
     },
     {
       id: "service-3",
-icon: "Settings",
-title: "Search Engine Optimization (SEO)",
-description:
-  "We optimize your website to improve its visibility in search engines and help potential customers find your business more easily. Our SEO approach combines technical optimization, on-page improvements, performance enhancements, and content strategy to build a strong foundation for sustainable organic growth.",
-
-benefits:
-  "Increase your website's visibility, attract more qualified visitors, and build long-term organic traffic without relying solely on paid advertising.",
-
-techUsed: [
-  "Google Search Console",
-  "Google Analytics",
-  "Schema.org",
-  "Core Web Vitals"
-],
-
-items: [
-  "Technical SEO Audits",
-  "On-Page SEO Optimization",
-  "Keyword Research & Content Strategy",
-  "Website Performance & Core Web Vitals",
-  "Local SEO & Search Console Setup"
-]
+      icon: "Settings",
+      title: "Technical SEO",
+      description: "We audit and configure your web platform structure so search engines index it correctly. We focus on fast server response indices, clean sitemaps, structured schema data, and smart keyword density plans.",
+      benefits: "Increases your business ranking on search results organically, bringing in qualified sales leads without relying on continuous paid ads.",
+      techUsed: ["Google Search Console", "Google Analytics", "Speed Indexes Metrics", "Schema.org Markup"],
+      items: [
+        "Full Page Speed & Performance Tuning",
+        "Dynamic XML Sitemap Optimization",
+        "In-depth Keyword Strategy Mapping",
+        "Organic Backlink Roadmap Strategies",
+        "Local SEO & Search Index Configuration"
+      ]
     },
     {
       id: "service-4",
-icon: "Bot",
-title: "AI Automation",
-description:
-  "We build AI-powered automation solutions that streamline repetitive tasks, improve operational efficiency, and help your team work smarter. From customer inquiries and lead management to workflow automation and intelligent data processing, we create solutions that integrate seamlessly with your existing business systems.",
-
-benefits:
-  "Reduce manual work, improve response times, minimize repetitive tasks, and allow your team to focus on higher-value work while automated workflows handle routine processes.",
-
-techUsed: [
-  "Google Gemini API",
-  "OpenAI API",
-  "Workflow Automation",
-  "Webhook Integrations"
-],
-
-items: [
-  "AI Chatbots & Virtual Assistants",
-  "Lead Capture & Qualification Automation",
-  "WhatsApp & Email Workflow Automation",
-  "CRM & Database Automation",
-  "Document Processing & AI Classification"
-]
+      icon: "Bot",
+      title: "AI Automation",
+      description: "We connect Google Gemini API features to your daily manual procedures, helping you filter raw customer inquires, update databases automatically, and send instant notification alerts to your team.",
+      benefits: "Cuts down administrative chore times by hours, responds to leads in under five minutes, and avoids boring manual copy-paste mistakes.",
+      techUsed: ["Gemini AI API", "SDK Workflows", "Slack Webhooks", "Trigger Pipelines"],
+      items: [
+        "Smart Conversational Chat Assistances",
+        "Automatic Client Lead Scoring Systems",
+        "Instant WhatsApp & Telegram Alerts",
+        "Database Lead Logs Automation",
+        "AI Content Classification Tools"
+      ]
     },
     {
       id: "service-5",
-icon: "Download",
-title: "Business Templates",
-description:
-  "Launch your website faster with professionally designed templates built for real business needs. Our templates provide a solid foundation for common industries while remaining flexible enough to match your brand, content, and business goals. Each template is optimized for performance, responsiveness, and future customization.",
-
-benefits:
-  "Reduce development time, lower project costs, and launch with a polished, professional website that can easily grow alongside your business.",
-
-techUsed: [
-  "React",
-  "TypeScript",
-  "Zustand",
-  "Supabase"
-],
-
-items: [
-  "Hotel & Hospitality Websites",
-  "Restaurant & Café Websites",
-  "Real Estate Listing Platforms",
-  "Agency & Business Websites",
-  "Appointment Booking & Service Websites"
-]
+      icon: "Download",
+      title: "Business Templates",
+      description: "We deliver pre-built digital architectural layouts for common business fields, letting you fast-track your launch schedules. Each template includes high-end styling, database tables, and fully designed client widgets.",
+      benefits: "Reduces complete project design-to-launch schedules by weeks while maintaining a handcrafted, bespoke user experience.",
+      techUsed: ["Zustand State", "Form Assertions", "Static Data Hydration", "Local Cache Systems"],
+      items: [
+        "Boutique Hotel Booking Layouts",
+        "Responsive Restaurant Menu Systems",
+        "Real Estate Spatial Listings Boards",
+        "Bespoke Agency Showcase Layouts",
+        "Sleek Client Invoicing Mockups"
+      ]
     }
   ];
 
@@ -166,60 +114,40 @@ items: [
     ? cmsContent.services 
     : [];
 
-  const servicesData = defaultServices.map((defS) => {
-    const storeS = rawStoreServices.find(s => s.id === defS.id || s.title.toLowerCase() === defS.title.toLowerCase());
-    return {
-      ...defS,
-      title: storeS?.title || defS.title,
-      description: storeS?.description || defS.description,
-      icon: iconMap[storeS?.icon || defS.icon] || <Laptop className="text-cyan-400" size={24} />,
-    };
-  });
+  const servicesData = rawStoreServices.length > 0
+    ? rawStoreServices.map((storeS) => {
+        const defS = defaultServices.find(d => d.id === storeS.id || d.title.toLowerCase() === storeS.title.toLowerCase());
+        return {
+          id: storeS.id,
+          title: storeS.title,
+          description: storeS.description,
+          icon: iconMap[storeS.icon] || <Laptop className="text-cyan-400" size={24} />,
+          benefits: defS?.benefits || "Custom created digital capabilities to deliver enterprise and growth value.",
+          techUsed: defS?.techUsed || ["Core Frameworks", "Handcrafted Layouts", "API Systems"],
+          items: defS?.items || ["Handcrafted delivery assets", "Custom parameters configuration"]
+        };
+      })
+    : defaultServices.map(defS => ({
+        ...defS,
+        icon: iconMap[defS.icon] || <Laptop className="text-cyan-400" size={24} />,
+      }));
 
-  if (rawStoreServices.length > defaultServices.length) {
-    rawStoreServices.forEach((s) => {
-      const alreadyIncluded = servicesData.some(sd => sd.title === s.title);
-      if (!alreadyIncluded) {
-        servicesData.push({
-          id: s.id,
-          title: s.title,
-          description: s.description,
-          icon: iconMap[s.icon] || <Laptop className="text-cyan-400" size={24} />,
-          benefits: "Custom created digital capabilities to deliver enterprise and growth value.",
-          techUsed: ["Core Frameworks", "Handcrafted Layouts", "API Systems"],
-          items: ["Handcrafted delivery assets", "Custom parameters configuration"]
-        });
-      }
-    });
-  }
 
   const faqData = cmsContent?.faqs && cmsContent.faqs.length > 0
     ? cmsContent.faqs.map(f => ({ q: f.question, a: f.answer }))
     : [
-  {
-    q: "How long does it take to build a custom website?",
-    a: "Project timelines depend on the scope and complexity. Most business websites are completed within 3–6 weeks, while larger web applications or platforms with custom features typically take 6–10 weeks. We'll provide a clear timeline before development begins."
-  },
-  {
-    q: "Can I review the design before development starts?",
-    a: "Yes. We begin with wireframes or high-fidelity designs so you can review the layout, branding, and user experience. Development only starts after you've approved the design."
-  },
-  {
-    q: "Will I receive updates during the project?",
-    a: "Absolutely. We keep you informed throughout the development process with regular progress updates, milestone reviews, and opportunities to provide feedback before moving to the next stage."
-  },
-  {
-    q: "Will my website work on mobile devices?",
-    a: "Yes. Every website we build is fully responsive and optimized to provide a smooth experience across desktops, tablets, and smartphones."
-  },
-  {
-    q: "Can my website be updated as my business grows?",
-    a: "Yes. We build scalable websites that can be expanded with new pages, features, integrations, or functionality as your business evolves."
-  },
-  {
-    q: "Do you provide support after the website is launched?",
-    a: "Yes. We offer post-launch support to help with updates, maintenance, performance improvements, and any technical issues that may arise."
-  }
+        {
+          q: "How long does it take to deploy a custom business website?",
+          a: "A standard custom project (like a corporate landing page or visual portfolio) typically delivers an active beta layout in 2 to 3 weeks. Complex web applications with databases and user logins may take 6 to 8 weeks in sprints."
+        },
+        {
+          q: "Do we get to review the UI layouts before development begins?",
+          a: "Yes, absolutely. We design comprehensive prototypes in Figma first. We collect your direct text feedback and iterate on layouts, colors, and typography until you approve. Only then do we start writing clean code."
+        },
+        {
+          q: "Can we track active development status in real-time?",
+          a: "Yes. Once you sign in, your dedicated Customer Dashboard lists your active development portal, database states, payment invoices, and a live chat window with your engineering lead."
+        }
       ];
 
   const handleBookSelected = () => {
@@ -335,12 +263,20 @@ items: [
         
         {/* Title Presentation */}
         <div className="max-w-3xl space-y-4" id="services-title-wrapper">
-          <p className="text-xs font-mono uppercase tracking-widest text-cyan-500 font-bold">EXPERTISE & CAPABILITIES</p>
+          <p className="text-xs font-mono uppercase tracking-widest text-cyan-500 font-bold">
+            {cmsContent?.sectionTitles?.services || "EXPERTISE & CAPABILITIES"}
+          </p>
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-display font-light leading-tight tracking-tight">
-            How We Help Your Business <span className="font-semibold italic text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500">Stand Out & Grow</span>
+            {cmsContent?.sectionSubtitles?.services ? (
+              cmsContent.sectionSubtitles.services
+            ) : (
+              <>
+                How We Help Your Business <span className="font-semibold italic text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500">Stand Out & Grow</span>
+              </>
+            )}
           </h2>
           <p className="text-sm sm:text-base opacity-85 leading-relaxed font-light">
-            We provide web development, AI automation, business templates, UI/UX design, and SEO services that help businesses launch faster, improve search visibility, automate workflows, and convert more visitors into clients.
+            {cmsContent?.sectionDescriptions?.services || "We provide clear, reliable web development, corporate design, search ranking configurations, and smart script integrations to eliminate operational bottlenecks and turn traffic into clients."}
           </p>
         </div>
 

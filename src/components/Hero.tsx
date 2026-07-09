@@ -56,13 +56,8 @@ export default function Hero({ onNavigate, onOpenAuth }: HeroProps) {
 
   const currentSlide = slides[currentSlideIndex] || {
     id: "default",
-    title:
-    cmsContent?.heroTitle ||
-    "Web Development, AI Automation & SEO Services for Growing Businesses",
-
-   subtitle:
-    cmsContent?.heroSubtitle ||
-    "Diavox Tech builds fast websites, custom web apps, AI automation systems, business templates, UI/UX designs, and SEO-ready digital solutions for modern businesses.",
+    title: cmsContent?.heroTitle || "Aesthetic Modern Digital Systems",
+    subtitle: cmsContent?.heroSubtitle || "Empowering brands through precision engineering and design.",
     buttonText: cmsContent?.heroCtaPrimaryText || "Initialize Request",
     buttonLink: "#services",
     status: true,
@@ -307,7 +302,7 @@ export default function Hero({ onNavigate, onOpenAuth }: HeroProps) {
             </div>
             <div className="space-y-1">
               <h3 className="text-3xl md:text-4xl font-display font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-sky-400 to-purple-400">
-                5+
+                120+
               </h3>
               <p className="text-xs font-mono opacity-70">Remote Projects Done</p>
             </div>

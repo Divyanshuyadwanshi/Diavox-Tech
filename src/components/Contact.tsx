@@ -104,12 +104,20 @@ export default function Contact({ onOpenAuth, onNavigate }: ContactProps) {
         
         {/* Title row */}
         <div className="max-w-3xl mb-16 space-y-4" id="contact-header">
-          <p className="text-xs font-mono uppercase tracking-widest text-cyan-500 font-bold">DIAVOX COMMUNICATIONS HUB</p>
+          <p className="text-xs font-mono uppercase tracking-widest text-cyan-500 font-bold">
+            {cmsContent?.sectionTitles?.contact || "DIAVOX COMMUNICATIONS HUB"}
+          </p>
           <h2 className="text-3xl sm:text-4xl md:text-5.5xl font-display font-light tracking-tight leading-tight">
-            Schedule a <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-500 via-amber-250 to-purple-400 font-normal italic">Free Consultation</span>
+            {cmsContent?.sectionSubtitles?.contact ? (
+              cmsContent.sectionSubtitles.contact
+            ) : (
+              <>
+                Schedule a <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-500 via-amber-250 to-purple-400 font-normal italic">Free Consultation</span>
+              </>
+            )}
           </h2>
           <p className="text-sm sm:text-base opacity-75 font-light">
-            We are fully remote, assisting businesses around the globe. Get in touch with us via WhatsApp, phone, email, or post your direct project checklist inquiries below.
+            {cmsContent?.sectionDescriptions?.contact || "We are fully remote, assisting businesses around the globe. Get in touch with us via WhatsApp, phone, email, or post your direct project checklist inquiries below."}
           </p>
         </div>
 

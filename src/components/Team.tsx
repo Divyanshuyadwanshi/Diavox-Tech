@@ -14,7 +14,7 @@ interface TeamProps {
 }
 
 export default function Team({ preview, onNavigate }: TeamProps) {
-  const { theme, allUsers, currentUser } = useStore();
+  const { theme, allUsers, currentUser, cmsContent } = useStore();
   const [apiStatus, setApiStatus] = useState<string>("Testing...");
 
   useEffect(() => {
@@ -98,12 +98,20 @@ export default function Team({ preview, onNavigate }: TeamProps) {
         
         {/* Header content block */}
         <div className="max-w-3xl mb-16 space-y-4" id="team-header-block">
-          <p className="text-xs font-mono uppercase tracking-widest text-cyan-500 font-bold">RELIABLE WORLDWIDE SPECIALISTS</p>
+          <p className="text-xs font-mono uppercase tracking-widest text-cyan-500 font-bold">
+            {cmsContent?.sectionTitles?.team || "RELIABLE WORLDWIDE SPECIALISTS"}
+          </p>
           <h2 className="text-3xl sm:text-4xl md:text-5.5xl font-display font-light tracking-tight leading-tight">
-            Meet the <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-500 via-amber-250 to-purple-400 font-normal italic">Remote Specialists</span>
+            {cmsContent?.sectionSubtitles?.team ? (
+              cmsContent.sectionSubtitles.team
+            ) : (
+              <>
+                Meet the <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-500 via-amber-250 to-purple-400 font-normal italic">Remote Specialists</span>
+              </>
+            )}
           </h2>
           <p className="text-sm sm:text-base opacity-75 font-light leading-relaxed">
-            Our multi-branch divisions operate 24/7 across hemispheres to deploy sub-second custom portals, modern responsive layouts, and technical ranking algorithms.
+            {cmsContent?.sectionDescriptions?.team || "Our multi-branch divisions operate 24/7 across hemispheres to deploy sub-second custom portals, modern responsive layouts, and technical ranking algorithms."}
           </p>
         </div>
 
