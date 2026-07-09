@@ -12,6 +12,7 @@ import Services from "./components/Services";
 import Portfolio from "./components/Portfolio";
 import Team from "./components/Team";
 import SEO from "./components/SEO";
+import GoogleAnalytics from "./components/GoogleAnalytics";
 import Pricing from "./components/Pricing";
 import Blog from "./components/Blog";
 import Reviews from "./components/Reviews";
@@ -421,6 +422,7 @@ useEffect(() => {
   return (
     <>
       <SEO title={seo.title} description={seo.description} path={seo.path} image={seo.image} />
+      <GoogleAnalytics />
 
       <div className={`min-h-screen flex flex-col font-sans transition-colors duration-300 ${
       theme === "dark" ? "bg-slate-950 text-white" : "bg-white text-slate-900"
