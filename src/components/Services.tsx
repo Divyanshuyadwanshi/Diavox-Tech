@@ -51,7 +51,7 @@ export default function Services({ onNavigate, onOpenAuth, preview = true }: Ser
     {
       id: "service-2",
       icon: "Layers",
-      title: "Website Design",
+      title: "UI/UX Design",
       description: "We craft professional layouts that tell your corporate story elegantly. Our design layouts balance beautiful readability with clever interactive details to keep visitors engaged and guide them toward your key actions.",
       benefits: "Drives higher client inquiry rates, establishes immediate brand authority, and matches the visual standard of premium industry leaders.",
       techUsed: ["Figma UI/UX", "Tailwind CSS", "Framer Motion", "Luxurious Typography"],
@@ -66,7 +66,7 @@ export default function Services({ onNavigate, onOpenAuth, preview = true }: Ser
     {
       id: "service-3",
       icon: "Settings",
-      title: "Technical SEO",
+      title: "Search Engine Optimization (SEO)",title: "Search Engine Optimization (SEO)",
       description: "We audit and configure your web platform structure so search engines index it correctly. We focus on fast server response indices, clean sitemaps, structured schema data, and smart keyword density plans.",
       benefits: "Increases your business ranking on search results organically, bringing in qualified sales leads without relying on continuous paid ads.",
       techUsed: ["Google Search Console", "Google Analytics", "Speed Indexes Metrics", "Schema.org Markup"],
@@ -82,7 +82,7 @@ export default function Services({ onNavigate, onOpenAuth, preview = true }: Ser
       id: "service-4",
       icon: "Bot",
       title: "AI Automation",
-      description: "We connect Google Gemini API features to your daily manual procedures, helping you filter raw customer inquires, update databases automatically, and send instant notification alerts to your team.",
+      description: "We connect Google Gemini API features to your daily manual procedures, helping you filter raw customer inquiries, update databases automatically, and send instant notification alerts to your team.",
       benefits: "Cuts down administrative chore times by hours, responds to leads in under five minutes, and avoids boring manual copy-paste mistakes.",
       techUsed: ["Gemini AI API", "SDK Workflows", "Slack Webhooks", "Trigger Pipelines"],
       items: [
@@ -276,7 +276,7 @@ export default function Services({ onNavigate, onOpenAuth, preview = true }: Ser
             How We Help Your Business <span className="font-semibold italic text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500">Stand Out & Grow</span>
           </h2>
           <p className="text-sm sm:text-base opacity-85 leading-relaxed font-light">
-            We provide clear, reliable web development, corporate design, search ranking configurations, and smart script integrations to eliminate operational bottlenecks and turn traffic into clients.
+            We provide web development, AI automation, business templates, UI/UX design, and SEO services that help businesses launch faster, improve search visibility, automate workflows, and convert more visitors into clients.
           </p>
         </div>
 
