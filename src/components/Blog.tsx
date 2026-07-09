@@ -13,6 +13,20 @@ export default function Blog() {
   const [selectedCategory, setSelectedCategory] = useState<string>("All");
   const [readableBlog, setReadableBlog] = useState<any | null>(null);
 
+  React.useEffect(() => {
+  const slug = window.location.pathname.startsWith("/blog/")
+    ? window.location.pathname.replace("/blog/", "")
+    : "";
+
+  if (!slug) return;
+
+  const matchedBlog = blogs.find((blog) => blog.slug === slug);
+
+  if (matchedBlog) {
+    setReadableBlog(matchedBlog);
+  }
+}, [blogs]);
+
   const categories = ["All", "Web Development", "SEO", "AI", "Business Growth", "Automation"];
 
   const filteredBlogs = blogs.filter((bl) => {
@@ -126,7 +140,10 @@ export default function Blog() {
               {/* Footer row */}
               <div className="p-5.5 pt-0">
                 <button
-                  onClick={() => setReadableBlog(post)}
+  onClick={() => {
+    window.history.pushState({}, "", `/blog/${post.slug}`);
+    setReadableBlog(post);
+  }}
                   className="text-xs font-mono font-bold text-cyan-500 hover:text-cyan-400 inline-flex items-center space-x-1 cursor-pointer pt-3 border-t dark:border-slate-900 border-slate-100 w-full"
                 >
                   <BookOpen size={13} />
