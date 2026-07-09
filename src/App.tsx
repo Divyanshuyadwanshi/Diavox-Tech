@@ -76,10 +76,34 @@ const LandingSkeleton = () => {
     </div>
   );
 };
+const pathToSection: Record<string, string> = {
+  "/": "hero",
+  "/services": "services-page",
+  "/pricing": "pricing-page",
+  "/portfolio": "portfolio-page",
+  "/projects": "projects-page",
+  "/team": "team-page",
+  "/reviews": "reviews-page",
+  "/contact": "contact-page",
+  "/about": "about-page",
+  "/blog": "blog-page",
+};
 
+const sectionToPath: Record<string, string> = {
+  hero: "/",
+  "services-page": "/services",
+  "pricing-page": "/pricing",
+  "portfolio-page": "/portfolio",
+  "projects-page": "/projects",
+  "team-page": "/team",
+  "reviews-page": "/reviews",
+  "contact-page": "/contact",
+  "about-page": "/about",
+  "blog-page": "/blog",
+};
 export default function App() {
   const { theme, currentUser, syncSupabase, cmsContent, socialMediaLinks, isCmsLoaded, isCmsFresh } = useStore();
-  const [activeSection, setActiveSection] = useState<string>("hero");
+  const [activeSection, setActiveSection] = useState<string>(() => {   return pathToSection[window.location.pathname] || "hero"; });
   const [authModalOpen, setAuthModalOpen] = useState<boolean>(false);
   const [showScrollTop, setShowScrollTop] = useState<boolean>(false);
   const [commandCenterOpen, setCommandCenterOpen] = useState<boolean>(false);
@@ -216,16 +240,33 @@ export default function App() {
   }, [cmsContent?.fontSans, cmsContent?.fontDisplay, cmsContent?.fontMono]);
 
   const handleNavigate = (sectionId: string) => {
-    setActiveSection(sectionId);
-    
-    // Scroll to section block if on general Home view
-    const element = document.getElementById(sectionId);
-    if (element) {
-      element.scrollIntoView({ behavior: "smooth" });
-    } else {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }
+  setActiveSection(sectionId);
+
+  const path = sectionToPath[sectionId];
+
+  if (path && window.location.pathname !== path) {
+    window.history.pushState({}, "", path);
+  }
+
+  const element = document.getElementById(sectionId);
+
+  if (element && sectionId === "hero") {
+    element.scrollIntoView({ behavior: "smooth" });
+  } else {
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+};
+useEffect(() => {
+  const handlePopState = () => {
+    setActiveSection(pathToSection[window.location.pathname] || "hero");
   };
+
+  window.addEventListener("popstate", handlePopState);
+
+  return () => {
+    window.removeEventListener("popstate", handlePopState);
+  };
+}, []);
 
   const handleScrollTopAction = () => {
     window.scrollTo({ top: 0, behavior: "smooth" });
