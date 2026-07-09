@@ -1785,6 +1785,53 @@ app.post("/api/admin/deactivate-user-confirm", async (req, res) => {
 });
 
 async function startServer() {
+  app.get("/sitemap.xml", async (req, res) => {
+    const SITE_URL = "https://www.diavoxtech.in";
+
+    const staticPages = [
+      "",
+      "/services",
+      "/pricing",
+      "/portfolio",
+      "/blog",
+      "/reviews",
+      "/contact",
+      "/about",
+      "/team",
+    ];
+
+    let blogUrls: string[] = [];
+
+    try {
+      const { data: blogs } = await supabaseAdmin
+        .from("blogs")
+        .select("slug")
+        .order("created_at", { ascending: false });
+
+      blogUrls = (blogs || [])
+        .filter((blog: any) => blog.slug)
+        .map((blog: any) => `/blog/${blog.slug}`);
+    } catch (error) {
+      console.warn("[SITEMAP] Failed to fetch blogs:", error);
+    }
+
+    const urls = [...staticPages, ...blogUrls];
+
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="https://www.sitemaps.org/schemas/sitemap/0.9">
+${urls
+  .map(
+    (url) => `  <url>
+    <loc>${SITE_URL}${url}</loc>
+  </url>`
+  )
+  .join("\n")}
+</urlset>`;
+
+    res.setHeader("Content-Type", "application/xml");
+    res.status(200).send(xml);
+  });
+
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -1792,7 +1839,6 @@ async function startServer() {
     });
     app.use(vite.middlewares);
   } else {
-    // Production static serving
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
     app.get("*", (req, res) => {
